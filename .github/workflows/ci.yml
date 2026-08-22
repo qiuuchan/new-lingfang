@@ -75,6 +75,19 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $ProgressPreference = 'SilentlyContinue'
+          # 黑匣子：任何失败 → 错误全文写入公开可见的 Step Summary + ::error:: 注解
+          # （Actions 日志 API 需管理员权限；summary 与注解匿名可读，便于远程排障）
+          trap {
+            $detail = ($_ | Out-String).Trim() + "`n--- runtimes tree (depth 3) ---`n" +
+              ((Get-ChildItem apps/desktop/runtimes -Recurse -Depth 3 -ErrorAction SilentlyContinue |
+                ForEach-Object FullName | Out-String))
+            $detail | Set-Content populate-error.txt
+            Add-Content $env:GITHUB_STEP_SUMMARY ('## Populate failure' + "`n" + '~~~' + "`n" + $detail + "`n~~~")
+            $one = ($detail -replace '\s+', ' ')
+            if ($one.Length -gt 3500) { $one = $one.Substring(0, 3500) }
+            Write-Output "::error::$one"
+            break
+          }
           $lock = Get-Content apps/desktop/runtime-lock.json -Raw | ConvertFrom-Json
           $rt   = 'apps/desktop/runtimes'
 
@@ -92,6 +105,18 @@ jobs:
           New-Item -ItemType Directory -Force -Path "$rt/python" | Out-Null
           tar -xzf python-dist.tar.gz -C "$rt/python" --strip-components=1
           if ($LASTEXITCODE -ne 0) { throw "python tar extract failed (exit=$LASTEXITCODE)" }
+
+          # install_only_stripped 不带 pip 启动器（pip 包本体在 site-packages）；
+          # 锁 requiredFiles 要求 python/Scripts/pip.cmd —— 补一个标准 .cmd 垫片。
+          & "$rt/python/python.exe" -m pip --version *> $null
+          if ($LASTEXITCODE -ne 0) {
+            & "$rt/python/python.exe" -m ensurepip --upgrade *> $null
+            if ($LASTEXITCODE -ne 0) { throw "python ensurepip failed (exit=$LASTEXITCODE)" }
+          }
+          @'
+@echo off
+"%~dp0..\python.exe" -m pip %*
+'@ | Set-Content -LiteralPath "$rt/python/Scripts/pip.cmd" -Encoding Ascii
 
           # ffmpeg —— 取 materialize 校验过的归档（sha256 已硬门槛），解出两个 exe
           $ffArchive = Get-ChildItem "$rt/.download" -Filter '.ffmpeg.*' |
@@ -117,8 +142,14 @@ jobs:
 
       # ── 3. 全量校验（keyFiles sha256 + Playwright 漂移）──────────────────
       - name: Verify runtimes (sha256 + Playwright drift)
-        run: node scripts/verify-bundled-runtimes.mjs
-        shell: bash
+        shell: pwsh
+        run: |
+          node scripts/verify-bundled-runtimes.mjs 2>&1 | Tee-Object -Variable verifyOut
+          if ($LASTEXITCODE -ne 0) {
+            ($verifyOut | Out-String) | Add-Content $env:GITHUB_STEP_SUMMARY
+            Write-Output "::error::$(($verifyOut | Select-Object -Last 3) -join ' ')"
+            exit 1
+          }
 
       # ── 4. 打包 ──────────────────────────────────────────────────────
       - name: Package runtimes bundle
