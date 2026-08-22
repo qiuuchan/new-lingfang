@@ -132,7 +132,7 @@ jobs:
           # chrome.dll 已由分片拼合（字节一致），此处 -Force 合并补齐其余文件与 headless shell。
           $cft = $lock.runtimes.chromium.source
           $mp  = "$rt/chromium/ms-playwright"
-          New-Item -ItemType Directory -Force -Path "$mp/chromium-1228" "$mp/chromium_headless_shell-1228" | Out-Null
+          New-Item -ItemType Directory -Force -Path "$mp/chromium-1228", "$mp/chromium_headless_shell-1228" | Out-Null
           Invoke-WebRequest "$cft/chrome-win64.zip" -OutFile cft-chrome.zip
           Invoke-WebRequest "$cft/chrome-headless-shell-win64.zip" -OutFile cft-hss.zip
           Expand-Archive cft-chrome.zip -DestinationPath "$mp/chromium-1228" -Force
