@@ -119,36 +119,32 @@
 |---|---|---|---|
 | 1 | `chrome.dll` 5 分片（合计 285MB） | ✅ 完成（2026-08-22） | 自 Playwright CFT 149.0.7827.55 `chrome-win64.zip` 提取（size/sha256 与锁一致），等分切分落位 `apps/desktop/runtime-parts/chromium/ms-playwright/chromium-1228/chrome-win64/`，拼合回验 sha256 通过。提交走 LFS（流程见 `docs/lfs-setup.md`）；本工作副本尚无 `.git`，建仓后首提即入库 |
 | 2 | ffmpeg 实际 `sourceSha256` / `sourceSize` | ✅ 完成（2026-08-22） | 归档 166,721,853B / sha256 `0fff1889…` 已回填 lock；`source` 修正为 gyan.dev `/builds/packages/`（原 `/builds/` 路径已 404，GitHub 镜像字节一致）；包内 ffmpeg.exe / ffprobe.exe 与 keyFiles 逐字节一致 |
-| 3 | CI minisign 密钥 | 🟡 密钥已生成本机（2026-08-22）/ ⏳ Org secret 待配 | 密钥对已在本机 `.runtime-signing/`（gitignore，绝不入库）生成，32-byte 公钥 base64 见下「minisign 密钥交接」。团队将其注册为 Org secret（`LINGFANG_RUNTIME_PUBKEY` / `LINGFANG_RUNTIME_SIGKEY`）后，将 `publish-runtimes` 打包/签名/上传由占位/`continue-on-error` 改 hard（checkout `lfs: true` 已就位）→ B 链路闭环 |
+| 3 | CI minisign 密钥 | ✅ 完成（2026-08-22） | `LINGFANG_RUNTIME_PUBKEY` / `LINGFANG_RUNTIME_SIGKEY` 已注册；`publish-runtimes` 六步全部 hard 并端到端跑绿：tag `v0.0.1-test` → Release `runtimes-bundle.zip`（约 1.7GB）+ `.minisig`，签名与自验通过。B 链路闭环 |
 
 后续（P2，不阻塞 B）：installer crate 接入 workspace 并注入 `runtimes/`，迁移至方案 C——待 B 的 CI 制品链路验证通过后启动。
 
 ---
 
-## minisign 密钥交接（2026-08-22 生成）
+## CI 签名链路闭环记录（2026-08-22）
 
-本机**已生成** ed25519 密钥对（minisign 兼容格式），位于 `.runtime-signing/`（已加入 `.gitignore`，**切勿提交**）：
+> ⚠️ 本节取代早前的「minisign 密钥交接」草案：该草案描述的 `.runtime-signing/` 密钥对**从未注册**，
+> 已作废（可删除），避免双钥匙混淆。**唯一信任根 = 已注册的 Org secret。**
 
-- `minisign.pub`：公钥文件（`untrusted comment` + base64(KeyId‖pk)）。
-- `minisign.key`：私钥文件（`untrusted comment` + base64(KeyId‖seed‖pk)，权限 0600）。
+实际注册并生效的密钥：
 
-注册到 CI 的两个值：
-
-| Org secret | 取值 |
+| Org secret | 值 |
 |---|---|
-| `LINGFANG_RUNTIME_PUBKEY` | `minisign.pub` 第二行去掉 KeyId 后的 **32-byte 公钥 base64**（即 `minisign.pub` base64 解码后第 9 字节起的 32 字节；`verify_minisign` / `PublicKey::from_base64` 期望此格式） |
-| `LINGFANG_RUNTIME_SIGKEY` | `minisign.key` 全文（含 `untrusted comment` 行 + base64 行），`minisign -S -s` 直接消费 |
+| `LINGFANG_RUNTIME_PUBKEY` | minisign 公钥文件全文（KeyId `3AAE104344CB8CA3`，base64 `RWSjjMtEQxCuOiyJ5vRBrdquGSU15tGQDHW3zVMkO4sMJIAvC32jpQwt`） |
+| `LINGFANG_RUNTIME_SIGKEY` | 对应私钥文件全文（无密码版，仅存于 GitHub secret 与 Owner 本地备份） |
 
-> 当前本机生成的 32-byte 公钥 base64（仅用于本地校验/文档留档，正式值以注册到 Org secret 者为准）：
-> `/NSQKc1QouKFqoTx0VTja4WAoMU+GMePvPndjGTJU24=`
+闭环验证（tag `v0.0.1-test`，run `ab75bbe`）：checkout(LFS) → 预取(sha 门槛) → materialize → populate → verify → package(~1.7GB) → **minisign 签名 + 自验 ✓** → Release 上传 ✓。
+产物：`https://github.com/qiuuchan/new-lingfang/releases/tag/v0.0.1-test`。
 
-CI 启用步骤（`ci.yml` `publish-runtimes` job）：Org secret 配齐后，
+验签命令（消费方）：
 
-1. 「Package runtimes bundle」：去掉 `continue-on-error: true`（7z 在 windows-latest 预装）。
-2. 「Sign bundle (minisign)」：替换为真实签名（写入临时 key 文件后 `minisign -S -s sig.key -m runtimes-bundle.zip`）；`minisign` 在 windows-latest 需先 `choco install minisign` 或 `winget install Minisign.Minisign`。
-3. 「Upload release asset」：去掉 `continue-on-error: true`，并将 `if: env.LINGFANG_RUNTIME_PUBKEY != ''` 改为始终执行。
-
-> 本机验证：已对生成的密钥做 ed25519 签名/验签 roundtrip，一致通过。minisign CLI 未安装，未做 minisign 封包级联调——CI 首次跑通即完成最终验证。
+```powershell
+minisign -Vm runtimes-bundle.zip -P <LINGFANG_RUNTIME_PUBKEY 文件或内联 base64>
+```
 
 ---
 

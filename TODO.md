@@ -20,10 +20,13 @@
       包内 ffmpeg.exe / ffprobe.exe 与 keyFiles 完全一致；lock 已回填 `sourceSha256`/`sourceSize`，
       `source` URL 修正为 `/builds/packages/`（原 `/builds/` 根路径已 404）。
     - `ci.yml` `publish-runtimes` checkout 已启用 `lfs: true`。
-  - **CI minisign 密钥（🟡 本机已生成 2026-08-22 / ⏳ Org secret 待配）**：ed25519 密钥对已生成本机
-    `.runtime-signing/`（gitignore，绝不入库），32-byte 公钥 base64 与交接步骤见 `docs/decisions/B3-runtime-material-source.md`
-    「minisign 密钥交接」。团队注册 Org secret `LINGFANG_RUNTIME_PUBKEY`/`LINGFANG_RUNTIME_SIGKEY` 后，
-    将 `publish-runtimes` 打包/签名/上传由 `continue-on-error` 改 hard 即闭 B 链路；随后启动 P2 安装器注入（C）。
+  - **B 链路已闭环（✅ 2026-08-22 端到端跑绿）**：Org secret `LINGFANG_RUNTIME_PUBKEY`/`LINGFANG_RUNTIME_SIGKEY`
+    已注册（旧 `.runtime-signing/` 草案密钥作废，唯一信任根 = Org secret）；`publish-runtimes` 六步全部 hard——
+    LFS 检出 → curl 断点预取 → materialize → populate(node/python/pnpm/ffmpeg/chromium) → verify(全量 sha256+漂移) →
+    打包(~1.7GB) → minisign 签名+自验 → Release 上传，tag `v0.0.1-test` 全绿，
+    产物见 `https://github.com/qiuuchan/new-lingfang/releases/tag/v0.0.1-test`。
+    过程中实测修正：python.exe 历史哈希不可复现已按 stripped 构建回填、`@playwright/test@1.61.1` 补入依赖、
+    ffmpeg/python 归档走断点预取。**仅剩 P2：installer crate 注入 `runtimes/`（方案 C）。**
   - **可立即准备（代码侧，本会话已完成 ✅ 2026-08-22）**：
     - `.gitattributes`：Git LFS 跟踪 `apps/desktop/runtime-parts/**` 与 `*.part-*`（chrome.dll 分片不拖垮克隆；
       团队初始化/提交流程见 `docs/lfs-setup.md`）。
