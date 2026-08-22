@@ -114,9 +114,9 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw "python ensurepip failed (exit=$LASTEXITCODE)" }
           }
           @'
-@echo off
-"%~dp0..\python.exe" -m pip %*
-'@ | Set-Content -LiteralPath "$rt/python/Scripts/pip.cmd" -Encoding Ascii
+          @echo off
+          "%~dp0..\python.exe" -m pip %*
+          '@ | Set-Content -LiteralPath "$rt/python/Scripts/pip.cmd" -Encoding Ascii
 
           # ffmpeg —— 取 materialize 校验过的归档（sha256 已硬门槛），解出两个 exe
           $ffArchive = Get-ChildItem "$rt/.download" -Filter '.ffmpeg.*' |
