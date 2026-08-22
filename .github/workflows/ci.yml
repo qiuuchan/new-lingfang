@@ -54,19 +54,36 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile || pnpm install
 
-      # ── 0. 大文件预取：curl 断点续传 + 重试（Node fetch 无重试且默认 300s 超时，
-      #    gyan.dev 慢速链路会挂；预取后 materialize 走 sha256 复用分支）────────
-      - name: Pre-fetch ffmpeg archive (resumable)
+      # ── 0. 大件预取：凡锁内带 sha256 硬门槛的归档一律走 curl 断点续传 + 重试
+      #    （Node fetch 无重试、300s 超时，慢速源会被击杀）；预取后 materialize 全部命中复用分支。
+      - name: Pre-fetch runtime archives (resumable)
         run: |
           mkdir -p apps/desktop/runtimes/.download
-          url=$(node -p "JSON.parse(require('fs').readFileSync('apps/desktop/runtime-lock.json','utf8')).runtimes.ffmpeg.source")
-          curl -L --retry 8 --retry-all-errors --retry-delay 5 -C - \
-            -o apps/desktop/runtimes/.download/.ffmpeg.prefetched.tmp "$url"
+          node -e "
+            const l = JSON.parse(require('fs').readFileSync('apps/desktop/runtime-lock.json', 'utf8'));
+            for (const [name, rt] of Object.entries(l.runtimes)) {
+              if (typeof rt.source === 'string' && rt.source.startsWith('https://') &&
+                  rt.sourceSha256 && rt.sourceSha256 !== 'TODO_FETCH_AND_FILL' &&
+                  Number(rt.sourceSize) > 0) {
+                console.log(name + '\t' + rt.source);
+              }
+            }
+          " | while IFS=$'\t' read -r name url; do
+            echo "[pre-fetch] $name <- $url"
+            curl -L --retry 8 --retry-all-errors --retry-delay 5 -C - \
+              -o "apps/desktop/runtimes/.download/.$name.prefetched.tmp" "$url"
+          done
         shell: bash
 
-      # ── 1. 分片拼合 + 公开来源归档下载（sha256 硬校验）─────────────────────
-      - name: Materialize runtime shards & fetch verified archives
-        run: node scripts/materialize-bundled-runtimes.mjs
+      # ── 1. 分片拼合 + 公开来源归档校验（sha256 硬门槛；网络件已预取）───────
+      - name: Materialize runtime shards & verify fetched archives
+        run: |
+          if ! node scripts/materialize-bundled-runtimes.mjs 2>materialize-error.txt; then
+            cat materialize-error.txt >&2
+            { echo '## Materialize failure'; echo '~~~text'; cat materialize-error.txt; echo '~~~'; } >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::$(tail -3 materialize-error.txt | tr '\n' ' ')"
+            exit 1
+          fi
         shell: bash
 
       # ── 2. 灌装 runtimes/：解包 node/python/pnpm/ffmpeg/chromium ───────────
