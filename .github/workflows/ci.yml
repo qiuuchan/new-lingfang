@@ -40,6 +40,8 @@ jobs:
     runs-on: windows-latest
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     needs: quality
+    permissions:
+      contents: write   # 创建 Release 并上传 bundle + minisign 签名附件
     env:
       LINGFANG_RUNTIME_PUBKEY: ${{ secrets.LINGFANG_RUNTIME_PUBKEY }}
       LINGFANG_RUNTIME_SIGKEY: ${{ secrets.LINGFANG_RUNTIME_SIGKEY }}
