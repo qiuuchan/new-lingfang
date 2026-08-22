@@ -8,7 +8,10 @@
     },
     "python": {
       "version": "3.12.13+20260623",
-      "source": "https://github.com/astral-sh/python-build-standalone/releases/download/20260623/cpython-3.12.13+20260623-x86_64-pc-windows-msvc-install_only_stripped.tar.gz"
+      "source": "https://github.com/astral-sh/python-build-standalone/releases/download/20260623/cpython-3.12.13+20260623-x86_64-pc-windows-msvc-install_only_stripped.tar.gz",
+      "sourceSha256": "de3e362376859b060fa8b856c434efa81fcf6d4ede3d6e177c7e2169670cac50",
+      "sourceSize": 21931932,
+      "_sourceNote": "B3: python-build-standalone 20260623 install_only_stripped（21MB 精简版，无预装 pip 启动器，CI 以 .cmd 垫片补齐）。2026-08-22 实测：原 keyFiles 的 python.exe sha256 与任何 20260623 变体均不符（历史记录不可复现），已按实测回填；node/chromium/ffmpeg 哈希经同日实测全部吻合。sha256 为硬门槛。"
     },
     "ffmpeg": {
       "version": "8.1.2",
@@ -33,7 +36,7 @@
     {
       "path": "python/python.exe",
       "size": 91648,
-      "sha256": "82cc5793a3ba146a3ef6f6fa96982ca70780290d66f91d18fb021be10c6475d7"
+      "sha256": "88b9e780cfdc38597c7f53e20f7165262befa28d9a5e9470360d349e172ecf37"
     },
     {
       "path": "ffmpeg/ffmpeg.exe",

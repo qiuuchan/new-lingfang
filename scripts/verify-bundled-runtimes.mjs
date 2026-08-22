@@ -67,7 +67,10 @@ function verifyPlaywrightLock(runtimeLock) {
   const require = createRequire(import.meta.url);
   let packagePath;
   try {
-    const testPackage = require.resolve('@playwright/test/package.json', { paths: [repoRoot] });
+    // pnpm 隔离布局下 @playwright/test 装在 apps/desktop/node_modules，
+    // 不在仓库根——候选解析根必须同时包含两处。
+    const candidates = [repoRoot, join(repoRoot, 'apps', 'desktop'), process.cwd()];
+    const testPackage = require.resolve('@playwright/test/package.json', { paths: candidates });
     const playwrightPackage = createRequire(testPackage).resolve('playwright/package.json');
     packagePath = createRequire(playwrightPackage).resolve('playwright-core/package.json');
   } catch {
