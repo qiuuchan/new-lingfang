@@ -74,21 +74,24 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
+          $ProgressPreference = 'SilentlyContinue'
           $lock = Get-Content apps/desktop/runtime-lock.json -Raw | ConvertFrom-Json
           $rt   = 'apps/desktop/runtimes'
 
           # node —— 解压 zip 并去掉顶层目录，随后把 pnpm 装进便携 prefix，
           # 使 nodejs/pnpm.cmd 与 nodejs/node_modules/pnpm/bin/pnpm.cjs 就位。
           Invoke-WebRequest $lock.runtimes.node.source -OutFile node-dist.zip
-          Expand-Archive node-dist.zip -DestinationPath node-tmp
+          Expand-Archive node-dist.zip -DestinationPath node-tmp -Force
           Move-Item node-tmp\* "$rt/nodejs"
           $env:PATH = "$((Resolve-Path "$rt/nodejs").Path);$env:PATH"
           & "$rt/nodejs/npm.cmd" install -g --prefix "$rt/nodejs" 'pnpm@9'
+          if ($LASTEXITCODE -ne 0) { throw "pnpm install into portable node failed (exit=$LASTEXITCODE)" }
 
           # python —— install_only_stripped 压缩包顶层即 python/
           Invoke-WebRequest $lock.runtimes.python.source -OutFile python-dist.tar.gz
           New-Item -ItemType Directory -Force -Path "$rt/python" | Out-Null
           tar -xzf python-dist.tar.gz -C "$rt/python" --strip-components=1
+          if ($LASTEXITCODE -ne 0) { throw "python tar extract failed (exit=$LASTEXITCODE)" }
 
           # ffmpeg —— 取 materialize 校验过的归档（sha256 已硬门槛），解出两个 exe
           $ffArchive = Get-ChildItem "$rt/.download" -Filter '.ffmpeg.*' |
@@ -96,17 +99,19 @@ jobs:
           if (-not $ffArchive) { throw 'ffmpeg archive not found in .download/' }
           New-Item -ItemType Directory -Force -Path ff-tmp "$rt/ffmpeg" | Out-Null
           tar -xf $ffArchive.FullName -C ff-tmp
+          if ($LASTEXITCODE -ne 0) { throw "ffmpeg tar extract failed (exit=$LASTEXITCODE)" }
           Copy-Item ff-tmp/*/bin/*.exe "$rt/ffmpeg/"
 
           # chromium —— CfT 官方包按 ms-playwright 目录布局落位；
-          # chrome.dll 已由分片拼合（字节一致），此处合并补齐其余文件与 headless shell。
-          $cft = $lock.runtimes.chromium.source + $lock.runtimes.chromium.browserVersion + '/win64/'
+          # 锁内 source 已含 <browserVersion>/win64/ 路径，直接拼文件名即可。
+          # chrome.dll 已由分片拼合（字节一致），此处 -Force 合并补齐其余文件与 headless shell。
+          $cft = $lock.runtimes.chromium.source
           $mp  = "$rt/chromium/ms-playwright"
           New-Item -ItemType Directory -Force -Path "$mp/chromium-1228" "$mp/chromium_headless_shell-1228" | Out-Null
           Invoke-WebRequest "$cft/chrome-win64.zip" -OutFile cft-chrome.zip
           Invoke-WebRequest "$cft/chrome-headless-shell-win64.zip" -OutFile cft-hss.zip
-          Expand-Archive cft-chrome.zip -DestinationPath "$mp/chromium-1228"
-          Expand-Archive cft-hss.zip -DestinationPath "$mp/chromium_headless_shell-1228"
+          Expand-Archive cft-chrome.zip -DestinationPath "$mp/chromium-1228" -Force
+          Expand-Archive cft-hss.zip -DestinationPath "$mp/chromium_headless_shell-1228" -Force
           Set-Content "$mp/chromium-1228/INSTALLATION_COMPLETE" ''
           Set-Content "$mp/chromium_headless_shell-1228/INSTALLATION_COMPLETE" ''
 
