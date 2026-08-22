@@ -122,7 +122,7 @@ jobs:
           $ffArchive = Get-ChildItem "$rt/.download" -Filter '.ffmpeg.*' |
             Sort-Object LastWriteTime | Select-Object -Last 1
           if (-not $ffArchive) { throw 'ffmpeg archive not found in .download/' }
-          New-Item -ItemType Directory -Force -Path ff-tmp "$rt/ffmpeg" | Out-Null
+          New-Item -ItemType Directory -Force -Path ff-tmp, "$rt/ffmpeg" | Out-Null
           tar -xf $ffArchive.FullName -C ff-tmp
           if ($LASTEXITCODE -ne 0) { throw "ffmpeg tar extract failed (exit=$LASTEXITCODE)" }
           Copy-Item ff-tmp/*/bin/*.exe "$rt/ffmpeg/"
