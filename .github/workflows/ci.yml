@@ -54,6 +54,16 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile || pnpm install
 
+      # ── 0. 大文件预取：curl 断点续传 + 重试（Node fetch 无重试且默认 300s 超时，
+      #    gyan.dev 慢速链路会挂；预取后 materialize 走 sha256 复用分支）────────
+      - name: Pre-fetch ffmpeg archive (resumable)
+        run: |
+          mkdir -p apps/desktop/runtimes/.download
+          url=$(node -p "JSON.parse(require('fs').readFileSync('apps/desktop/runtime-lock.json','utf8')).runtimes.ffmpeg.source")
+          curl -L --retry 8 --retry-all-errors --retry-delay 5 -C - \
+            -o apps/desktop/runtimes/.download/.ffmpeg.prefetched.tmp "$url"
+        shell: bash
+
       # ── 1. 分片拼合 + 公开来源归档下载（sha256 硬校验）─────────────────────
       - name: Materialize runtime shards & fetch verified archives
         run: node scripts/materialize-bundled-runtimes.mjs

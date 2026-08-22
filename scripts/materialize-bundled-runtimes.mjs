@@ -7,6 +7,7 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   renameSync,
   rmSync,
@@ -62,33 +63,52 @@ for (const [name, rt] of Object.entries(lock.runtimes ?? {})) {
 
 async function downloadAndVerify(name, url, expectedSha, expectedSize, pendingCount) {
   mkdirSync(downloadDir, { recursive: true });
-  const tmp = join(downloadDir, `.${name}.${Date.now()}.tmp`);
-  try {
-    const res = await fetch(url);
-    if (!res.ok || !res.body)
-      fail(`download failed (${res.status}) for ${url}`);
 
-    const buf = Buffer.from(await res.arrayBuffer());
-    // size 硬校验
-    if (buf.length !== expectedSize)
-      fail(`size mismatch for ${url}: got ${buf.length}, expected ${expectedSize}`);
-    // sha256 硬校验（产品核心要求）
-    const actual = createHash('sha256').update(buf).digest('hex');
-    if (actual !== expectedSha)
-      fail(`sha256 mismatch for ${url}: got ${actual}, expected ${expectedSha}`);
-
-    await writeFile(tmp, buf);
+  // ── B3: 预载复用（CI 用 curl 断点续传预取 / 本地缓存）。
+  // 命中即跳过网络下载，但 sha256 + size 仍然硬校验——信任根不降级。
+  for (const entry of readdirSync(downloadDir)) {
+    if (!entry.startsWith(`.${name}.`)) continue;
+    const candidate = join(downloadDir, entry);
+    const stat = statSync(candidate);
+    if (!stat.isFile() || stat.size !== expectedSize) continue;
+    if ((await sha256(candidate)) !== expectedSha) continue;
     process.stdout.write(
-      `[runtimes] downloaded & verified ${url} (sha256 OK); ` +
-        `extraction of ${pendingCount} files pending — run on Windows build host with 7z\n`,
+      `[runtimes] reused pre-fetched ${entry} (sha256 OK); ` +
+        `extraction of ${pendingCount} files pending\n`,
     );
-    // 归档保留在 .download/ 下，供 CI/构建主机解压；不在此清理。
-  } catch (error) {
-    rmSync(tmp, { force: true });
-    if (error && typeof error.message === 'string' && error.message.includes('mismatch'))
-      throw error;
-    fail(`download/verify error for ${url}: ${error?.message ?? error}`);
+    return;
   }
+
+  const tmp = join(downloadDir, `.${name}.${Date.now()}.tmp`);
+  let buffer;
+  // 网络类错误重试；sha/size 不匹配是确定性失败，不进入重试。
+  for (let attempt = 1; ; attempt++) {
+    try {
+      const res = await fetch(url);
+      if (!res.ok || !res.body)
+        fail(`download failed (${res.status}) for ${url}`);
+      buffer = Buffer.from(await res.arrayBuffer());
+      break;
+    } catch (error) {
+      if (attempt >= 3)
+        fail(`download error after ${attempt} attempts for ${url}: ${error?.message ?? error}`);
+      process.stdout.write(
+        `[runtimes] download attempt ${attempt} failed for ${url} (${error?.message ?? error}); retrying\n`,
+      );
+      await new Promise((resolveRetry) => setTimeout(resolveRetry, 5000 * attempt));
+    }
+  }
+  if (buffer.length !== expectedSize)
+    fail(`size mismatch for ${url}: got ${buffer.length}, expected ${expectedSize}`);
+  const actual = createHash('sha256').update(buffer).digest('hex');
+  if (actual !== expectedSha)
+    fail(`sha256 mismatch for ${url}: got ${actual}, expected ${expectedSha}`);
+
+  await writeFile(tmp, buffer);
+  process.stdout.write(
+    `[runtimes] downloaded & verified ${url} (sha256 OK); ` +
+      `extraction of ${pendingCount} files pending — run on Windows build host with 7z\n`,
+  );
 }
 
 async function materialize(entry) {
