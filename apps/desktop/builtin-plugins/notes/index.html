@@ -1,0 +1,1224 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Markdown 笔记</title>
+    <style>
+      :root {
+        --bg: #f8f9fa;
+        --surface: #ffffff;
+        --sidebar-bg: #f1f3f5;
+        --text: #212529;
+        --text-secondary: #868e96;
+        --border: #dee2e6;
+        --accent: #3b82f6;
+        --accent-hover: #2563eb;
+        --accent-light: #dbeafe;
+        --danger: #ef4444;
+        --danger-hover: #dc2626;
+        --note-hover: #e9ecef;
+        --note-active: #dbe4ff;
+        --shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+        --radius: 8px;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #0f1117;
+          --surface: #1a1b26;
+          --sidebar-bg: #14151f;
+          --text: #c9d1d9;
+          --text-secondary: #8b949e;
+          --border: #30363d;
+          --accent: #58a6ff;
+          --accent-hover: #79c0ff;
+          --accent-light: #1a2332;
+          --danger: #f87171;
+          --danger-hover: #ef4444;
+          --note-hover: #1c1e2e;
+          --note-active: #1a2332;
+          --shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+        }
+      }
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      html,
+      body {
+        height: 100%;
+      }
+      body {
+        font-family:
+          -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans SC', 'PingFang SC',
+          'Microsoft YaHei', sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        font-size: 14px;
+        line-height: 1.5;
+        overflow: hidden;
+        -webkit-font-smoothing: antialiased;
+      }
+      .app-container {
+        display: flex;
+        height: 100vh;
+      }
+      .sidebar {
+        width: 280px;
+        min-width: 280px;
+        background: var(--sidebar-bg);
+        border-right: 1px solid var(--border);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+      .sidebar-header {
+        padding: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        border-bottom: 1px solid var(--border);
+      }
+      .sidebar-header h1 {
+        font-size: 16px;
+        font-weight: 700;
+      }
+      .btn-new {
+        padding: 6px 14px;
+        font-size: 13px;
+        font-weight: 600;
+        color: #fff;
+        background: var(--accent);
+        border: none;
+        border-radius: var(--radius);
+        cursor: pointer;
+        transition: background 0.15s;
+        white-space: nowrap;
+      }
+      .btn-new:hover {
+        background: var(--accent-hover);
+      }
+      .btn-new::before {
+        content: '+ ';
+      }
+      .btn-icon {
+        width: 32px;
+        height: 32px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: transparent;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        color: var(--text-secondary);
+        font-size: 18px;
+        transition: all 0.15s;
+        flex-shrink: 0;
+      }
+      .btn-icon:hover {
+        background: var(--note-hover);
+        color: var(--text);
+      }
+      .search-box {
+        padding: 12px 16px;
+        position: relative;
+      }
+      .search-box input {
+        width: 100%;
+        padding: 8px 12px 8px 32px;
+        font-size: 13px;
+        background: var(--surface);
+        color: var(--text);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        outline: none;
+        transition: border-color 0.15s;
+      }
+      .search-box input:focus {
+        border-color: var(--accent);
+      }
+      .search-box .search-icon {
+        position: absolute;
+        left: 24px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: var(--text-secondary);
+        font-size: 13px;
+        pointer-events: none;
+      }
+      .filter-section {
+        padding: 8px 16px;
+        border-bottom: 1px solid var(--border);
+        max-height: 180px;
+        overflow-y: auto;
+      }
+      .filter-group {
+        margin: 4px 0;
+      }
+      .filter-group h4 {
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--text-secondary);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 4px;
+      }
+      .filter-chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+      }
+      .filter-chip {
+        padding: 2px 8px;
+        font-size: 11px;
+        border-radius: 10px;
+        cursor: pointer;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        color: var(--text-secondary);
+        transition: all 0.15s;
+        white-space: nowrap;
+      }
+      .filter-chip:hover {
+        border-color: var(--accent);
+        color: var(--accent);
+      }
+      .filter-chip.active {
+        background: var(--accent);
+        color: #fff;
+        border-color: var(--accent);
+      }
+      .notes-list {
+        flex: 1;
+        overflow-y: auto;
+        padding: 8px;
+      }
+      .note-item {
+        padding: 10px 12px;
+        border-radius: 6px;
+        cursor: pointer;
+        margin-bottom: 2px;
+        transition: background 0.1s;
+      }
+      .note-item:hover {
+        background: var(--note-hover);
+      }
+      .note-item.selected {
+        background: var(--note-active);
+      }
+      .note-item-title {
+        font-size: 14px;
+        font-weight: 600;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        margin-bottom: 2px;
+      }
+      .note-item-preview {
+        font-size: 12px;
+        color: var(--text-secondary);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        margin-bottom: 2px;
+      }
+      .note-item-meta {
+        font-size: 11px;
+        color: var(--text-secondary);
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .note-item-category {
+        padding: 0 5px;
+        border-radius: 3px;
+        font-size: 10px;
+        background: var(--accent-light);
+        color: var(--accent);
+      }
+      .empty-notes {
+        padding: 40px 20px;
+        text-align: center;
+        color: var(--text-secondary);
+        font-size: 13px;
+      }
+      .empty-notes .empty-icon {
+        font-size: 40px;
+        margin-bottom: 12px;
+        opacity: 0.4;
+      }
+      .empty-notes .btn-new {
+        margin-top: 12px;
+      }
+      .main-panel {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+      .main-header {
+        padding: 12px 20px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        border-bottom: 1px solid var(--border);
+      }
+      .note-title-input {
+        flex: 1;
+        font-size: 18px;
+        font-weight: 700;
+        border: none;
+        outline: none;
+        background: transparent;
+        color: var(--text);
+      }
+      .note-title-input::placeholder {
+        color: var(--text-secondary);
+        font-weight: 400;
+      }
+      .action-btn {
+        padding: 6px 14px;
+        font-size: 13px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        background: var(--surface);
+        color: var(--text);
+        cursor: pointer;
+        transition: all 0.15s;
+        white-space: nowrap;
+      }
+      .action-btn:hover {
+        border-color: var(--accent);
+        color: var(--accent);
+      }
+      .action-btn.danger {
+        color: var(--danger);
+      }
+      .action-btn.danger:hover {
+        background: var(--danger);
+        color: #fff;
+        border-color: var(--danger);
+      }
+      .action-btn.primary {
+        background: var(--accent);
+        color: #fff;
+        border-color: var(--accent);
+      }
+      .action-btn.primary:hover {
+        background: var(--accent-hover);
+      }
+      .action-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      .tab-bar {
+        display: flex;
+        border-bottom: 1px solid var(--border);
+        padding: 0 20px;
+      }
+      .tab-item {
+        padding: 8px 16px;
+        font-size: 13px;
+        cursor: pointer;
+        color: var(--text-secondary);
+        border-bottom: 2px solid transparent;
+        transition: all 0.15s;
+      }
+      .tab-item:hover {
+        color: var(--text);
+      }
+      .tab-item.active {
+        color: var(--accent);
+        border-bottom-color: var(--accent);
+      }
+      .editor-panel,
+      .preview-panel {
+        flex: 1;
+        overflow: hidden;
+        display: none;
+      }
+      .editor-panel.active,
+      .preview-panel.active {
+        display: flex;
+      }
+      .editor-panel textarea {
+        flex: 1;
+        padding: 20px;
+        font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'SF Mono', Consolas, monospace;
+        font-size: 14px;
+        line-height: 1.7;
+        border: none;
+        outline: none;
+        resize: none;
+        background: var(--surface);
+        color: var(--text);
+      }
+      .editor-panel textarea::placeholder {
+        color: var(--text-secondary);
+      }
+      .preview-panel {
+        padding: 20px;
+        overflow-y: auto;
+      }
+      .preview-panel h1 {
+        font-size: 24px;
+        margin: 0 0 12px;
+        font-weight: 700;
+      }
+      .preview-panel h2 {
+        font-size: 20px;
+        margin: 20px 0 10px;
+        font-weight: 700;
+        padding-bottom: 6px;
+        border-bottom: 1px solid var(--border);
+      }
+      .preview-panel h3 {
+        font-size: 17px;
+        margin: 16px 0 8px;
+        font-weight: 600;
+      }
+      .preview-panel p {
+        margin: 0 0 10px;
+        line-height: 1.7;
+      }
+      .preview-panel ul {
+        margin: 0 0 10px;
+        padding-left: 20px;
+      }
+      .preview-panel li {
+        margin-bottom: 4px;
+      }
+      .preview-panel code {
+        padding: 2px 6px;
+        border-radius: 3px;
+        font-size: 13px;
+        font-family: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
+        background: var(--sidebar-bg);
+        color: var(--accent);
+      }
+      .preview-panel strong {
+        font-weight: 700;
+      }
+      .preview-panel em {
+        font-style: italic;
+      }
+      .preview-panel a {
+        color: var(--accent);
+        text-decoration: none;
+      }
+      .preview-panel a:hover {
+        text-decoration: underline;
+      }
+      .summary-section {
+        border-top: 1px solid var(--border);
+        padding: 12px 20px;
+        max-height: 200px;
+        overflow-y: auto;
+        background: var(--sidebar-bg);
+      }
+      .summary-header {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--text-secondary);
+        margin-bottom: 6px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .summary-content {
+        font-size: 13px;
+        line-height: 1.6;
+        color: var(--text);
+      }
+      .summary-placeholder {
+        color: var(--text-secondary);
+        font-style: italic;
+        font-size: 12px;
+      }
+      .summary-loading {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--text-secondary);
+        font-size: 13px;
+      }
+      .spinner {
+        width: 14px;
+        height: 14px;
+        border: 2px solid var(--border);
+        border-top-color: var(--accent);
+        border-radius: 50%;
+        animation: spin 0.6s linear infinite;
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      .summary-error {
+        color: var(--danger);
+        font-size: 13px;
+      }
+      .modal-overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 1000;
+        align-items: center;
+        justify-content: center;
+      }
+      .modal-overlay.open {
+        display: flex;
+      }
+      .modal {
+        background: var(--surface);
+        border-radius: 12px;
+        padding: 24px;
+        width: 360px;
+        max-width: 90%;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      }
+      .modal h3 {
+        font-size: 16px;
+        margin-bottom: 8px;
+      }
+      .modal p {
+        font-size: 14px;
+        color: var(--text-secondary);
+        margin-bottom: 20px;
+      }
+      .modal-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+      }
+      .no-selection {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-direction: column;
+        gap: 12px;
+        color: var(--text-secondary);
+      }
+      .no-selection .no-icon {
+        font-size: 48px;
+        opacity: 0.3;
+      }
+      .no-selection p {
+        font-size: 14px;
+      }
+      @media (max-width: 768px) {
+        .sidebar {
+          width: 100%;
+          min-width: auto;
+          max-height: 40vh;
+          border-right: none;
+          border-bottom: 1px solid var(--border);
+        }
+        .app-container {
+          flex-direction: column;
+        }
+        .main-header {
+          flex-wrap: wrap;
+        }
+        .note-title-input {
+          width: 100%;
+        }
+        .main-header .action-btn {
+          flex-shrink: 0;
+        }
+        .filter-section {
+          max-height: 120px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app-container" id="app">
+      <aside class="sidebar">
+        <div class="sidebar-header">
+          <h1>Markdown 笔记</h1>
+          <button class="btn-new" id="btnNewNote">新建笔记</button>
+          <button class="btn-icon" id="btnConfig" title="AI 总结使用灵坊平台 LLM，无需额外配置">
+            AI
+          </button>
+        </div>
+        <div class="search-box">
+          <span class="search-icon">⌕</span>
+          <input type="text" id="searchInput" placeholder="搜索笔记..." />
+        </div>
+        <div class="filter-section" id="filterSection">
+          <div class="filter-group">
+            <h4>分类</h4>
+            <div class="filter-chips" id="categoryFilters"></div>
+          </div>
+          <div class="filter-group">
+            <h4>标签</h4>
+            <div class="filter-chips" id="tagFilters"></div>
+          </div>
+        </div>
+        <div class="notes-list" id="notesList"></div>
+      </aside>
+      <main class="main-panel" id="mainPanel">
+        <div class="main-header">
+          <input class="note-title-input" id="noteTitle" placeholder="无标题" spellcheck="false" />
+          <button class="action-btn" id="btnCategory">分类</button>
+          <button class="action-btn" id="btnTags">标签</button>
+          <button class="action-btn danger" id="btnDelete">删除</button>
+          <button class="action-btn primary" id="btnSummary">AI 总结</button>
+        </div>
+        <div class="tab-bar">
+          <span class="tab-item active" data-tab="edit">编辑</span>
+          <span class="tab-item" data-tab="preview">预览</span>
+        </div>
+        <div class="editor-panel active" id="editorPanel">
+          <textarea id="noteContent" placeholder="开始写笔记..."></textarea>
+        </div>
+        <div class="preview-panel" id="previewPanel"></div>
+        <div class="summary-section" id="summarySection">
+          <div class="summary-header">AI 总结</div>
+          <div class="summary-content" id="summaryContent">
+            <span class="summary-placeholder">点击「AI 总结」按钮，由 AI 生成笔记摘要</span>
+          </div>
+        </div>
+      </main>
+    </div>
+    <div class="modal-overlay" id="confirmModal">
+      <div class="modal">
+        <h3>确认删除</h3>
+        <p id="confirmMessage">确定要删除这篇笔记吗？此操作不可撤销。</p>
+        <div class="modal-actions">
+          <button class="action-btn" id="btnCancelDelete">取消</button>
+          <button class="action-btn danger" id="btnConfirmDelete">删除</button>
+        </div>
+      </div>
+    </div>
+    <div class="modal-overlay" id="metaModal">
+      <div class="modal">
+        <h3 id="metaModalTitle">编辑属性</h3>
+        <div style="margin-bottom: 12px">
+          <label
+            style="
+              font-size: 13px;
+              color: var(--text-secondary);
+              display: block;
+              margin-bottom: 4px;
+            "
+            >分类</label
+          >
+          <input
+            id="metaCategory"
+            style="
+              width: 100%;
+              padding: 8px 12px;
+              font-size: 14px;
+              background: var(--surface);
+              color: var(--text);
+              border: 1px solid var(--border);
+              border-radius: var(--radius);
+              outline: none;
+            "
+            placeholder="输入分类名称"
+          />
+        </div>
+        <div style="margin-bottom: 16px">
+          <label
+            style="
+              font-size: 13px;
+              color: var(--text-secondary);
+              display: block;
+              margin-bottom: 4px;
+            "
+            >标签（逗号分隔）</label
+          >
+          <input
+            id="metaTags"
+            style="
+              width: 100%;
+              padding: 8px 12px;
+              font-size: 14px;
+              background: var(--surface);
+              color: var(--text);
+              border: 1px solid var(--border);
+              border-radius: var(--radius);
+              outline: none;
+            "
+            placeholder="标签1, 标签2, 标签3"
+          />
+        </div>
+        <div class="modal-actions">
+          <button class="action-btn" id="btnCancelMeta">取消</button>
+          <button class="action-btn primary" id="btnSaveMeta">保存</button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      /* ========== 状态 ========== */
+      let notes = [];
+      let currentNoteId = null;
+      let selectedCategory = null;
+      let selectedTag = null;
+      let searchKeyword = '';
+      let saveTimer = null;
+      let deleteTargetId = null;
+      let currentTab = 'edit';
+
+      /* ========== SDK 适配层 ========== */
+      const sdk = (() => {
+        if (typeof window.sdk !== 'undefined' && window.sdk) return window.sdk;
+        return {
+          storage: {
+            get: (key) => {
+              try {
+                return Promise.resolve(JSON.parse(localStorage.getItem(key)));
+              } catch {
+                return Promise.resolve(null);
+              }
+            },
+            set: (key, val) => {
+              try {
+                localStorage.setItem(key, JSON.stringify(val));
+              } catch {}
+              return Promise.resolve();
+            },
+          },
+          net: {
+            fetch: async (opts) => {
+              const res = await fetch(opts.url, {
+                method: opts.method || 'GET',
+                headers: opts.headers || {},
+                body: opts.body,
+              });
+              const body = await res.text();
+              return {
+                status: res.status,
+                headers: Object.fromEntries(res.headers.entries()),
+                body,
+              };
+            },
+          },
+          llm: { chat: () => Promise.resolve({ content: 'AI 功能需在 LingFang 平台内使用。' }) },
+          system: {
+            notify: (t) => {
+              try {
+                new Notification(t);
+              } catch {}
+            },
+          },
+        };
+      })();
+
+      const STORAGE_KEY = 'notes';
+
+      async function loadNotes() {
+        try {
+          const data = await sdk.storage.get(STORAGE_KEY);
+          notes = Array.isArray(data) ? data : [];
+        } catch {
+          notes = [];
+        }
+      }
+
+      async function saveNotes() {
+        try {
+          await sdk.storage.set(STORAGE_KEY, notes);
+        } catch {
+          /* silent */
+        }
+      }
+
+      function generateId() {
+        return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+      }
+
+      function nowISO() {
+        return new Date().toISOString();
+      }
+
+      /* ========== Markdown 解析 ========== */
+      function escapeHtml(text) {
+        return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      }
+
+      function inlineFormat(text) {
+        const esc = escapeHtml(text);
+        return esc
+          .replace(/`([^`]+)`/g, '<code>$1</code>')
+          .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+          .replace(/\*(.+?)\*/g, '<em>$1</em>')
+          .replace(
+            /\[([^\]]+)\]\(([^)]+)\)/g,
+            '<a href="$2" target="_blank" rel="noopener">$1</a>'
+          );
+      }
+
+      function parseMarkdown(text) {
+        if (!text) return '';
+        const lines = text.split('\n');
+        let html = '',
+          inList = false;
+        for (let i = 0; i < lines.length; i++) {
+          const L = lines[i];
+          if (/^### (.+)/.test(L)) {
+            if (inList) {
+              html += '</ul>';
+              inList = false;
+            }
+            html += '<h3>' + inlineFormat(RegExp.$1) + '</h3>';
+          } else if (/^## (.+)/.test(L)) {
+            if (inList) {
+              html += '</ul>';
+              inList = false;
+            }
+            html += '<h2>' + inlineFormat(RegExp.$1) + '</h2>';
+          } else if (/^# (.+)/.test(L)) {
+            if (inList) {
+              html += '</ul>';
+              inList = false;
+            }
+            html += '<h1>' + inlineFormat(RegExp.$1) + '</h1>';
+          } else if (/^- (.+)/.test(L)) {
+            if (!inList) {
+              html += '<ul>';
+              inList = true;
+            }
+            html += '<li>' + inlineFormat(RegExp.$1) + '</li>';
+          } else if (L.trim() === '') {
+            if (inList) {
+              html += '</ul>';
+              inList = false;
+            }
+          } else {
+            if (inList) {
+              html += '</ul>';
+              inList = false;
+            }
+            html += '<p>' + inlineFormat(L) + '</p>';
+          }
+        }
+        if (inList) html += '</ul>';
+        return html;
+      }
+
+      /* ========== 筛选与搜索 ========== */
+      function getFilteredNotes() {
+        let f = notes;
+        if (searchKeyword) {
+          const kw = searchKeyword.toLowerCase();
+          f = f.filter(
+            (n) => n.title.toLowerCase().includes(kw) || n.content.toLowerCase().includes(kw)
+          );
+        }
+        if (selectedCategory) f = f.filter((n) => n.category === selectedCategory);
+        if (selectedTag) f = f.filter((n) => n.tags && n.tags.includes(selectedTag));
+        return f.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+      }
+
+      function collectCategories() {
+        const s = new Set();
+        notes.forEach((n) => {
+          if (n.category) s.add(n.category);
+        });
+        return Array.from(s).sort();
+      }
+
+      function collectTags() {
+        const s = new Set();
+        notes.forEach((n) => {
+          if (n.tags) n.tags.forEach((t) => s.add(t));
+        });
+        return Array.from(s).sort();
+      }
+
+      /* ========== 渲染 ========== */
+      function renderFilters() {
+        const cats = collectCategories(),
+          tags = collectTags();
+        const catC = document.getElementById('categoryFilters'),
+          tagC = document.getElementById('tagFilters');
+        let ch =
+          '<span class="filter-chip' +
+          (!selectedCategory ? ' active' : '') +
+          '" data-type="category" data-value="">全部</span>';
+        cats.forEach((c) => {
+          ch +=
+            '<span class="filter-chip' +
+            (selectedCategory === c ? ' active' : '') +
+            '" data-type="category" data-value="' +
+            escapeHtml(c) +
+            '">' +
+            escapeHtml(c) +
+            '</span>';
+        });
+        catC.innerHTML = ch;
+        let th =
+          '<span class="filter-chip' +
+          (!selectedTag ? ' active' : '') +
+          '" data-type="tag" data-value="">全部</span>';
+        tags.forEach((t) => {
+          th +=
+            '<span class="filter-chip' +
+            (selectedTag === t ? ' active' : '') +
+            '" data-type="tag" data-value="' +
+            escapeHtml(t) +
+            '">' +
+            escapeHtml(t) +
+            '</span>';
+        });
+        tagC.innerHTML = th;
+      }
+
+      function formatDate(iso) {
+        try {
+          const d = new Date(iso);
+          const p = (n) => String(n).padStart(2, '0');
+          return (
+            d.getFullYear() +
+            '-' +
+            p(d.getMonth() + 1) +
+            '-' +
+            p(d.getDate()) +
+            ' ' +
+            p(d.getHours()) +
+            ':' +
+            p(d.getMinutes())
+          );
+        } catch {
+          return '';
+        }
+      }
+
+      function getPreviewText(note) {
+        if (!note || !note.content) return '';
+        const fl = note.content.split('\n')[0] || '';
+        return fl.length > 60 ? fl.slice(0, 60) + '...' : fl;
+      }
+
+      function renderNotesList() {
+        const c = document.getElementById('notesList');
+        const filtered = getFilteredNotes();
+        if (filtered.length === 0) {
+          c.innerHTML =
+            '<div class="empty-notes"><div class="empty-icon">📝</div>' +
+            (notes.length === 0
+              ? '<p>暂无笔记</p><button class="btn-new" id="btnNewNoteEmpty">新建笔记</button>'
+              : '<p>未找到匹配的笔记</p>') +
+            '</div>';
+          const eb = document.getElementById('btnNewNoteEmpty');
+          if (eb) eb.addEventListener('click', createNote);
+          return;
+        }
+        let html = '';
+        filtered.forEach((n) => {
+          const sel = n.id === currentNoteId ? ' selected' : '';
+          const catTag = n.category
+            ? '<span class="note-item-category">' + escapeHtml(n.category) + '</span>'
+            : '';
+          html +=
+            '<div class="note-item' +
+            sel +
+            '" data-id="' +
+            n.id +
+            '"><div class="note-item-title">' +
+            escapeHtml(n.title || '无标题') +
+            '</div><div class="note-item-preview">' +
+            escapeHtml(getPreviewText(n)) +
+            '</div><div class="note-item-meta">' +
+            formatDate(n.updatedAt) +
+            catTag +
+            '</div></div>';
+        });
+        c.innerHTML = html;
+        c.querySelectorAll('.note-item').forEach((el) =>
+          el.addEventListener('click', () => selectNote(el.dataset.id))
+        );
+      }
+
+      function renderCurrentNote() {
+        const note = notes.find((n) => n.id === currentNoteId) || null;
+        const ti = document.getElementById('noteTitle'),
+          ta = document.getElementById('noteContent');
+        const pp = document.getElementById('previewPanel'),
+          sc = document.getElementById('summaryContent');
+        const mp = document.getElementById('mainPanel');
+        const bids = ['btnDelete', 'btnSummary', 'btnCategory', 'btnTags'];
+        const noSel = mp.querySelector('.no-selection');
+        if (!note) {
+          ti.value = '';
+          ta.value = '';
+          pp.innerHTML = '';
+          sc.innerHTML = '<span class="summary-placeholder">选择一篇笔记查看详情</span>';
+          ti.disabled = true;
+          ta.disabled = true;
+          bids.forEach((id) => {
+            const el = document.getElementById(id);
+            if (el) el.disabled = true;
+          });
+          if (!noSel) {
+            const d = document.createElement('div');
+            d.className = 'no-selection';
+            d.innerHTML = '<div class="no-icon">📄</div><p>选择左侧笔记或新建一篇</p>';
+            mp.insertBefore(d, mp.querySelector('.tab-bar'));
+          }
+          return;
+        }
+        if (noSel) noSel.remove();
+        ti.disabled = false;
+        ta.disabled = false;
+        bids.forEach((id) => {
+          const el = document.getElementById(id);
+          if (el) el.disabled = false;
+        });
+        ti.value = note.title || '';
+        ta.value = note.content || '';
+        pp.innerHTML = note.content
+          ? parseMarkdown(note.content)
+          : '<p style="color:var(--text-secondary)">暂无内容</p>';
+        sc.innerHTML = note.summary
+          ? escapeHtml(note.summary)
+          : '<span class="summary-placeholder">点击「AI 总结」按钮，由 AI 生成笔记摘要</span>';
+      }
+
+      /* ========== CRUD ========== */
+      async function createNote() {
+        const note = {
+          id: generateId(),
+          title: '',
+          content: '',
+          category: '',
+          tags: [],
+          summary: '',
+          createdAt: nowISO(),
+          updatedAt: nowISO(),
+        };
+        notes.unshift(note);
+        await saveNotes();
+        currentNoteId = note.id;
+        renderAll();
+        document.getElementById('noteTitle').focus();
+      }
+
+      function selectNote(id) {
+        if (id === currentNoteId) return;
+        flushSave();
+        currentNoteId = id;
+        renderAll();
+      }
+
+      async function deleteNote(id) {
+        notes = notes.filter((n) => n.id !== id);
+        await saveNotes();
+        if (currentNoteId === id) currentNoteId = notes.length > 0 ? notes[0].id : null;
+        renderAll();
+        sdk.system.notify('笔记已删除');
+      }
+
+      /* ========== 防抖自动保存 ========== */
+      function flushSave() {
+        if (saveTimer) {
+          clearTimeout(saveTimer);
+          saveTimer = null;
+        }
+        doSave();
+      }
+      function scheduleSave() {
+        if (saveTimer) clearTimeout(saveTimer);
+        saveTimer = setTimeout(doSave, 500);
+      }
+
+      async function doSave() {
+        saveTimer = null;
+        if (!currentNoteId) return;
+        const note = notes.find((n) => n.id === currentNoteId);
+        if (!note) return;
+        const title = document.getElementById('noteTitle').value.trim();
+        const content = document.getElementById('noteContent').value;
+        if (note.title === title && note.content === content) return;
+        note.title = title;
+        note.content = content;
+        note.updatedAt = nowISO();
+        await saveNotes();
+        renderNotesList();
+        renderFilters();
+      }
+
+      /* ========== 搜索/筛选事件 ========== */
+      function handleSearch(e) {
+        searchKeyword = e.target.value.trim();
+        renderNotesList();
+      }
+
+      function handleFilterClick(e) {
+        const chip = e.target.closest('.filter-chip');
+        if (!chip) return;
+        const type = chip.dataset.type,
+          value = chip.dataset.value;
+        if (type === 'category') selectedCategory = value || null;
+        else if (type === 'tag') selectedTag = value || null;
+        renderFilters();
+        renderNotesList();
+      }
+
+      /* ========== Tab 切换 ========== */
+      function switchTab(tab) {
+        currentTab = tab;
+        document
+          .querySelectorAll('.tab-item')
+          .forEach((el) => el.classList.toggle('active', el.dataset.tab === tab));
+        document.getElementById('editorPanel').classList.toggle('active', tab === 'edit');
+        document.getElementById('previewPanel').classList.toggle('active', tab === 'preview');
+        if (tab === 'preview') {
+          const note = notes.find((n) => n.id === currentNoteId);
+          document.getElementById('previewPanel').innerHTML =
+            note && note.content
+              ? parseMarkdown(note.content)
+              : '<p style="color:var(--text-secondary)">暂无内容</p>';
+        }
+      }
+
+      /* ========== AI 总结 ========== */
+      async function handleSummary() {
+        const note = notes.find((n) => n.id === currentNoteId);
+        if (!note || !note.content.trim()) {
+          sdk.system.notify('请先输入笔记内容');
+          return;
+        }
+        const btn = document.getElementById('btnSummary'),
+          cd = document.getElementById('summaryContent');
+        btn.disabled = true;
+        btn.textContent = '总结中...';
+        cd.innerHTML =
+          '<div class="summary-loading"><div class="spinner"></div>AI 正在分析...</div>';
+        try {
+          const summary = await sdk.llm.chat({
+            model: 'fast',
+            messages: [
+              { role: 'system', content: '你是笔记总结助手，用简洁中文总结要点，分条列出。' },
+              { role: 'user', content: '请总结以下笔记内容：\n\n' + note.content },
+            ],
+          });
+          note.summary =
+            typeof summary === 'string' ? summary : (summary && summary.content) || '总结为空';
+          note.updatedAt = nowISO();
+          await saveNotes();
+          cd.innerHTML = escapeHtml(note.summary);
+        } catch (err) {
+          cd.innerHTML =
+            '<div class="summary-error">总结失败：' +
+            escapeHtml(err.message || '未知错误') +
+            '</div>';
+        } finally {
+          btn.disabled = false;
+          btn.textContent = 'AI 总结';
+        }
+      }
+
+      /* ========== 分类/标签编辑弹窗 ========== */
+      function handleMetaClick(type) {
+        const note = notes.find((n) => n.id === currentNoteId);
+        if (!note) return;
+        document.getElementById('metaModalTitle').textContent =
+          type === 'category' ? '编辑分类' : '编辑标签';
+        document.getElementById('metaCategory').value = note.category || '';
+        document.getElementById('metaTags').value = (note.tags || []).join(', ');
+        document.getElementById('metaModal').classList.add('open');
+      }
+
+      function saveMeta() {
+        const note = notes.find((n) => n.id === currentNoteId);
+        if (!note) return;
+        note.category = document.getElementById('metaCategory').value.trim();
+        note.tags = document
+          .getElementById('metaTags')
+          .value.split(',')
+          .map((s) => s.trim())
+          .filter(Boolean);
+        note.updatedAt = nowISO();
+        closeMeta();
+        saveNotes().then(() => {
+          renderAll();
+          sdk.system.notify('属性已保存');
+        });
+      }
+
+      function closeMeta() {
+        document.getElementById('metaModal').classList.remove('open');
+      }
+
+      function renderAll() {
+        renderFilters();
+        renderNotesList();
+        renderCurrentNote();
+      }
+
+      /* ========== 初始化 ========== */
+      async function init() {
+        await loadNotes();
+        if (notes.length > 0) currentNoteId = notes[0].id;
+        renderAll();
+        document
+          .getElementById('btnConfig')
+          .addEventListener('click', () =>
+            sdk.system.notify('AI 总结已接入灵坊平台 LLM，无需配置第三方接口')
+          );
+        document.getElementById('btnNewNote').addEventListener('click', createNote);
+        document.getElementById('searchInput').addEventListener('input', handleSearch);
+        document.getElementById('filterSection').addEventListener('click', handleFilterClick);
+        document.getElementById('noteTitle').addEventListener('input', scheduleSave);
+        document.getElementById('noteContent').addEventListener('input', scheduleSave);
+        document.getElementById('noteTitle').addEventListener('blur', flushSave);
+        document.getElementById('noteContent').addEventListener('blur', flushSave);
+        document
+          .querySelectorAll('.tab-item')
+          .forEach((el) => el.addEventListener('click', () => switchTab(el.dataset.tab)));
+        document.getElementById('btnDelete').addEventListener('click', () => {
+          if (!currentNoteId) return;
+          deleteTargetId = currentNoteId;
+          document.getElementById('confirmModal').classList.add('open');
+        });
+        document
+          .getElementById('btnCancelDelete')
+          .addEventListener('click', () =>
+            document.getElementById('confirmModal').classList.remove('open')
+          );
+        document.getElementById('btnConfirmDelete').addEventListener('click', () => {
+          document.getElementById('confirmModal').classList.remove('open');
+          if (deleteTargetId) {
+            deleteNote(deleteTargetId);
+            deleteTargetId = null;
+          }
+        });
+        document.getElementById('btnSummary').addEventListener('click', handleSummary);
+        document
+          .getElementById('btnCategory')
+          .addEventListener('click', () => handleMetaClick('category'));
+        document.getElementById('btnTags').addEventListener('click', () => handleMetaClick('tags'));
+        document.getElementById('btnCancelMeta').addEventListener('click', closeMeta);
+        document.getElementById('btnSaveMeta').addEventListener('click', saveMeta);
+        document.querySelectorAll('.modal-overlay').forEach((el) =>
+          el.addEventListener('click', (e) => {
+            if (e.target === el) el.classList.remove('open');
+          })
+        );
+        document.addEventListener('keydown', (e) => {
+          if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
+            e.preventDefault();
+            createNote();
+          }
+          if (e.key === 'Escape')
+            document
+              .querySelectorAll('.modal-overlay.open')
+              .forEach((el) => el.classList.remove('open'));
+        });
+      }
+      document.addEventListener('DOMContentLoaded', init);
+    </script>
+  </body>
+</html>

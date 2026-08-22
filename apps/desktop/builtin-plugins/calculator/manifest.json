@@ -1,0 +1,12 @@
+{
+  "id": "builtin.calculator",
+  "name": "计算器",
+  "version": "0.1.0",
+  "description": "基于 PySide6 (Qt6) 的桌面计算器：支持四则运算、括号表达式求值、退格与清零。首次运行需自动安装 PySide6（走清华镜像，约 80MB，几十秒），之后秒开。",
+  "runtime_type": "python",
+  "entry": "main.py",
+  "capabilities": [
+    { "kind": "ui.view", "reason": "展示计算器 GUI", "risk": "none", "requires_admin": false }
+  ],
+  "visibility": "tenant"
+}

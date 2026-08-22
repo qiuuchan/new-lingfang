@@ -1,0 +1,13 @@
+# Cargo workspace：Tauri 桌面壳的 Rust 部分。
+[workspace]
+resolver = "2"
+members = [
+  "apps/desktop/src-tauri",
+]
+
+# release 优化：减体积 + 提升启动速度。
+[profile.release]
+lto = "fat"
+codegen-units = 1
+strip = "symbols"
+panic = "abort"

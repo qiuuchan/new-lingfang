@@ -1,0 +1,86 @@
+"""{{name}} — Python 脚本插件"""
+import http.server
+import json
+import os
+import threading
+import urllib.request
+import webbrowser
+
+BRIDGE_URL = os.environ.get("LINGFANG_PLUGIN_BRIDGE_URL", "")
+BRIDGE_TOKEN = os.environ.get("LINGFANG_PLUGIN_BRIDGE_TOKEN", "")
+
+
+def call_bridge(path: str, payload: dict) -> dict:
+    """调用平台本地桥。"""
+    if not BRIDGE_URL or not BRIDGE_TOKEN:
+        raise RuntimeError("桥未注入：请在 LingFang 桌面壳内运行此插件")
+    req = urllib.request.Request(
+        f"{BRIDGE_URL}{path}",
+        data=json.dumps(payload).encode(),
+        headers={
+            "Content-Type": "application/json",
+            "X-LingFang-Plugin-Token": BRIDGE_TOKEN,
+        },
+        method="POST",
+    )
+    with urllib.request.urlopen(req) as resp:
+        return json.loads(resp.read())
+
+
+def llm_chat(content: str, model: str = "fast") -> str:
+    return call_bridge("/llm/chat", {"messages": [{"role": "user", "content": content}], "model": model}).get("content", "")
+
+
+class Handler(http.server.BaseHTTPRequestHandler):
+    def do_GET(self):
+        if self.path == "/":
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.end_headers()
+            self.wfile.write(
+                f"""<!doctype html><meta charset="utf-8"><title>{{name}}</title>
+                <h1>{{name}}</h1><p>{{description}}</p>
+                <button onclick="test()">调用 llm.chat</button>
+                <pre id="o"></pre>
+                <script>
+                async function test() {{
+                    const r = await fetch('/api/llm');
+                    document.getElementById('o').textContent = await r.text();
+                }}
+                </script>""".encode()
+            )
+            return
+        if self.path == "/api/llm":
+            try:
+                reply = llm_chat("你好，请用一句话介绍 {{name}} 插件。")
+                self.send_response(200)
+                self.send_header("Content-Type", "text/plain; charset=utf-8")
+                self.end_headers()
+                self.wfile.write(reply.encode())
+            except Exception as e:
+                self.send_response(500)
+                self.end_headers()
+                self.wfile.write(str(e).encode())
+            return
+        self.send_response(404)
+        self.end_headers()
+
+    def log_message(self, *args):
+        pass
+
+
+def find_port():
+    for port in range(41984, 42084):
+        try:
+            http.server.HTTPServer(("127.0.0.1", port), Handler)
+            return port
+        except OSError:
+            continue
+    raise RuntimeError("no available port")
+
+
+if __name__ == "__main__":
+    port = find_port()
+    print(f"[{{name}}] 服务已启动：http://127.0.0.1:{port}")
+    threading.Thread(target=lambda: webbrowser.open(f"http://127.0.0.1:{port}"), daemon=True).start()
+    http.server.HTTPServer(("127.0.0.1", port), Handler).serve_forever()

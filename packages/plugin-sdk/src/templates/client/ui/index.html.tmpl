@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>{{name}}</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body {
+      font-family: system-ui, sans-serif;
+      margin: 24px;
+      background: var(--lf-bg, #fff);
+      color: var(--lf-fg, #111);
+    }
+    button { padding: 8px 16px; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <h1>{{name}}</h1>
+  <p>{{description}}</p>
+  <button id="btn">点击调用 llm.chat</button>
+  <pre id="out"></pre>
+  <script>
+    // client 插件：window.sdk 由宿主在 iframe 加载前注入。
+    // TS 用户可：import type { ClientPluginEntry } from '@lingfang/plugin-sdk/types/client-entry'
+    //          然后声明：declare const sdk: ClientPluginEntry
+    /** @type {any} */
+    const sdk = window.sdk;
+    document.getElementById('btn').addEventListener('click', async () => {
+      if (!sdk?.llm?.chat) {
+        document.getElementById('out').textContent = '当前运行环境未注入 sdk.llm.chat';
+        return;
+      }
+      const reply = await sdk.llm.chat({
+        messages: [{ role: 'user', content: '你好，请用一句话介绍 LingFang 平台。' }],
+      });
+      document.getElementById('out').textContent = reply;
+    });
+  </script>
+</body>
+</html>

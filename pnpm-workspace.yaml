@@ -1,0 +1,5 @@
+# my-treasure workspace：桌面插件平台。
+# 只包含插件平台闭环：桌面端、契约、SDK。后端与外围（relay/计费/RBAC/AI 创建器）已全部移除。
+packages:
+  - 'apps/desktop'
+  - 'packages/*'

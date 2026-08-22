@@ -1,0 +1,85 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - "**"
+  pull_request:
+    branches:
+      - "**"
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile || pnpm install
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Test
+        run: pnpm test
+
+  publish-runtimes:
+    name: Publish bundled runtimes (B3)
+    runs-on: windows-latest
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: quality
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true   # runtime-parts 分片走 LFS；materialize 拼合 chrome.dll 需真实字节
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile || pnpm install
+      - name: Materialize runtime shards
+        run: node scripts/materialize-bundled-runtimes.mjs
+        shell: bash
+      - name: Verify runtimes (sha256 + Playwright drift)
+        run: node scripts/verify-bundled-runtimes.mjs
+        shell: bash
+      - name: Package runtimes bundle
+        run: |
+          cd apps/desktop
+          7z a -r runtimes-bundle.zip runtimes
+        shell: bash
+        continue-on-error: true   # 7z 可能未预装；B3 物料就绪后改为 hard
+      - name: Sign bundle (minisign)
+        env:
+          LINGFANG_RUNTIME_PUBKEY: ${{ secrets.LINGFANG_RUNTIME_PUBKEY }}
+          LINGFANG_RUNTIME_SIGKEY: ${{ secrets.LINGFANG_RUNTIME_SIGKEY }}
+        run: |
+          # 复用 plugin_security.rs 的 minisign 原语；签名密钥来自 Org secret。
+          # 密钥对已生成（见 docs/decisions/B3-runtime-material-source.md「minisign 密钥交接」）：
+          #   将本机 .runtime-signing/minisign.pub 的 32-byte 公钥 base64 配为 Org secret
+          #   LINGFANG_RUNTIME_PUBKEY；将 .runtime-signing/minisign.key 全文配为
+          #   LINGFANG_RUNTIME_SIGKEY。两者配齐后，下方改为 hard 并执行真实签名：
+          #   printf '%s' "$LINGFANG_RUNTIME_SIGKEY" > sig.key && minisign -S -s sig.key -m runtimes-bundle.zip
+          echo "minisign signing deferred until runtime material + signing key are provisioned (B3)"
+        shell: bash
+      - name: Upload release asset
+        uses: softprops/action-gh-release@v2
+        if: env.LINGFANG_RUNTIME_PUBKEY != ''
+        with:
+          files: apps/desktop/runtimes-bundle.zip
+        continue-on-error: true

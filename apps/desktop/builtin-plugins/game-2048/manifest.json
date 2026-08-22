@@ -1,0 +1,17 @@
+{
+  "id": "builtin.game-2048",
+  "name": "2048 小游戏",
+  "version": "0.1.0",
+  "description": "经典 2048 数字合并游戏。用 Node.js 标准库 http 起本地服务托管网页，启动后自动打开浏览器。方向键/WASD/触摸滑动操作，零 npm 依赖，秒启动。",
+  "runtime_type": "nodejs",
+  "entry": "index.js",
+  "capabilities": [
+    {
+      "kind": "ui.view",
+      "reason": "展示 2048 游戏 http 服务",
+      "risk": "none",
+      "requires_admin": false
+    }
+  ],
+  "visibility": "tenant"
+}

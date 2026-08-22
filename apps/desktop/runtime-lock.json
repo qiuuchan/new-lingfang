@@ -1,0 +1,86 @@
+{
+  "schemaVersion": 1,
+  "platform": "windows-x64",
+  "runtimes": {
+    "node": {
+      "version": "22.21.1",
+      "source": "https://nodejs.org/dist/v22.21.1/node-v22.21.1-win-x64.zip"
+    },
+    "python": {
+      "version": "3.12.13+20260623",
+      "source": "https://github.com/astral-sh/python-build-standalone/releases/download/20260623/cpython-3.12.13+20260623-x86_64-pc-windows-msvc-install_only_stripped.tar.gz"
+    },
+    "ffmpeg": {
+      "version": "8.1.2",
+      "source": "https://www.gyan.dev/ffmpeg/builds/packages/ffmpeg-8.1.2-full_build.7z",
+      "sourceSha256": "0fff188997a499b5382e0f66e845d4556c48c54f0113ebed4853d556dbdd7059",
+      "sourceSize": 166721853,
+      "_sourceNote": "B3: gyan.dev 8.1.2 full_build（/builds/ 根路径已下线，归档迁至 /builds/packages/，与 GitHub GyanD/codexffmpeg release 资产字节一致）。2026-08-22 实测：归档 sha256/size 已回填，包内 ffmpeg.exe / ffprobe.exe 与 keyFiles 完全一致。sha256 为硬门槛。"
+    },
+    "chromium": {
+      "playwrightVersion": "1.61.1",
+      "revision": "1228",
+      "browserVersion": "149.0.7827.55",
+      "source": "https://cdn.playwright.dev/builds/cft/149.0.7827.55/win64/"
+    }
+  },
+  "keyFiles": [
+    {
+      "path": "nodejs/node.exe",
+      "size": 85800448,
+      "sha256": "471961cb355311c9a9dd8ba417eca8269ead32a2231653084112554cda52e8b3"
+    },
+    {
+      "path": "python/python.exe",
+      "size": 91648,
+      "sha256": "82cc5793a3ba146a3ef6f6fa96982ca70780290d66f91d18fb021be10c6475d7"
+    },
+    {
+      "path": "ffmpeg/ffmpeg.exe",
+      "size": 242496512,
+      "sha256": "ad8f211bc894755e0061c55ab280ae00e8d3d4f15a8cc4372b24cfa247b5942e"
+    },
+    {
+      "path": "ffmpeg/ffprobe.exe",
+      "size": 242291712,
+      "sha256": "9df3b0b5275e830961df6d94e1f7a71121a7abd5ff708e9fec8a0b6084a55015"
+    },
+    {
+      "path": "chromium/ms-playwright/chromium-1228/chrome-win64/chrome.exe",
+      "size": 4059648,
+      "sha256": "b798f9e53a98d29eb7f36f8c409f905d3184780a04d2bcb56989067194784bd1"
+    },
+    {
+      "path": "chromium/ms-playwright/chromium_headless_shell-1228/chrome-headless-shell-win64/chrome-headless-shell.exe",
+      "size": 203034112,
+      "sha256": "28016df6864d302434c9231e1f9f1a8a7ecc512cb2fe3faabb2a36130b96bcf1"
+    }
+  ],
+  "materializedFiles": [
+    {
+      "path": "chromium/ms-playwright/chromium-1228/chrome-win64/chrome.dll",
+      "size": 285203968,
+      "sha256": "22e963482a71829da68c2c2717b615aed4fb8c2aac13fc5c22baf0fd079dff5b",
+      "partsRoot": "../runtime-parts",
+      "parts": [
+        "chromium/ms-playwright/chromium-1228/chrome-win64/chrome.dll.part-000",
+        "chromium/ms-playwright/chromium-1228/chrome-win64/chrome.dll.part-001",
+        "chromium/ms-playwright/chromium-1228/chrome-win64/chrome.dll.part-002",
+        "chromium/ms-playwright/chromium-1228/chrome-win64/chrome.dll.part-003",
+        "chromium/ms-playwright/chromium-1228/chrome-win64/chrome.dll.part-004"
+      ]
+    }
+  ],
+  "requiredFiles": [
+    "nodejs/npm.cmd",
+    "nodejs/pnpm.cmd",
+    "nodejs/node_modules/npm/bin/npm-cli.js",
+    "nodejs/node_modules/npm/bin/npx-cli.js",
+    "nodejs/node_modules/pnpm/bin/pnpm.cjs",
+    "nodejs/node_modules/pnpm/bin/pnpx.cjs",
+    "python/Scripts/pip.cmd",
+    "python/Lib/ensurepip/_bundled/pip-25.0.1-py3-none-any.whl",
+    "chromium/ms-playwright/chromium-1228/INSTALLATION_COMPLETE",
+    "chromium/ms-playwright/chromium_headless_shell-1228/INSTALLATION_COMPLETE"
+  ]
+}

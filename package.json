@@ -1,0 +1,23 @@
+{
+  "name": "my-treasure",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@9.0.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "dev:desktop": "pnpm -C apps/desktop dev",
+    "build:desktop": "pnpm -C apps/desktop build",
+    "plugin:create": "pnpm -C packages/plugin-sdk exec lingfang-plugin create",
+    "plugin:validate": "pnpm -C packages/plugin-sdk exec lingfang-plugin validate",
+    "plugin:build": "pnpm -C packages/plugin-sdk exec lingfang-plugin build",
+    "plugin:publish": "pnpm -C packages/plugin-sdk exec lingfang-plugin publish"
+  },
+  "devDependencies": {
+    "prettier": "^3.6.2"
+  }
+}

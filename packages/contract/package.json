@@ -1,0 +1,20 @@
+{
+  "name": "@lingfang/contract",
+  "version": "0.0.6",
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage"
+  },
+  "dependencies": {
+    "zod": "^3"
+  },
+  "devDependencies": {
+    "typescript": "^5",
+    "vitest": "^4.1.8",
+    "@vitest/coverage-v8": "4.1.8"
+  }
+}

@@ -1,0 +1,50 @@
+// {{name}} — Node.js 脚本插件
+// 通过 @lingfang/plugin-sdk 调用平台能力（推荐，比手写 fetch 桥客户端干净）
+import { sdk, PluginAiError } from '@lingfang/plugin-sdk';
+
+const http = await import('node:http');
+
+const server = http.createServer(async (req, res) => {
+  if (req.url === '/' && req.method === 'GET') {
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.end(`<!doctype html><meta charset="utf-8"><title>{{name}}</title>
+      <h1>{{name}}</h1><p>{{description}}</p>
+      <button onclick="test()">调用 llm.chat</button>
+      <pre id="o"></pre>
+      <script>
+        async function test() {
+          const r = await fetch('/api/llm');
+          document.getElementById('o').textContent = await r.text();
+        }
+      </script>`);
+    return;
+  }
+  if (req.url === '/api/llm' && req.method === 'GET') {
+    try {
+      const reply = await sdk.llm.chat({
+        messages: [{ role: 'user', content: '你好，请用一句话介绍 {{name}} 插件。' }],
+      });
+      res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+      res.end(reply);
+    } catch (err) {
+      res.statusCode = 500;
+      res.end(err instanceof PluginAiError ? `[${err.code}] ${err.message}` : String(err));
+    }
+    return;
+  }
+  res.statusCode = 404;
+  res.end('Not Found');
+});
+
+// 端口自发现（41984-42084）
+const PORT_BASE = 41984;
+for (let port = PORT_BASE; port < PORT_BASE + 100; port++) {
+  try {
+    await new Promise((resolve, reject) => {
+      server.once('error', reject);
+      server.listen(port, '127.0.0.1', resolve);
+    });
+    console.log(`[{{name}}] 服务已启动：http://127.0.0.1:${port}`);
+    break;
+  } catch { /* try next */ }
+}

@@ -1,0 +1,35 @@
+# 依赖
+node_modules/
+.pnpm-store/
+
+# 构建产物
+dist/
+target/
+release/
+*.tsbuildinfo
+
+# 运行时（随包分发，不入仓）
+apps/desktop/runtimes/
+apps/desktop/src-tauri/runtimes/
+
+# 本地环境
+.env
+.env.*
+!.env.example
+!.env.collab.example
+
+# 日志与缓存
+*.log
+.vite/
+eslintcache
+
+# 打包产物
+*.lfplugin
+*.exe
+*.msi
+
+# Trellis 内部工作痕迹（新仓库不使用）
+.trellis/
+
+# B3: 本地生成的运行时 minisign 密钥（绝不入库；仅本机/CI 通过 Org secret 持有）
+.runtime-signing/

@@ -1,0 +1,4 @@
+{
+  "_说明": "内置后端服务地址（公司平台）。打包分发前通过安全发布配置注入 HTTPS 地址；默认留空进入配置入口。",
+  "api_base": "https://lingfang.guiyuanzi.com"
+}

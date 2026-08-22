@@ -1,0 +1,30 @@
+{
+  "name": "@lingfang/plugin-sdk",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "src/index.ts",
+  "bin": {
+    "lingfang-plugin": "src/cli/index.ts"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./manifest": "./src/manifest/index.ts",
+    "./types/client-entry": "./src/types/client-entry.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "cli:dev": "tsx src/cli/index.ts"
+  },
+  "dependencies": {
+    "@lingfang/contract": "workspace:*",
+    "jszip": "^3.10.1"
+  },
+  "devDependencies": {
+    "typescript": "^5",
+    "vitest": "^4.1.8",
+    "@vitest/coverage-v8": "4.1.8",
+    "tsx": "^4.19.2"
+  }
+}

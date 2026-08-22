@@ -1,0 +1,50 @@
+# 自制 Windows 安装/更新/卸载器（PRD R3/R4/R8）。
+# 三合一二进制：install（egui 交互）/ --silent（无 UI 覆盖）/ update（等待+覆盖+重启）/ uninstall（egui 确认）。
+# 自解压：app 文件追加到本 exe 尾部，运行期读取解压（design §2）。
+[package]
+name = "lingfang-installer"
+version = "0.0.23"
+edition = "2021"
+
+[[bin]]
+name = "installer"
+path = "src/main.rs"
+
+[dependencies]
+# egui + 窗口（install/uninstall 模式才初始化；silent/update 模式不创建窗口）。
+eframe = { version = "0.28", default-features = false, features = ["default_fonts", "glow"] }
+egui = "0.28"
+# 自解压：zip 解压 app 文件（deflate 即可，runtime 多为已压缩的小文件）。
+zip = { version = "2", default-features = false, features = ["deflate"] }
+# SHA-256 完整性校验（与后端 uploadAsset 计算的哈希比对）。
+sha2 = "0.10"
+# 窗口图标 PNG 解码（编译期内嵌图标 → 运行期解码为 RGBA，纯 Rust 轻量）。
+png = "0.17"
+# LOCALAPPDATA 等目录定位（与 src-tauri 同款 dirs 5）。
+dirs = "5"
+anyhow = "1"
+# 从 eframe Frame 取真实窗口 HWND（applyWin11 圆角）。版本须与 eframe 0.28 一致（0.6）。
+raw-window-handle = "0.6"
+
+[target.'cfg(windows)'.dependencies]
+# 注册表（Uninstall key + 读 CurrentBuild 判 Win11）/ 快捷方式（IShellLinkW COM）/
+# 进程等待（OpenProcess/WaitForSingleObject）。
+# GDI（CreateRoundRectRgn）+ WindowsAndMessaging（SetWindowRgn/GetWindowRect）：
+# 给无边框窗口裁圆角形状（winit 无边框吃掉 NC 区，DWM 圆角失效，故改用窗口区域裁剪）。
+windows-sys = { version = "0.59", features = [
+  "Win32_Foundation",
+  "Win32_Security",
+  "Win32_System_Registry",
+  "Win32_UI_Shell",
+  "Win32_System_Com",
+  "Win32_System_Threading",
+  "Win32_System_Diagnostics_ToolHelp",
+  "Win32_Storage_FileSystem",
+  "Win32_Graphics_Gdi",
+  "Win32_UI_WindowsAndMessaging",
+] }
+
+# Windows VERSIONINFO 资源（build.rs 嵌入）：给 installer.exe 补合法的版本元数据
+# （公司名/产品名/版本/文件描述），减少杀软把「匿名 dropper」误判为恶意的概率。
+[target.'cfg(windows)'.build-dependencies]
+winres = "0.1"

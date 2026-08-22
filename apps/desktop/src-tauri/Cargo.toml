@@ -1,0 +1,65 @@
+[package]
+name = "lingfang-desktop"
+version = "0.1.11"
+edition = "2021"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+semver = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+zip = "2"
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon", "devtools"] }
+tauri-plugin-dialog = "2.7.1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sysinfo = "0.32"
+dirs = "5"
+# 自制更新器（design §5）：check_update 调后端 /api/releases/latest 解析 JSON 判断有无更新，
+# download_update 下载安装包 + 流式 SHA-256 校验 + 调起安装目录的 updater.exe 覆盖重启。
+# 摆脱 tauri-plugin-updater 与 minisign 签名密钥（PRD R1/R6）。
+sha2 = "0.10"
+# fetch_models 命令（llm_fetch.rs）直连 LLM provider 的 /v1/models 拉取模型列表。
+# features=json 解析 OpenAI 兼容响应体；features=rustls-tls 复用 rustls 避免原生 OpenSSL/WinHTTP 依赖；
+# default-features=false 裁掉默认的 native-tls / charset / blocking 等不需要的 feature，减小产物体积。
+reqwest = { version = "0.12", features = [
+  "json",
+  "blocking",
+  "rustls-tls",
+  "stream",
+], default-features = false }
+# v4 制品上传/下载流式 body：network.rs 使用 futures stream + bytes::Bytes。
+futures-util = "0.3"
+bytes = "1"
+windows-sys = { version = "0.61.2", features = [
+  "Win32_Foundation",
+  "Win32_System_Diagnostics_ToolHelp",
+  "Win32_System_Threading",
+  "Win32_System_JobObjects",
+] }
+# Task 14 插件签名校验：minisign 非对称验签（与 updater 同款，已传递依赖、直接声明复用已编译产物）。
+# verify_plugin_signature 用 PublicKey::from_base64 + verify 校验插件 manifest.sig。
+minisign-verify = "0.2"
+# 本地草稿插件：生成创建/更新时间戳（RFC 3339 格式）。
+chrono = "0.4"
+# 插件能力：clipboard（剪贴板读写，纯 Rust 跨平台，无 Tauri 依赖）。
+arboard = "3"
+# 插件能力：system.screenshot（跨平台截屏，支持 Linux/macOS/Windows）。
+xcap = "0.9"
+# 插件能力：system.screenshot 截图 PNG → base64 data URL 编码。
+base64 = "0.22"
+# 插件制品读写与版本校验。
+zip = "2"
+semver = "1"
+uuid = { version = "1", features = ["v4"] }
+# 异步运行时（plugin_runner 用 tokio::time::sleep 做非阻塞等待）
+tokio = { version = "1", features = ["time"] }
+
+[dev-dependencies]
+# scheduler 单测临时目录。
+tempfile = "3"
+# scheduler 单测阻塞 oneshot 接收。
+futures = "0.3"
