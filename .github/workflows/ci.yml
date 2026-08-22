@@ -40,6 +40,9 @@ jobs:
     runs-on: windows-latest
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     needs: quality
+    env:
+      LINGFANG_RUNTIME_PUBKEY: ${{ secrets.LINGFANG_RUNTIME_PUBKEY }}
+      LINGFANG_RUNTIME_SIGKEY: ${{ secrets.LINGFANG_RUNTIME_SIGKEY }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -52,34 +55,89 @@ jobs:
           node-version: 20
           cache: pnpm
       - run: pnpm install --frozen-lockfile || pnpm install
-      - name: Materialize runtime shards
+
+      # ── 1. 分片拼合 + 公开来源归档下载（sha256 硬校验）─────────────────────
+      - name: Materialize runtime shards & fetch verified archives
         run: node scripts/materialize-bundled-runtimes.mjs
         shell: bash
+
+      # ── 2. 灌装 runtimes/：解包 node/python/pnpm/ffmpeg/chromium ───────────
+      - name: Populate runtimes (node/python/pnpm/ffmpeg/chromium)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $lock = Get-Content apps/desktop/runtime-lock.json -Raw | ConvertFrom-Json
+          $rt   = 'apps/desktop/runtimes'
+
+          # node —— 解压 zip 并去掉顶层目录，随后把 pnpm 装进便携 prefix，
+          # 使 nodejs/pnpm.cmd 与 nodejs/node_modules/pnpm/bin/pnpm.cjs 就位。
+          Invoke-WebRequest $lock.runtimes.node.source -OutFile node-dist.zip
+          Expand-Archive node-dist.zip -DestinationPath node-tmp
+          Move-Item node-tmp\* "$rt/nodejs"
+          $env:PATH = "$((Resolve-Path "$rt/nodejs").Path);$env:PATH"
+          & "$rt/nodejs/npm.cmd" install -g --prefix "$rt/nodejs" 'pnpm@9'
+
+          # python —— install_only_stripped 压缩包顶层即 python/
+          Invoke-WebRequest $lock.runtimes.python.source -OutFile python-dist.tar.gz
+          New-Item -ItemType Directory -Force -Path "$rt/python" | Out-Null
+          tar -xzf python-dist.tar.gz -C "$rt/python" --strip-components=1
+
+          # ffmpeg —— 取 materialize 校验过的归档（sha256 已硬门槛），解出两个 exe
+          $ffArchive = Get-ChildItem "$rt/.download" -Filter '.ffmpeg.*' |
+            Sort-Object LastWriteTime | Select-Object -Last 1
+          if (-not $ffArchive) { throw 'ffmpeg archive not found in .download/' }
+          New-Item -ItemType Directory -Force -Path ff-tmp "$rt/ffmpeg" | Out-Null
+          tar -xf $ffArchive.FullName -C ff-tmp
+          Copy-Item ff-tmp/*/bin/*.exe "$rt/ffmpeg/"
+
+          # chromium —— CfT 官方包按 ms-playwright 目录布局落位；
+          # chrome.dll 已由分片拼合（字节一致），此处合并补齐其余文件与 headless shell。
+          $cft = $lock.runtimes.chromium.source + $lock.runtimes.chromium.browserVersion + '/win64/'
+          $mp  = "$rt/chromium/ms-playwright"
+          New-Item -ItemType Directory -Force -Path "$mp/chromium-1228" "$mp/chromium_headless_shell-1228" | Out-Null
+          Invoke-WebRequest "$cft/chrome-win64.zip" -OutFile cft-chrome.zip
+          Invoke-WebRequest "$cft/chrome-headless-shell-win64.zip" -OutFile cft-hss.zip
+          Expand-Archive cft-chrome.zip -DestinationPath "$mp/chromium-1228"
+          Expand-Archive cft-hss.zip -DestinationPath "$mp/chromium_headless_shell-1228"
+          Set-Content "$mp/chromium-1228/INSTALLATION_COMPLETE" ''
+          Set-Content "$mp/chromium_headless_shell-1228/INSTALLATION_COMPLETE" ''
+
+      # ── 3. 全量校验（keyFiles sha256 + Playwright 漂移）──────────────────
       - name: Verify runtimes (sha256 + Playwright drift)
         run: node scripts/verify-bundled-runtimes.mjs
         shell: bash
+
+      # ── 4. 打包 ──────────────────────────────────────────────────────
       - name: Package runtimes bundle
-        run: |
-          cd apps/desktop
-          7z a -r runtimes-bundle.zip runtimes
+        run: tar -a -c -f runtimes-bundle.zip -C apps/desktop runtimes
         shell: bash
-        continue-on-error: true   # 7z 可能未预装；B3 物料就绪后改为 hard
+
+      # ── 5. minisign 签名 + 自验 ──────────────────────────────────────
       - name: Sign bundle (minisign)
-        env:
-          LINGFANG_RUNTIME_PUBKEY: ${{ secrets.LINGFANG_RUNTIME_PUBKEY }}
-          LINGFANG_RUNTIME_SIGKEY: ${{ secrets.LINGFANG_RUNTIME_SIGKEY }}
+        shell: pwsh
         run: |
-          # 复用 plugin_security.rs 的 minisign 原语；签名密钥来自 Org secret。
-          # 密钥对已生成（见 docs/decisions/B3-runtime-material-source.md「minisign 密钥交接」）：
-          #   将本机 .runtime-signing/minisign.pub 的 32-byte 公钥 base64 配为 Org secret
-          #   LINGFANG_RUNTIME_PUBKEY；将 .runtime-signing/minisign.key 全文配为
-          #   LINGFANG_RUNTIME_SIGKEY。两者配齐后，下方改为 hard 并执行真实签名：
-          #   printf '%s' "$LINGFANG_RUNTIME_SIGKEY" > sig.key && minisign -S -s sig.key -m runtimes-bundle.zip
-          echo "minisign signing deferred until runtime material + signing key are provisioned (B3)"
-        shell: bash
+          $ErrorActionPreference = 'Stop'
+          Invoke-WebRequest 'https://github.com/jedisct1/minisign/releases/download/0.12/minisign-0.12-win64.zip' -OutFile ms.zip
+          Expand-Archive ms.zip -DestinationPath ms-bin
+          $minisign = (Get-ChildItem ms-bin -Recurse -Filter minisign.exe |
+            Where-Object FullName -match 'x86_64').FullName
+          # 密钥来自 Org secret；统一为 LF 结尾写入临时文件（不入库）
+          function Write-Key([string]$value, [string]$path) {
+            $t = $value.Replace("`r`n", "`n")
+            if (-not $t.EndsWith("`n")) { $t += "`n" }
+            [IO.File]::WriteAllText($path, $t)
+          }
+          Write-Key $env:LINGFANG_RUNTIME_SIGKEY 'bundle.seckey'
+          Write-Key $env:LINGFANG_RUNTIME_PUBKEY 'bundle.pubkey'
+          & $minisign -S -s bundle.seckey -m runtimes-bundle.zip
+          if ($LASTEXITCODE -ne 0) { throw 'minisign signing failed' }
+          & $minisign -V -p bundle.pubkey -m runtimes-bundle.zip -x runtimes-bundle.zip.minisig
+          if ($LASTEXITCODE -ne 0) { throw 'minisign self-verification failed' }
+
+      # ── 6. 上传 Release 附件（bundle + 签名）──────────────────────────
       - name: Upload release asset
         uses: softprops/action-gh-release@v2
-        if: env.LINGFANG_RUNTIME_PUBKEY != ''
         with:
-          files: apps/desktop/runtimes-bundle.zip
-        continue-on-error: true
+          files: |
+            runtimes-bundle.zip
+            runtimes-bundle.zip.minisig
