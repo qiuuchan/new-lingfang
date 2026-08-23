@@ -8,8 +8,11 @@ target/
 release/
 *.tsbuildinfo
 
-# 运行时（随包分发，不入仓）
-apps/desktop/runtimes/
+# 运行时（随包分发，不入仓）。目录本身必须入库：tauri.conf.json 把 ../runtimes
+# 声明为打包资源，tauri-build 编译期要求其存在——没有 .gitkeep 时全新 clone /
+# CI 直接 "resource path `..\runtimes` doesn't exist" 编译失败。
+apps/desktop/runtimes/*
+!apps/desktop/runtimes/.gitkeep
 apps/desktop/src-tauri/runtimes/
 
 # 本地环境
