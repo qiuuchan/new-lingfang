@@ -261,6 +261,78 @@ fn unsafe_release_id_is_rejected_before_creating_installation_paths() {
 }
 
 #[test]
+fn v1_policy_rejects_local_import_of_process_runtime_plugins() {
+    // IMPROVEMENT_PLAN F2：Local 来源的 nodejs/python 插件在签名信任根建立前拒绝安装。
+    let (manager, root) = manager();
+    let (py_path, py_artifact) = artifact(&root, "1.0.0", "print('py')");
+    let err = manager
+        .install(InstallArtifactInput {
+            artifact_path: py_path.to_string_lossy().to_string(),
+            expected_sha256: Some(py_artifact.sha256.clone()),
+            package_id: Some("policy-py".to_string()),
+            release_id: Some("policy-py-release".to_string()),
+            origin: InstallationOrigin::Local,
+            protected: false,
+        })
+        .unwrap_err();
+    assert!(err.contains("v1 安全政策"), "错误文案应指向政策：{err}");
+    assert!(err.contains("client 运行时"), "错误文案应说明仅支持 client：{err}");
+
+    let (node_path, node_artifact) = node_artifact(&root);
+    assert!(manager
+        .install(InstallArtifactInput {
+            artifact_path: node_path.to_string_lossy().to_string(),
+            expected_sha256: Some(node_artifact.sha256),
+            package_id: Some("policy-node".to_string()),
+            release_id: Some("policy-node-release".to_string()),
+            origin: InstallationOrigin::Local,
+            protected: false,
+        })
+        .is_err());
+
+    assert!(manager.list_installations().is_empty());
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
+fn v1_policy_allows_local_client_and_builtin_process_plugins() {
+    // F2 政策只约束 Local 来源：client 插件照常安装，Builtin 来源的进程插件不受限。
+    let (manager, root) = manager();
+    let (client_path, client_artifact) = runtime_artifact(
+        &root,
+        "policy-client-demo",
+        "1.0.0",
+        "client",
+        "index.html",
+        "<p>ok</p>",
+    );
+    manager
+        .install(InstallArtifactInput {
+            artifact_path: client_path.to_string_lossy().to_string(),
+            expected_sha256: Some(client_artifact.sha256),
+            package_id: Some("policy-client".to_string()),
+            release_id: Some("policy-client-release".to_string()),
+            origin: InstallationOrigin::Local,
+            protected: false,
+        })
+        .unwrap();
+
+    let (node_path, node_artifact) = node_artifact(&root);
+    manager
+        .install(InstallArtifactInput {
+            artifact_path: node_path.to_string_lossy().to_string(),
+            expected_sha256: Some(node_artifact.sha256),
+            package_id: Some("policy-builtin-node".to_string()),
+            release_id: Some("policy-builtin-node-release".to_string()),
+            origin: InstallationOrigin::Builtin,
+            protected: true,
+        })
+        .unwrap();
+    assert_eq!(manager.list_installations().len(), 2);
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
 fn update_uses_pending_then_activation_and_rollback() {
     let (manager, root) = manager();
     let (first_path, first) = artifact(&root, "1.0.0", "print('one')");
@@ -362,7 +434,8 @@ fn installed_release_can_be_copied_to_workspace_then_uninstalled_with_data() {
             expected_sha256: Some(artifact.sha256),
             package_id: None,
             release_id: None,
-            origin: InstallationOrigin::Local,
+            // 机制测试用 Team 来源（v1 政策仅约束 Local 来源的进程运行时插件，F2）
+            origin: InstallationOrigin::Team,
             protected: false,
         })
         .unwrap();
@@ -403,7 +476,8 @@ fn nodejs_install_does_not_precreate_node_modules_junction() {
             expected_sha256: Some(artifact.sha256),
             package_id: Some("package-node".to_string()),
             release_id: Some("release-node".to_string()),
-            origin: InstallationOrigin::Local,
+            // 同上：nodejs 机制测试用 Team 来源绕开 F2 的 Local 来源限制
+            origin: InstallationOrigin::Team,
             protected: false,
         })
         .unwrap();
@@ -555,7 +629,8 @@ fn script_pending_preview_does_not_activate_without_successful_process_start() {
             expected_sha256: Some(first.sha256),
             package_id: Some("script-package".to_string()),
             release_id: Some("script-release-1".to_string()),
-            origin: InstallationOrigin::Local,
+            // 同上：python 机制测试用 Team 来源（F2）
+            origin: InstallationOrigin::Team,
             protected: false,
         })
         .unwrap();
@@ -566,7 +641,7 @@ fn script_pending_preview_does_not_activate_without_successful_process_start() {
             expected_sha256: Some(second.sha256),
             package_id: Some("script-package".to_string()),
             release_id: Some("script-release-2".to_string()),
-            origin: InstallationOrigin::Local,
+            origin: InstallationOrigin::Team,
             protected: false,
         })
         .unwrap();

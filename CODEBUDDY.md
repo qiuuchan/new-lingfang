@@ -6,9 +6,10 @@ This file provides guidance to CodeBuddy Code when working with code in this rep
 
 **my-treasure** ("灵坊工作台" / LingFang Workbench) is a Tauri v2 desktop **plugin platform**. It
 runs third-party plugins locally inside a desktop shell. The defining architectural choice is a
-**zero-server model**: there is no backend in this repo. All plugin execution, capability
-enforcement, and file/network access happen through Tauri commands, the local filesystem, and
-app-bundled language runtimes (Node/Python/Chromium/ffmpeg).
+**zero-server model**: there is no backend in this repo. Client-plugin execution and every
+privileged call it makes go through Tauri commands with capability checks; nodejs/python plugins
+run as local OS processes whose containment story is install-time trust, not a runtime sandbox
+(see "Security model" for the honest three-tier boundary).
 
 The repo is a hybrid monorepo: a **pnpm workspace** for the TypeScript side and a **Cargo workspace**
 for the Rust/Tauri shell. Backend services (relay / billing / RBAC / AI creator) and the older Rust
@@ -160,9 +161,29 @@ dir / `LINGFANG_EMBEDDED_RUNTIME_DIR`), injecting bundled PATH plus Tsinghua PyP
 mirrors. `plugin_runner.rs` uses it to create Python venvs and run `pnpm`/`npm install`, spawning
 sandboxed processes.
 
-### Security model
+### Security model (three-tier boundary, stated honestly)
 
-Plugin packages (`.lfplugin`) are verified with `minisign-verify` (`plugin_security.rs`
-`verify_plugin_signature_command`) and checked against a recall list (`check_plugin_recall_command`).
-Plugin processes run inside a Windows Job Object sandbox (`process_util/sandbox.rs`). Built-in
-bundles are validated at startup (`builtin_plugin_index.rs`: sorted, SemVer, sha256 format).
+**Tier 1 — client plugins: a real runtime boundary.** Client HTML runs in a sandboxed iframe
+(`sandbox="allow-scripts"`, srcdoc, no `allow-same-origin` → opaque origin `'null'`). Its only
+privileged channel is the host-injected `window.sdk` facade; every call is source-checked
+(`event.source === iframe.contentWindow`, `event.origin === 'null'`) and routed through the
+capability gateway. Plugin JS cannot reach the host page, Tauri IPC, or sibling plugins.
+
+**Tier 2 — process plugins: a lifecycle fence, NOT a security boundary.** nodejs/python plugins
+run as regular OS processes under a Windows Job Object (`process_util/sandbox.rs`) whose only
+guarantees are process-tree containment and kill-on-close (`KILL_ON_JOB_CLOSE`,
+`DIE_ON_UNHANDLED_EXCEPTION`, no `BREAKAWAY_OK`). There is no restricted token, integrity level,
+AppContainer, or filesystem/network isolation: a process plugin runs with the user's full
+privileges and CAN bypass the SDK to touch the network or user-readable files directly. The
+capability gateway constrains only calls that go through the SDK/bridge — it is an API contract
+for honest plugins, not a wall against malicious ones.
+
+**Tier 3 — the real defense for process plugins is install-time trust.** `.lfplugin` packages
+are minisign-verified (`plugin_security.rs` `verify_plugin_signature_command`; `signed=false`
+does not block — status display only) and checked against a recall list
+(`check_plugin_recall_command`). Until a plugin-signing trust root exists for the ecosystem,
+**v1 policy restricts third-party (local-import) installs to client plugins** — nodejs/python
+installs are reserved for built-in/first-party signed plugins (`IMPROVEMENT_PLAN.md` F2).
+
+Built-in bundles are validated at startup (`builtin_plugin_index.rs`: sorted, SemVer, sha256
+format).

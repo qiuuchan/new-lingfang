@@ -30,6 +30,11 @@ lingfang-plugin publish
 - `python`：Python 独立进程入口。
 - `cloud` / `workflow`：由平台云运行与工作流能力处理，不能套用前三种模板的本地入口假设。
 
+> 🔒 **v1 安装政策**：桌面壳对**本地导入**的第三方插件仅接受 `client` 运行时；
+> `nodejs` / `python` 进程插件保留给内置或一方签名插件（进程沙箱非安全边界，
+> 详见仓库 `IMPROVEMENT_PLAN.md` F2 与 `CODEBUDDY.md` Security model）。
+> CLI 的 `create` / `validate` / `build` 不受影响。
+
 插件使用的能力必须在 `manifest.capabilities` 中声明。代码通过 `@lingfang/plugin-sdk` 调用宿主能力，不直接读取平台密钥或桥接令牌；README 应解释每项能力的用途、访问的数据和隐私影响。
 
 ## CLI 门禁

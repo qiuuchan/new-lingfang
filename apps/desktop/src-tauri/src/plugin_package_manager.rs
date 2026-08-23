@@ -998,14 +998,18 @@ impl PluginPackageManager {
             .staging_root()
             .join(format!("legacy-layout-{}", Uuid::new_v4()));
         fs::rename(path, &backup).map_err(|error| format!("暂存旧插件目录失败：{error}"))?;
-        let installed = match self.install(InstallArtifactInput {
-            artifact_path: artifact_path.to_string_lossy().to_string(),
-            expected_sha256: Some(artifact.sha256.clone()),
-            package_id: Some(format!("local:{manifest_id}")),
-            release_id: Some(format!("legacy-{}", &artifact.sha256[..16])),
-            origin: InstallationOrigin::Local,
-            protected: false,
-        }) {
+        // 迁移的是政策生效前已存在的安装（grandfathered），绕开 F2 v1 运行时政策。
+        let installed = match self.install_with_runtime_policy(
+            InstallArtifactInput {
+                artifact_path: artifact_path.to_string_lossy().to_string(),
+                expected_sha256: Some(artifact.sha256.clone()),
+                package_id: Some(format!("local:{manifest_id}")),
+                release_id: Some(format!("legacy-{}", &artifact.sha256[..16])),
+                origin: InstallationOrigin::Local,
+                protected: false,
+            },
+            false,
+        ) {
             Ok(installed) => installed,
             Err(error) => {
                 let _ = fs::remove_file(&artifact_path);
@@ -1052,7 +1056,18 @@ impl PluginPackageManager {
             .ok_or_else(|| "本机安装项不存在".to_string())
     }
 
+    /// 命令层安装入口（新安装）：执行 F2 v1 运行时政策（Local 来源仅 client）。
     pub(crate) fn install(&self, input: InstallArtifactInput) -> Result<LocalInstallation, String> {
+        self.install_with_runtime_policy(input, true)
+    }
+
+    /// `enforce_v1_runtime_policy = false` 仅供 legacy 迁移——迁移的是政策生效前
+    /// 已存在的安装（grandfathered），不按新政策拒收。
+    fn install_with_runtime_policy(
+        &self,
+        input: InstallArtifactInput,
+        enforce_v1_runtime_policy: bool,
+    ) -> Result<LocalInstallation, String> {
         let _guard = lock_or_recover(&self.file_lock);
         let artifact_path = PathBuf::from(&input.artifact_path);
         let inspected = inspect_artifact(&artifact_path)?;
@@ -1086,6 +1101,32 @@ impl PluginPackageManager {
             .release_id
             .unwrap_or_else(|| format!("local-{}", &inspected.sha256[..16]));
         validate_storage_segment(&release_id, "releaseId")?;
+        // IMPROVEMENT_PLAN F2（v1 安全政策）：本地导入的第三方插件仅允许 client 运行时。
+        // 进程沙箱（Job Object）是生命周期围栏而非安全边界（CODEBUDDY.md Security model Tier 2），
+        // 在插件签名信任根建立前，nodejs/python 进程插件保留给内置/一方签名插件；
+        // Team/Marketplace 来源另受 start_installed_plugin 的在线访问权校验门槛约束。
+        if enforce_v1_runtime_policy && input.origin == InstallationOrigin::Local {
+            let runtime_type = inspected
+                .manifest
+                .get("runtime_type")
+                .and_then(Value::as_str)
+                .unwrap_or("client");
+            if runtime_type == "nodejs" || runtime_type == "python" {
+                self.audit(
+                    "plugin.install.runtime_policy_rejected",
+                    &release_id,
+                    serde_json::json!({
+                        "manifest_id": manifest_id,
+                        "version": version,
+                        "runtime_type": runtime_type,
+                    }),
+                );
+                return Err(
+                    "v1 安全政策：本地导入的插件暂仅支持 client 运行时；nodejs/python 进程插件保留给内置或一方签名插件（进程沙箱非安全边界，待插件签名信任根建立后放开，见 IMPROVEMENT_PLAN.md F2）"
+                        .to_string(),
+                );
+            }
+        }
         let mut ledger = self.read_installations();
         let existing_index = ledger
             .installations

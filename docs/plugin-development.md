@@ -21,6 +21,12 @@
 > ⚠️ 校验器会对 `cloud` / `workflow` 发出**非阻塞警告**：本地桌面工作台是零服务端模型，
 > 不会运行这两类运行时；它们需通过平台云端运行。其余规则（如 `cloud` 入口必须是 URL）仍照常生效。
 
+> 🔒 **v1 安装政策（2026-08-23 起，IMPROVEMENT_PLAN F2）**：**本地导入**的第三方插件仅允许
+> `client` 运行时；`nodejs` / `python` 进程插件保留给内置或一方签名插件——进程沙箱
+> （Windows Job Object）是生命周期围栏而非安全边界，在插件签名信任根建立前不放开
+> （见仓库 `CODEBUDDY.md` Security model）。开发期 `create` / `validate` / `build`
+> 这两类插件制品不受影响；受影响的只是桌面壳的本地导入安装。
+
 `create` 脚手架目前提供 `client`、`nodejs`、`python` 三类本地模板。
 
 ---
