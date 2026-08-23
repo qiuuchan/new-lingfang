@@ -169,7 +169,8 @@
    本轮实际只补了 runbook「当前预期」段。
 2. **F3 徽标数据源改道**:计划的 `_meta.sourceKind/sourceLabel` 经核实**无任何生产者填充**(仅类型声明),
    消费它将永远不显示;改用安装账本现成的 `installation.origin`(builtin/local/team/marketplace)。
-   `plugin-provenance.ts` 仍为零消费者,留待 draft 流打通时再接(归入 G3/H 观察)。
+   同轮清理:零消费者的 `plugin-provenance.ts`、`LoadedPlugin._meta` 死类型已删除
+   (git 历史可复现,draft 流真需要时再 resurrect)。
 3. **F2 落点微调**:政策实现在 `manager.install`(命令层入口)而非 `install_plugin_artifact` 命令本身,
    原因是 legacy 迁移与内置注册都内部调用 `install()`——通过 `install_with_runtime_policy(enforce)` 参数
    区分:命令路径强制、迁移路径 grandfathered(false)、内置注册走 Builtin origin 天然豁免。

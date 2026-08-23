@@ -1,4 +1,4 @@
-import type { PluginCapability, PluginReleaseSourceKind } from '@lingfang/contract';
+import type { PluginCapability } from '@lingfang/contract';
 import { formatTimestamp } from './time';
 
 export interface DraftFile {
@@ -51,17 +51,6 @@ export interface LoadedPlugin {
   draft?: boolean;
   local?: boolean;
   versionCount?: number; // 历史版本数（.versions/vN 目录数）
-  _meta?: {
-    createdAt: string;
-    updatedAt: string;
-    source: string;
-    /** Release/workspace provenance; never contains a localAbsolute path. */
-    sourceKind?: PluginReleaseSourceKind;
-    sourceLabel?: string;
-    publishedToTeam?: boolean;
-    conversationId?: string;
-    turns?: unknown; // 对话轮次（编辑时恢复）
-  };
 }
 
 /** 通用时间格式化：ISO 字符串 → zh-CN 本地时间（24h），解析失败返回 '—'。
