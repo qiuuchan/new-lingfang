@@ -11,12 +11,16 @@
 //   iframe 永不持有）：llm.chat → client_llm_chat / image.generate → client_image_generate /
 //   image.edit → client_image_edit / video.generate → client_video_generate /
 //   audio.generate → client_audio_generate。Rust 侧并行实现，前端只调命令名。
+// - storage.kv / fs.pick / system.notify 走 client_host_caps 的宿主代理命令
+//   （声明自校验；kv 按插件隔离持久化到 data/kv.json，pick 用原生对话框，notify 用系统通知）。
+// - ui.view 是纯宿主 UI 行为：直接入队 uiViewHost（App 根部 <UiViewHost> 渲染），
+//   不经 Rust——内容仅 Markdown/JSON 文本渲染，插件无法向宿主页注入 HTML/脚本。
 // - 其余 capability kind 走 invoke_capability 命令（三重校验 + 执行，见 capability.rs::invoke）。
-// - 下列 kind 桌面壳尚未实现后端落点（契约已定义）：ui.view / fs.pick / storage.kv /
-//   system.notify / plugin.upload / plugin.submitMarketplace。它们经 invoke_capability 会返回
-//   CapError::NotSupported（「插件已声明但桌面壳暂未实现」），前端归一化为 capability_not_supported。
+// - plugin.upload / plugin.submitMarketplace 保持网关 NotSupported：
+//   属平台市场审核流交互（需平台凭据/流程），零服务器桌面壳不越权伪造。
 
 import { tauriInvoke } from './api';
+import { enqueueUiView } from './uiViewHost';
 
 export type CapabilityRuntimeError = Error & { code?: string };
 
@@ -77,6 +81,21 @@ export async function invokeRuntime(
         return await tauriInvoke('client_video_generate', { pluginId, args });
       case 'audio.generate':
         return await tauriInvoke('client_audio_generate', { pluginId, args });
+      // 本地宿主能力（client_host_caps.rs，声明自校验）。
+      case 'storage.kv':
+        return await tauriInvoke('client_storage_kv', { pluginId, args });
+      case 'fs.pick':
+        return await tauriInvoke('client_fs_pick', { pluginId, args });
+      case 'system.notify':
+        return await tauriInvoke('client_system_notify', { pluginId, args });
+      // 纯前端落点：入队宿主视图队列，关闭时 resolve。
+      case 'ui.view': {
+        const content =
+          args && typeof args === 'object' && 'content' in (args as Record<string, unknown>)
+            ? (args as Record<string, unknown>).content
+            : args;
+        return await enqueueUiView(content);
+      }
     }
     return await tauriInvoke('invoke_capability', { pluginId, kind, args });
   } catch (err) {

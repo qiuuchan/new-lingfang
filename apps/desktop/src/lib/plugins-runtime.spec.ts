@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 vi.mock('./api', () => ({
   tauriInvoke: vi.fn(),
@@ -6,6 +6,7 @@ vi.mock('./api', () => ({
 
 import { tauriInvoke } from './api';
 import { invokeRuntime, normalizeCapabilityError } from './plugins-runtime';
+import { closeCurrentUiView, enqueueUiView, subscribeUiView, resetUiViewForTests } from './uiViewHost';
 
 const mockInvoke = tauriInvoke as unknown as ReturnType<typeof vi.fn>;
 
@@ -78,6 +79,68 @@ describe('plugins-runtime invokeRuntime routing', () => {
       args: { path: '/a/b' },
     });
     expect(mockInvoke).not.toHaveBeenCalledWith('client_fs_read', expect.anything());
+  });
+
+  it('routes storage.kv to the client_storage_kv host command', async () => {
+    mockInvoke.mockResolvedValue({ ok: true });
+    await invokeRuntime('p1', 'storage.kv', { op: 'set', key: 'k', value: 1 });
+    expect(mockInvoke).toHaveBeenCalledWith('client_storage_kv', {
+      pluginId: 'p1',
+      args: { op: 'set', key: 'k', value: 1 },
+    });
+  });
+
+  it('routes fs.pick to the client_fs_pick host command', async () => {
+    mockInvoke.mockResolvedValue({ paths: ['C:/a.txt'] });
+    const r = await invokeRuntime('p1', 'fs.pick', { accept: ['txt'] });
+    expect(mockInvoke).toHaveBeenCalledWith('client_fs_pick', {
+      pluginId: 'p1',
+      args: { accept: ['txt'] },
+    });
+    expect(r).toEqual({ paths: ['C:/a.txt'] });
+  });
+
+  it('routes system.notify to the client_system_notify host command', async () => {
+    mockInvoke.mockResolvedValue({ ok: true });
+    await invokeRuntime('p1', 'system.notify', { title: 't', body: 'b' });
+    expect(mockInvoke).toHaveBeenCalledWith('client_system_notify', {
+      pluginId: 'p1',
+      args: { title: 't', body: 'b' },
+    });
+  });
+});
+
+describe('plugins-runtime ui.view — pure-frontend host rendering queue', () => {
+  beforeEach(() => mockInvoke.mockReset());
+  afterEach(() => resetUiViewForTests());
+
+  it('ui.view does NOT invoke any command and enqueues to uiViewHost', async () => {
+    mockInvoke.mockResolvedValue({});
+    let current: unknown = 'unset';
+    const unsub = subscribeUiView((c) => (current = c));
+    const pending = invokeRuntime('p1', 'ui.view', { content: '# hello' });
+    // 未关闭前 pending 不 resolve；且没有任何命令调用。
+    await Promise.resolve();
+    expect(mockInvoke).not.toHaveBeenCalled();
+    expect(current).not.toBeNull();
+    closeCurrentUiView();
+    await expect(pending).resolves.toBeUndefined();
+    unsub();
+  });
+
+  it('unwraps args.content and queues FIFO across multiple requests', async () => {
+    const seen: unknown[] = [];
+    const unsub = subscribeUiView((c) => seen.push(c));
+    const p1 = enqueueUiView('first');
+    const p2 = invokeRuntime('p1', 'ui.view', { content: { title: 'T', body: 2 } });
+    closeCurrentUiView();
+    await p1;
+    // 队列推进到第二个请求。
+    expect(seen[seen.length - 1]).toMatchObject({ content: { title: 'T', body: 2 } });
+    closeCurrentUiView();
+    await p2;
+    expect(seen[seen.length - 1]).toBeNull();
+    unsub();
   });
 });
 

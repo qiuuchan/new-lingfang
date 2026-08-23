@@ -6,6 +6,7 @@ import { Sidebar } from '@/components/Sidebar';
 import { TitleBar } from '@/components/TitleBar';
 import { PanelDialog } from '@/components/PanelDialog';
 import { SettingsPanel } from '@/components/SettingsPanel';
+import { UiViewHost } from '@/components/UiViewHost';
 import { Button } from '@/components/ui/button';
 import { Toaster } from '@/components/ui/sonner';
 import { ListSkeleton, PageTransition } from '@/lib/motion';
@@ -386,6 +387,7 @@ export default function App() {
         <SettingsPanel onClose={closeSettings} />
       </PanelDialog>
       <Toaster position="top-right" richColors closeButton />
+      <UiViewHost />
     </AppContext.Provider>
   );
 }

@@ -6,6 +6,7 @@ mod builtin_plugin_bundle;
 mod builtin_plugin_index;
 mod capability;
 mod client_ai_proxy;
+mod client_host_caps;
 mod mirror_presets;
 mod plugin_artifact_v4;
 mod plugin_llm_bridge;
@@ -348,6 +349,7 @@ fn quit_app(app: tauri::AppHandle) {
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_notification::init())
         .setup(|app| {
             // task 06-16 组A：插件持久化目录存储（plugins_root 配置 + 目录定位 + 状态扫描）。
             // 组B 的 start_plugin/stop_plugin 经此 State 的 ensure_plugin_dir 解析插件目录，
@@ -462,6 +464,9 @@ fn main() {
             client_ai_proxy::client_image_edit,
             client_ai_proxy::client_video_generate,
             client_ai_proxy::client_audio_generate,
+            client_host_caps::client_storage_kv,
+            client_host_caps::client_fs_pick,
+            client_host_caps::client_system_notify,
             plugin_package_manager::commands::list_plugin_installations,
             plugin_package_manager::commands::install_plugin_artifact,
             plugin_package_manager::commands::load_installed_plugin,

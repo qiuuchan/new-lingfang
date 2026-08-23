@@ -49,7 +49,8 @@ const CLIENT_SDK_BOOTSTRAP = `(function(){
     system: {
       info: function(){ return cap('system.info', {}); },
       screenshot: function(){ return cap('system.screenshot', {}); },
-      notify: function(input){ return cap('system.notify', input); }
+      // 与 plugin-sdk 门面签名对齐：notify(title, body?)，而非单 input 对象。
+      notify: function(title, body){ return cap('system.notify', { title: title, body: body }); }
     },
     clipboard: {
       readText: function(){ return cap('clipboard', { op: 'read' }); },

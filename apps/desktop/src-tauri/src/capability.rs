@@ -111,9 +111,10 @@ pub fn invoke(
         "clipboard" => clipboard_op(args),
         "system.screenshot" => system_screenshot(),
         // 未实现的合法 kind（如经 manifest 注入但运行时无对应分派）落到 NotSupported。
-        // 注意：net.fetch / storage.kv / system.notify / system.requestPermission /
-        // ui.view 等已在 TS invokeRuntime（plugins-runtime.ts）处理，不会到达本网关；
-        // 真正到此仍 NotSupported 的 kind 视为契约与实现错位。
+        // 注意：net.fetch / storage.kv / fs.pick / system.notify / ui.view 与五个 AI kind
+        // 均在 TS invokeRuntime（plugins-runtime.ts）路由到独立命令/宿主 UI，不会到达本网关；
+        // 当前真正到此仍 NotSupported 的仅 plugin.upload / plugin.submitMarketplace
+        // （平台市场审核流交互，桌面壳不越权伪造），其余视为契约与实现错位。
         other => Err(CapError::NotSupported(other.to_string())),
     }
 }
