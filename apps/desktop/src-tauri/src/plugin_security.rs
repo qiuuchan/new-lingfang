@@ -13,7 +13,7 @@
 //! 与运行（避免破坏 AI 生成插件的工作流：它们默认无签名）。
 
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use serde::Serialize;
 
@@ -47,11 +47,19 @@ pub(crate) fn verify_minisign(pubkey_b64: &str, sig_text: &str, message: &[u8]) 
 }
 
 /// 读取插件签名状态：manifest.sig + manifest.json + 配置的公钥。
+/// 旧版目录布局（plugins_root/<id>/）经 plugin_dir 解析；账本安装由命令层回退到活动 release 目录。
 pub fn verify_plugin_signature(
     store: &PluginStore,
     plugin_id: &str,
 ) -> Result<PluginSignatureStatus, String> {
-    let dir = store.plugin_dir(plugin_id)?;
+    verify_signature_at_dir(&store.plugin_dir(plugin_id)?, &store.plugins_root())
+}
+
+/// 对任意插件目录验签（F3：供命令层按账本 release 目录调用，与旧版布局共用同一逻辑）。
+pub fn verify_signature_at_dir(
+    dir: &Path,
+    plugins_root: &Path,
+) -> Result<PluginSignatureStatus, String> {
     let sig_path = dir.join("manifest.sig");
     let manifest_path = dir.join("manifest.json");
 
@@ -72,7 +80,7 @@ pub fn verify_plugin_signature(
 
     // 公钥来源：plugins_root/.plugin-pubkey（优先）或 env LINGFANG_PLUGIN_PUBKEY。
     // 未配置时返回 signed=true 但 verified=false（不阻断，提示「平台未配置验签公钥」）。
-    let pubkey_str = match read_pubkey(store)? {
+    let pubkey_str = match read_pubkey(plugins_root)? {
         Some(k) => k,
         None => {
             return Ok(PluginSignatureStatus {
@@ -102,8 +110,8 @@ pub fn verify_plugin_signature(
 }
 
 /// 公钥读取：plugins_root/.plugin-pubkey（单行 base64）> env LINGFANG_PLUGIN_PUBKEY > None。
-fn read_pubkey(store: &PluginStore) -> Result<Option<String>, String> {
-    let path: PathBuf = store.plugins_root().join(".plugin-pubkey");
+fn read_pubkey(plugins_root: &Path) -> Result<Option<String>, String> {
+    let path: PathBuf = plugins_root.join(".plugin-pubkey");
     if path.exists() {
         let raw = fs::read_to_string(&path).map_err(|e| format!("读取公钥文件失败：{e}"))?;
         let trimmed = raw.trim();
@@ -183,11 +191,22 @@ pub fn check_plugin_recall(
 // === Tauri 命令封装（供前端 invoke） ===
 
 /// 命令：校验插件签名（Task 14）。未配置公钥/无签名时返回 signed=false，不抛错。
+/// F3：账本安装的插件位于 installed/<uuid>/releases/<id>/package（plugin_dir 解析不到），
+/// 在旧版目录布局未命中时回退到活动 release 目录验签。
 #[tauri::command]
 pub fn verify_plugin_signature_command(
     store: tauri::State<'_, PluginStore>,
+    manager: tauri::State<'_, crate::plugin_package_manager::PluginPackageManager>,
     plugin_id: String,
 ) -> Result<PluginSignatureStatus, String> {
+    if let Ok(dir) = store.plugin_dir(&plugin_id) {
+        if dir.join("manifest.json").exists() {
+            return verify_signature_at_dir(&dir, &store.plugins_root());
+        }
+    }
+    if let Ok((_, release, _)) = manager.selected_release(&plugin_id) {
+        return verify_signature_at_dir(Path::new(&release.path), &store.plugins_root());
+    }
     verify_plugin_signature(&store, &plugin_id)
 }
 
@@ -225,6 +244,24 @@ mod tests {
         assert!(!status.signed);
         assert!(!status.verified);
         assert!(status.reason.contains("签名"));
+    }
+
+    #[test]
+    fn verify_signature_at_dir_direct_paths() {
+        // F3：账本安装的 release 目录可直接验签，无需 plugin_dir 解析。
+        let store = temp_store("at-dir");
+        let release_dir = store.plugins_root().join("installed").join("u1").join("pkg");
+        std::fs::create_dir_all(&release_dir).unwrap();
+        std::fs::write(release_dir.join("manifest.json"), r#"{"id":"u1"}"#).unwrap();
+        let status =
+            verify_signature_at_dir(&release_dir, &store.plugins_root()).unwrap();
+        assert!(!status.signed);
+        assert!(status.reason.contains("manifest.sig"));
+        // 空目录同样归一为未签名，不报错。
+        let empty = store.plugins_root().join("installed").join("u2").join("pkg");
+        std::fs::create_dir_all(&empty).unwrap();
+        let status2 = verify_signature_at_dir(&empty, &store.plugins_root()).unwrap();
+        assert!(!status2.signed);
     }
 
     #[test]

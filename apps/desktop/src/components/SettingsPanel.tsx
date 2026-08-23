@@ -4,6 +4,7 @@
 // 由用户在此页录入，经 set_relay_settings 落到宿主。空串 → null（Rust 归一为 None）。
 import { useCallback, useEffect, useState } from 'react';
 import { tauriInvoke, errorMessage } from '@/lib/api';
+import { validateRelayApiBase, relayTokenHint } from '@/lib/relaySettings';
 import { Button } from '@/components/ui/button';
 
 interface RelaySettings {
@@ -53,6 +54,9 @@ export function SettingsPanel({ onClose }: { onClose?: () => void }) {
   }, [apiBase, authToken]);
 
   const configured = apiBase.trim().length > 0 && authToken.trim().length > 0;
+  // F5：api_base 非法时阻断保存；token 仅提示。
+  const apiBaseError = validateRelayApiBase(apiBase);
+  const tokenHint = relayTokenHint(authToken);
 
   return (
     <div className="space-y-5">
@@ -85,6 +89,7 @@ export function SettingsPanel({ onClose }: { onClose?: () => void }) {
               placeholder="https://relay.example.com/v1"
               className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
             />
+            {apiBaseError && <span className="text-xs text-red-600">{apiBaseError}</span>}
           </label>
 
           <label className="block space-y-1">
@@ -99,13 +104,16 @@ export function SettingsPanel({ onClose }: { onClose?: () => void }) {
               placeholder="••••••••"
               className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
             />
+            {tokenHint && <span className="text-xs text-amber-600">{tokenHint}</span>}
           </label>
 
           {error && <div className="text-xs text-red-600">{error}</div>}
           {saved && <div className="text-xs text-green-600">已保存。</div>}
 
           <div className="flex items-center gap-2">
-            <Button onClick={onSave}>保存</Button>
+            <Button onClick={onSave} disabled={Boolean(apiBaseError)}>
+              保存
+            </Button>
             {onClose && (
               <Button variant="ghost" onClick={onClose}>
                 关闭

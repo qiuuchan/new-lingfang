@@ -24,7 +24,12 @@ import {
 } from '@/components/ui/dialog';
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { errorMessage } from '@/lib/api';
+import { errorMessage, tauriInvoke } from '@/lib/api';
+import {
+  installationOriginBadge,
+  signatureStatusLabel,
+  type PluginSignatureStatus,
+} from '@/lib/installationProvenance';
 import type { LoadedPlugin } from '@/lib/types';
 import {
   downloadRelease,
@@ -56,6 +61,28 @@ export function PluginCenterBody({
   const [progress, setProgress] = useState<TransferProgress | null>(null);
   const [uninstallTarget, setUninstallTarget] = useState<Installation | null>(null);
   const [detailPlugin, setDetailPlugin] = useState<LoadedPlugin | null>(null);
+  // F3：详情页签名状态（非阻断展示；未配置公钥/未签名均为琥珀提示）。
+  const [signatureStatus, setSignatureStatus] = useState<PluginSignatureStatus | null>(null);
+
+  useEffect(() => {
+    if (!detailPlugin) {
+      setSignatureStatus(null);
+      return;
+    }
+    let cancelled = false;
+    tauriInvoke<PluginSignatureStatus>('verify_plugin_signature_command', {
+      pluginId: detailPlugin.id,
+    })
+      .then((status) => {
+        if (!cancelled) setSignatureStatus(status);
+      })
+      .catch(() => {
+        if (!cancelled) setSignatureStatus(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [detailPlugin]);
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -203,6 +230,8 @@ export function PluginCenterBody({
                 {installations.map((installation) => {
                   const plugin = installedPlugins[installation.installationId];
                   const busy = busyKey === installation.installationId;
+                  // F3：来源徽标（builtin 由「受保护」覆盖，local 琥珀提示）。
+                  const originBadge = installationOriginBadge(installation.origin);
                   return (
                     <div
                       key={installation.installationId}
@@ -217,6 +246,18 @@ export function PluginCenterBody({
                             {plugin?.name || installation.packageId}
                           </span>
                           {installation.protected && <Badge variant="outline">受保护</Badge>}
+                          {originBadge && (
+                            <Badge
+                              variant="outline"
+                              className={
+                                originBadge.tone === 'amber'
+                                  ? 'border-amber-500/40 text-amber-700 dark:text-amber-400'
+                                  : undefined
+                              }
+                            >
+                              {originBadge.label}
+                            </Badge>
+                          )}
                         </div>
                         <div className="mt-1 flex flex-wrap gap-x-3 text-xs text-muted-foreground">
                           <span>活动版本 v{installation.activeRelease.version}</span>
@@ -312,6 +353,24 @@ export function PluginCenterBody({
             <DialogTitle>{detailPlugin?.name}</DialogTitle>
             <DialogDescription>{detailPlugin?.description}</DialogDescription>
           </DialogHeader>
+          {detailPlugin && (
+            <div className="text-xs">
+              {signatureStatus ? (
+                <span
+                  className={
+                    signatureStatusLabel(signatureStatus).ok
+                      ? 'text-green-600'
+                      : 'text-amber-700 dark:text-amber-400'
+                  }
+                >
+                  {signatureStatusLabel(signatureStatus).ok ? '✓ ' : '⚠ '}
+                  {signatureStatusLabel(signatureStatus).text}
+                </span>
+              ) : (
+                <span className="text-muted-foreground">签名状态：无法获取</span>
+              )}
+            </div>
+          )}
           {detailPlugin?.readmeMarkdown && (
             <div className="max-h-96 overflow-y-auto">
               <Markdown>{detailPlugin.readmeMarkdown}</Markdown>
