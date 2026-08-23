@@ -144,24 +144,40 @@
 
 ---
 
-## 执行状况(回填位)
+## 执行状况(回填位 · 2026-08-23 首轮执行)
 
 | 阶段 | 内容 | 状态 |
 |---|---|---|
-| E1 | 推送 7 提交 + 基线复跑 + runbook 当前预期段 | ⬜ |
-| E2 | `scripts/e2e-desktop-smoke.mjs` + `test:e2e` | ⬜ |
-| E3 | ci.yml `rust-tests` job | ⬜ |
-| E4 | E2E 进 CI(workflow_dispatch + nightly) | ⬜ |
-| F1 | CODEBUDDY.md 安全章节三档边界重写 | ⬜ |
-| F2 | v1 第三方仅 client 政策落地(安装拒绝 + 文档) | ⬜ |
-| F3 | 来源徽标 + 验签状态 UI | ⬜ |
+| E1 | 推送领先提交 + 基线复跑 + runbook 当前预期段 | ✅ 基线全绿(vitest 71+113+50 / cargo 218+30);9 提交已推 `f22c358..0c86724` |
+| E2 | `scripts/e2e-desktop-smoke.mjs` + `test:e2e` | ✅ 首跑 8 断言全绿;负向验证通过(注释 `client_storage_kv` 注册 → storage.kv 断言变红 exit 1) |
+| E3 | ci.yml `rust-tests` job | ✅ 已写入(首次真实 PR 运行待观察) |
+| E4 | E2E 进 CI(workflow_dispatch + nightly) | ✅ cron `0 19 * * *`(03:00 UTC+8);首次 dispatch/夜跑待观察 |
+| F1 | CODEBUDDY.md 安全章节三档边界重写 | ✅ Tier1 iframe 真边界 / Tier2 Job Object 围栏 / Tier3 安装时信任 |
+| F2 | v1 第三方仅 client 政策落地(安装拒绝 + 单测 + 文档) | ✅ `install_with_runtime_policy`:Local 来源 nodejs/python 拒绝(带 audit);legacy 迁移 grandfathered 豁免;2 个专项测试;三处文档标注 |
+| F3 | 来源徽标 + 验签状态 UI | ✅ 徽标取 `installation.origin`(偏差说明见下);Rust 命令加账本 release 目录回退;详情页签名状态非阻断展示 |
 | F4 | CSP 收紧路径(记录,不执行) | 已记录于本文 ⬜ 触发待定 |
-| F5 | SettingsPanel 凭据校验 | ⬜ |
-| G1 | notes AI 摘要真实凭据实操 | ⬜ |
-| G2 | 剪藏摘要狗粮插件 + 摩擦记录 | ⬜ |
-| G3 | `lingfang-plugin dev`(v1 直读 → v2 watch) | ⬜ |
-| G4 | README.md | ⬜ |
-| G5 | 行号→符号引用 | ⬜ |
+| F5 | SettingsPanel 凭据校验 | ✅ api_base 硬校验(https URL,非法禁保存);token 空白字符软提示;7 个单测 |
+| G1 | notes AI 摘要真实凭据实操 | ⬜ **需真实 relay 凭据(用户输入),本轮无法自动推进** |
+| G2 | 剪藏摘要狗粮插件 + 摩擦记录 | ⬜ 未开始 |
+| G3 | `lingfang-plugin dev`(v1 直读 → v2 watch) | ⬜ 未开始 |
+| G4 | README.md | ✅ 含零服务器叙事校准、v1 政策、架构地图、三档安全摘要 |
+| G5 | 行号→符号引用 | ⬜ 未开始 |
+
+### 首轮执行偏差记录(与计划的差异,均为执行中发现的事实修正)
+
+1. **E1 范围收窄**:撰写计划时以为 caps 文档回填未做,实际 `ba6861c` 已回填 IMPLEMENTATION_PLAN/TODO;
+   本轮实际只补了 runbook「当前预期」段。
+2. **F3 徽标数据源改道**:计划的 `_meta.sourceKind/sourceLabel` 经核实**无任何生产者填充**(仅类型声明),
+   消费它将永远不显示;改用安装账本现成的 `installation.origin`(builtin/local/team/marketplace)。
+   `plugin-provenance.ts` 仍为零消费者,留待 draft 流打通时再接(归入 G3/H 观察)。
+3. **F2 落点微调**:政策实现在 `manager.install`(命令层入口)而非 `install_plugin_artifact` 命令本身,
+   原因是 legacy 迁移与内置注册都内部调用 `install()`——通过 `install_with_runtime_policy(enforce)` 参数
+   区分:命令路径强制、迁移路径 grandfathered(false)、内置注册走 Builtin origin 天然豁免。
+   Team/Marketplace 来源不拦(其启动另有 `registry_access_granted` 在线校验门槛)。
+4. **F3 Rust 侧超出"纯前端"预期**:验签命令原只能解析旧版目录布局(`plugins_root/<id>`),
+   账本安装在 `installed/<uuid>/...` 解析不到 → 抽出 `verify_signature_at_dir` + 命令层回退到
+   活动 release 目录,否则 UI 永远显示"无法获取"。
+5. **desktop vitest 基线更新**:50 → 62(随 caps spec 与本轮 F3/F5 新增)。
 
 ## 建议执行顺序
 
