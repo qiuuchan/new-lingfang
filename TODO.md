@@ -130,9 +130,24 @@
   - 桌面端实操（需 WebView2 + cargo build，本环境未跑）：装声明 client-action 的插件 →
     nodejs 插件 `sdk.actions.call(action_id)` 应真正执行并返回，而非 `action_dependency_unresolved`。
 
-- [ ] **未实现 kind 的产品化（超出本计划，可选）**
-  - `ui.view` / `fs.pick` / `storage.kv` / `system.notify` / `plugin.upload` / `plugin.submitMarketplace`
-    目前正确返回 `NotSupported`。若产品要落地，需各自后端实现，属新需求。
+- [x] **未实现 kind 的产品化** ✅ 部分落地（2026-08-23），其余保持 NotSupported 并记录理由
+  - **已落地 4 个**（经桌面壳 CDP 端到端实测）：
+    - `storage.kv` → `client_storage_kv`（Rust）：声明自校验 + 按插件隔离持久化
+      `<data>/kv.json`（原子写 tmp+rename；单值 256KB / 条目数 1024 / 文件 8MB 上限）。
+      实测 set/get 往返 ✅。
+    - `fs.pick` → `client_fs_pick`（Rust）：tauri-plugin-dialog 原生选择器，accept 扩展名过滤，
+      取消返回空数组。声明守卫实测（未声明插件立即 `capability_not_declared`、不弹框）✅；
+      原生对话框交互路径为插件官方组件行为，留人工确认。
+    - `system.notify` → `client_system_notify`（Rust）：tauri-plugin-notification 系统通知。
+      实测真实发出通知 ✅。顺带修正 iframe 引导脚本 `notify(input)` 与 SDK 门面
+      `notify(title, body)` 的签名漂移。
+    - `ui.view` → **纯前端落点**（不经 Rust）：新增 `uiViewHost.ts` 队列 + `UiViewHost.tsx`
+      （挂 App 根部）；string 走 Markdown 渲染、其余安全序列化为 JSON 文本，
+      绝不 innerHTML——插件无法向宿主页注入脚本。实测宿主弹层渲染 + 关闭回包 ✅。
+  - **保持 NotSupported 2 个**：`plugin.upload` / `plugin.submitMarketplace` —— 属平台市场
+    审核流交互（需平台凭据与流程），零服务器桌面壳不越权伪造；网关语义与文案不变。
+  - 新增 Rust 单测 8 个（kv 边界/持久化/损坏容忍）、前端路由单测 5 个；
+    desktop vitest 45 → 50 全绿。
 
 ## 四、工程化与清理（低优先）
 
@@ -155,16 +170,18 @@
     手动验证清单，含前置环境与 `pnpm build:desktop` 命令；标注 B3/C2 限制。
   - 三者均为文档，不改源码；B3/C2 仍待产品/人拍板后方可落码。
 
-- [ ] **校准文档行号（可选，低价值）**
-  - 「执行状况」节里 `plugin_runner.rs:126-139`、`:1532` 等为近似行号（随编辑浮动），内容准确；
-    需要精确引用时可校准。
+- [x] **校准文档行号** ✅ 已完成（2026-08-23）
+  - 已按当前代码校准 `IMPLEMENTATION_PLAN.md`「执行状况/复验/偏差/阶段」节的活性引用
+    （plugin_runner.rs parse_manifest :84 起、invoke_capability main.rs:287、net_fetch :159、
+    adapter 白名单 :213-221、materialize lockPath :25、capability 用例 :478、api.ts errorMessage :74 等）。
+  - 附录「核实关键证据」为二次修订时的**历史快照**（其开头已声明），行号保持原样不回改。
 
 ---
 
 ## 建议执行顺序
 
-> 2026-08-23：计划内全部任务（含 A5a/A5b 桌面端实操验证）已完成。剩余仅「可选」项：
-> 未实现 kind 的产品化（新需求）与文档行号校准（低价值）。
+> 2026-08-23：计划内全部任务与两个「可选」项（未实现 kind 产品化、文档行号校准）均已完成。
+> TODO 清单至此全部闭环；后续为新需求驱动。
 
 1. **#3、#4**（A5a/A5b 验证）：成本低、价值高，先证明已交付代码真通路。
 2. **#1、#2**（B3/C2 决策）：需产品/人拍板。
@@ -173,6 +190,10 @@
 
 ## 当前验证基线（已通过）
 
+- **2026-08-23 更新（第二次，功能补全后）**：`cargo test --workspace` desktop bin **226 passed** /
+  installer 30 passed 全绿；desktop vitest **50/50**（新增 5 个：storage.kv / fs.pick / system.notify
+  路由 + ui.view 纯前端队列 ×2）；`tsc --noEmit` 干净。
+  四个新能力经桌面壳 CDP 端到端实测通过（见「未实现 kind 的产品化」节）。
 - **2026-08-23 更新**：本机已装 Rust 工具链（cargo 1.97.1），Rust 侧验证缺口已补齐：
   - `cargo check --workspace`：通过（31+6 个历史 warning，无新增错误）。
   - `cargo test --workspace`：desktop bin 218 passed / installer 30 passed 全绿。

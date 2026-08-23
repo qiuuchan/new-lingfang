@@ -60,17 +60,17 @@ client HTML 模板 `index.html.tmpl:27` 声明 `const sdk = window.sdk;` —— 
   - `apps/desktop/src/lib/plugins-runtime.ts`:`net.fetch` 直连 `plugin_net_fetch`,其余 kind 走 `invoke_capability`;错误按文案归一化为 5 类 code。
   - `apps/desktop/src/lib/clientActionBridge.ts`:监听 `plugin-action-bridge-call` → `executeClientActionAdapter` → `respond_plugin_action_bridge` 回传;未注册 action 显式回 `action_dependency_unresolved`(进程端不再静默挂起)。
   - `apps/desktop/src/pages/plugins/PluginRunner.tsx`(38 行占位 → 214 行实现):`srcdoc` + `sandbox="allow-scripts"`(未开 `allow-same-origin`),origin `'null'` 校验,注入 `window.sdk` / `__lingfangInvoke` 与 ui-tokens CSS,cloud/workflow 显式占位。
-  - `plugin-action-client-adapter.ts:213-220`:白名单 4 → 6 kind(新增 `ui.view`、`storage.kv`)。
+  - `plugin-action-client-adapter.ts:213-221`:白名单 4 → 6 kind(新增 `ui.view`、`storage.kv`)。
   - `plugin_runner.rs:126-139`:`parse_manifest` 保留 fs.* 的 `paths`;`:1532` 插件 start 时 `registry.register`。
-  - `scripts/materialize-bundled-runtimes.mjs:22`:`lockPath` 指向 `apps/desktop/runtime-lock.json`。
+  - `scripts/materialize-bundled-runtimes.mjs:25`:`lockPath` 指向 `apps/desktop/runtime-lock.json`。
   - `packages/plugin-sdk/src/manifest/index.ts`:`ManifestResult` 增加非阻塞 `warnings`(cloud/workflow 报 `runtime_locally_unsupported`)。
 - A5 的桌面端实操验证(打开内置 notes 插件、安装自建插件走注册路径)未在本轮执行,本轮仅完成代码级与单测级验证。
 
 ### 执行中发现并修正的偏差
 
 1. **PluginRunner prop 实为 `onBack`**(本文附录原误写 `onRun`,已更正)。
-2. **`plugin_runner::parse_manifest` 原丢弃 fs.* 的 `paths`**(仓内既有 bug,非计划误判):只捕获 kind 字符串,fs.read/fs.write 即便声明也因空 paths 落入 `OutOfScope`。已在 A4 一并修复(`plugin_runner.rs:126-139`)。
-3. **`invoke_capability` 命令在 `main.rs:274`**(不在 capability.rs;本计划附录记载无误,执行初期曾按 capability.rs 寻找,记录以免重蹈)。
+2. **`plugin_runner::parse_manifest` 原丢弃 fs.* 的 `paths`**(仓内既有 bug,非计划误判):只捕获 kind 字符串,fs.read/fs.write 即便声明也因空 paths 落入 `OutOfScope`。已在 A4 一并修复(`plugin_runner.rs:84` 起 parse_manifest;2026-08-23 行号校准)。
+3. **`invoke_capability` 命令在 `main.rs:287`**(不在 capability.rs;本计划附录记载无误,执行初期曾按 capability.rs 寻找,记录以免重蹈;2026-08-23 行号校准)。
 4. plugin-sdk `ManifestResult` 加 `warnings` 后,spec 的类型谓词需同步(`manifest/index.spec.ts:45`),已补。
 
 ---
@@ -88,7 +88,7 @@ client HTML 模板 `index.html.tmpl:27` 声明 `const sdk = window.sdk;` —— 
 ### A1. 新建 `apps/desktop/src/lib/plugins-runtime.ts`(宿主能力落点) ✅
 - 导出 `invokeRuntime(pluginId: string, kind: string, args: unknown): Promise<unknown>`。
 - 内部调用 `tauriInvoke('invoke_capability', { pluginId, kind, args })`,复用 `apps/desktop/src/lib/api.ts:6` 的 `tauriInvoke`(该文件当前**未包裹** `invoke_capability`,在此统一收敛;net.fetch 的路由见 C1)。
-- 错误归一化注意:`api.ts:33` 的 `errorMessage` 只归一化为**字符串**;Tauri 命令错误是 `Result<_, String>` 裸字符串,不含结构化 code。要产出 `{ code, message }` 需自行按文案映射,或改 Rust 侧返回结构化错误(工作量另计)。
+- 错误归一化注意:`api.ts:74` 的 `errorMessage` 只归一化为**字符串**;Tauri 命令错误是 `Result<_, String>` 裸字符串,不含结构化 code。要产出 `{ code, message }` 需自行按文案映射,或改 Rust 侧返回结构化错误(工作量另计)。(2026-08-23 行号校准;另 `api.ts` 已回退 `__TAURI_INTERNALS__`,见 TODO 验证节)
 - **注释对齐**:`capability.rs:113-116`、`capability.rs:251-252`、`plugin-sdk/src/index.ts:140,353` 三处注释引用了 `plugins-runtime.ts`。本文件创建后注释即成真,只需核对措辞(如 `RUNTIME_BRIDGE_TIMEOUT_MS` 是否真实存在并对齐),不必删除。
 
 ### A2. 宿主向 client iframe 注入 `window.sdk`(`PluginRunner.tsx`) ✅
@@ -106,7 +106,7 @@ client HTML 模板 `index.html.tmpl:27` 声明 `const sdk = window.sdk;` —— 
 ### A4. 能力注册表补齐(非内置插件) ✅
 - 现状:`registry.register` 仅 `plugins.rs:99` 一处,只服务内置插件(`main.rs:371`)。
 - 在 `plugin_package_manager` / `plugin_store` 的安装与加载路径上,解析 manifest 的 `capabilities[]` 并注册进 `CapabilityRegistry`(含 fs.* 的 `paths` 模板展开,复用 `plugins.rs:53-72` 的解析逻辑)。否则市场安装/本地插件的所有 `invoke_capability` 调用恒 `NotDeclared`,A 阶段成果对它们不可见。
-- 执行回填:实际落点在 `plugin_runner.rs`——插件 start 时注册(`:1532`),并连带修复了 `parse_manifest` 丢失 `paths` 的既有 bug(`:126-139`)。
+- 执行回填:实际落点在 `plugin_runner.rs`——插件 start 时注册(`:1532`),并连带修复了 `parse_manifest` 丢失 `paths` 的既有 bug(`:84` 起)。
 
 ### A5. 验证 ✅（代码级 + 桌面端实操，2026-08-23 完成）
 - 实操已经 WebView2 远程调试自动化完成（A5a 内置 notes / A5b 安装插件注册路径均通过），
@@ -143,7 +143,7 @@ client HTML 模板 `index.html.tmpl:27` 声明 `const sdk = window.sdk;` —— 
 
 **策略**:17 种 `CapabilityKind`(`contract/src/plugin.ts:21-39`)按落点分四类:
 - **网关已落(5)**:fs.read / fs.write / system.info / clipboard / system.screenshot(`capability.rs:107-118`)。
-- **有独立命令(1)**:`net.fetch` → `plugin_net_fetch` 命令在 **`main.rs:157`**(不在 `plugin_net_fetch.rs`,该文件不存在;CODEBUDDY.md 的描述同样过时)。命令自带 manifest 声明校验 + SSRF 守卫 + 30s / 10 MiB 限制。
+- **有独立命令(1)**:`net.fetch` → `plugin_net_fetch` 命令在 **`main.rs:159`**(不在 `plugin_net_fetch.rs`,该文件不存在;CODEBUDDY.md 的描述同样过时)。命令自带 manifest 声明校验 + SSRF 守卫 + 30s / 10 MiB 限制。
 - **有桥路由但 session/relay 耦合(5)**:llm.chat(`plugin_llm_bridge.rs:675`)/ image.generate / image.edit / video.generate / **audio.generate(`:1191`,初版误判为"无落点")**。这些是 localhost 桥的路由函数,按 `BridgeSession` 键控(逐能力 `allow_*` 标志 + `api_base` / `auth_token`),最终转发**平台 relay** `/api/relay/v1/*`。
 - **无后台落点(6)**:ui.view / fs.pick / storage.kv / system.notify / plugin.upload / plugin.submitMarketplace。保持 `NotSupported`(已具备),并在 `plugins-runtime.ts` / SDK 文档标注"契约已定义、桌面壳未实现"。
 - 注意:**`system.requestPermission` 不在 `CapabilityKind` 枚举内**(初版误列为第 8 种无落点 kind),它只是设想的 TS 侧辅助函数名,非网关 kind。
@@ -160,7 +160,7 @@ client HTML 模板 `index.html.tmpl:27` 声明 `const sdk = window.sdk;` —— 
 - 验证:`tsc --noEmit` 干净;desktop vitest 8/8 文件 45 测试全绿(含 `plugins-runtime.spec.ts` 13)。Rust 侧于 2026-08-23 补验:`cargo check/test --workspace` 通过(首次工具链编译,顺带修复 4 处存量测试代码问题,见 TODO「当前验证基线」)。
 
 ### C3. 验证 ✅
-- `capability.rs` 已有 NotSupported 用例(`:477`),可扩展覆盖新接通的 kind。
+- `capability.rs` 已有 NotSupported 用例(`:478`),可扩展覆盖新接通的 kind。
 - 为 `plugins-runtime.ts` 补 vitest 单测:`net.fetch` 路由到 `plugin_net_fetch`、其余 kind 走 `invoke_capability`、错误字符串 → `{ code, message }` 映射。
 
 ---
