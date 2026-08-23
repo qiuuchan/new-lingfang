@@ -36,7 +36,7 @@ jobs:
         run: pnpm test
 
   publish-runtimes:
-    name: Publish bundled runtimes (B3)
+    name: Publish bundled runtimes + SFX installer (B3→C)
     runs-on: windows-latest
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     needs: quality
@@ -204,3 +204,52 @@ jobs:
           files: |
             runtimes-bundle.zip
             runtimes-bundle.zip.minisig
+
+      # ══ B3→C（P2）：方案 C 终态——把已校验的 runtimes/ 直接注入自制安装器 ══
+      # 本 job 的 apps/desktop/runtimes 刚通过全量 sha256 校验（步骤 3），
+      # build-installer.mjs 会再跑一次 runtime-lock 硬门槛后打包 SFX 安装器；
+      # 安装时落地 exe 同级 runtimes/，命中 runtime_resolver 的 exe 同级分支。
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build desktop app (frontend + rust)
+        shell: bash
+        run: |
+          pnpm -C apps/desktop vite:build   # tauri generate_context! 需要 ../dist 在编译期存在
+          cargo build --release -p lingfang-desktop -p lingfang-installer
+
+      # 打包脚本自带 runtime-lock sha256 硬门槛（复用 verify-bundled-runtimes.mjs）
+      - name: Build SFX installer (embeds verified runtimes)
+        shell: bash
+        run: node apps/desktop/build-installer.mjs
+
+      - name: Sign installer (minisign)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $setup = Get-ChildItem 'target/release' -Filter 'LingFang-Setup-*.exe' |
+            Sort-Object LastWriteTime | Select-Object -Last 1
+          if (-not $setup) { throw 'SFX installer not found after build' }
+          function Write-Key([string]$value, [string]$path) {
+            $t = $value.Replace("`r`n", "`n")
+            if (-not $t.EndsWith("`n")) { $t += "`n" }
+            [IO.File]::WriteAllText($path, $t)
+          }
+          Write-Key $env:LINGFANG_RUNTIME_SIGKEY 'bundle.seckey'
+          Write-Key $env:LINGFANG_RUNTIME_PUBKEY 'bundle.pubkey'
+          # 复用步骤 5 下载的 ms-bin/minisign.exe（同 job 工作区仍可用）
+          $minisign = (Get-ChildItem ms-bin -Recurse -Filter minisign.exe |
+            Where-Object FullName -match 'x86_64').FullName
+          & $minisign -S -s bundle.seckey -m $setup.FullName
+          if ($LASTEXITCODE -ne 0) { throw 'installer minisign signing failed' }
+          & $minisign -V -p bundle.pubkey -m $setup.FullName `
+            -x "$($setup.FullName).minisig"
+          if ($LASTEXITCODE -ne 0) { throw 'installer minisign self-verification failed' }
+
+      - name: Upload installer release asset
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            target/release/LingFang-Setup-*.exe
+            target/release/LingFang-Setup-*.exe.minisig

@@ -1,8 +1,9 @@
-# Cargo workspace：Tauri 桌面壳的 Rust 部分。
+# Cargo workspace：Tauri 桌面壳 + 自制安装器（B3→C：installer 注入 runtimes/）。
 [workspace]
 resolver = "2"
 members = [
   "apps/desktop/src-tauri",
+  "apps/desktop/installer",
 ]
 
 # release 优化：减体积 + 提升启动速度。

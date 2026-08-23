@@ -8,9 +8,14 @@
 //!
 //! 没有 trailer / MAGIC 不匹配 → 裸 installer.exe（updater 副本场景或 dev 直跑），
 //! locate_payload 返回 None，install 模式报错、update/uninstall 模式不需要 payload。
+//!
+//! B3→C（P2）：payload 现内嵌完整 runtimes/（>1.5GB），解压必须流式进行——
+//! 通过 SegmentReader 把 [offset, offset+payload_len) 映射为独立 Read+Seek 流，
+//! 不再把 payload 整段读进内存。trailer 长度字段仍为 u32（上限 ≈4GiB），
+//! 打包脚本负责在越界时拒绝拼接。
 
 use std::fs::File;
-use std::io::{Read, Seek, SeekFrom};
+use std::io::{self, Read, Seek, SeekFrom};
 use std::path::Path;
 
 use anyhow::{anyhow, Context, Result};
@@ -88,24 +93,79 @@ pub fn locate_payload(exe_path: &Path) -> Result<Option<u64>> {
         .ok_or_else(|| anyhow!("payload 偏移非法：payload_len 超出文件大小"))
 }
 
+/// 把 exe 内 [base, base+len) 区间映射为独立 Read+Seek 流（B3→C：流式解压）。
+///
+/// 读写均被钳制在区间内：越界 seek 饱和到边界，read 到达区间末尾返回 Ok(0)。
+/// 这样 zip crate 可以直接在「exe 的一个切片」上工作，无需把 >1.5GB payload
+/// 整段读进内存（旧实现 `vec![0u8; payload_len]` 在内嵌 runtimes 后必然 OOM）。
+struct SegmentReader {
+    file: File,
+    /// payload 起始的绝对偏移。
+    base: u64,
+    /// payload 段长度。
+    len: u64,
+    /// 段内相对游标。
+    pos: u64,
+}
+
+impl SegmentReader {
+    fn new(file: File, base: u64, len: u64) -> Self {
+        Self { file, base, len, pos: 0 }
+    }
+}
+
+impl Read for SegmentReader {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        let remaining = (self.len - self.pos) as usize;
+        if remaining == 0 {
+            return Ok(0);
+        }
+        let want = buf.len().min(remaining);
+        self.file.seek(SeekFrom::Start(self.base + self.pos))?;
+        let n = self.file.read(&mut buf[..want])?;
+        self.pos += n as u64;
+        Ok(n)
+    }
+}
+
+impl Seek for SegmentReader {
+    fn seek(&mut self, pos: SeekFrom) -> io::Result<u64> {
+        let target = match pos {
+            SeekFrom::Start(p) => Some(p),
+            SeekFrom::End(delta) => {
+                let v = self.len as i64 + delta;
+                (v >= 0).then(|| v as u64)
+            }
+            SeekFrom::Current(delta) => {
+                let v = self.pos as i64 + delta;
+                (v >= 0).then(|| v as u64)
+            }
+        };
+        let target = target.ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "seek 到 payload 段起点之前",
+            )
+        })?;
+        self.pos = target.min(self.len);
+        Ok(self.pos)
+    }
+}
+
 /// 从 exe 尾部 payload 解压到目标目录（覆盖已存在文件）。
 ///
-/// 流程：locate_payload → seek 到 payload 起点 → 取该段为 zip 读取 → 逐条解压。
+/// 流程：locate_payload → 定位 payload 起点 → SegmentReader 提供该段流式视图 →
+/// zip crate 从该视图逐条解压（不整段驻留内存，支持 >1.5GB 的 runtimes payload）。
 pub fn extract_payload(exe_path: &Path, dest_dir: &Path) -> Result<usize> {
     let offset = locate_payload(exe_path)?
         .ok_or_else(|| anyhow!("本安装包不含内嵌 payload（裸 installer.exe 无法执行安装）"))?;
 
-    let mut f = File::open(exe_path)?;
+    let f = File::open(exe_path)?;
     let total_len = f.metadata()?.len();
     // payload 段长度 = total - offset - trailer。
     let payload_len = total_len - offset - TRAILER_LEN;
-    f.seek(SeekFrom::Start(offset))?;
 
-    // 把 payload 段读进内存（更新场景一次性，简单可靠；超大包可改 take+临时文件）。
-    let mut payload = vec![0u8; payload_len as usize];
-    f.read_exact(&mut payload)?;
-
-    let reader = std::io::Cursor::new(payload);
+    let reader = SegmentReader::new(f, offset, payload_len);
     let mut archive = zip::ZipArchive::new(reader).context("payload 不是合法 zip")?;
 
     std::fs::create_dir_all(dest_dir)?;
@@ -239,5 +299,75 @@ mod tests {
         }
         assert_eq!(locate_payload(&bare).unwrap(), None);
         let _ = std::fs::remove_file(&bare);
+    }
+
+    // ── SegmentReader（B3→C：payload 流式视图）───────────────────────────
+
+    fn temp_file(name: &str, bytes: &[u8]) -> std::path::PathBuf {
+        use std::io::Write;
+        let path = std::env::temp_dir().join(name);
+        let mut f = File::create(&path).unwrap();
+        f.write_all(bytes).unwrap();
+        path
+    }
+
+    /// 只暴露 [base, base+len) 区间；区间外字节（前缀/尾部）不可见，读尽返回 0。
+    #[test]
+    fn segment_reader_bounded_to_range() {
+        use std::io::Write;
+        // 布局：前缀(6) + payload(b"PAYLOAD") + 尾部(4)。
+        let mut raw = Vec::new();
+        raw.extend_from_slice(b"PREFIX");
+        raw.extend_from_slice(b"PAYLOAD");
+        raw.extend_from_slice(b"TAIL");
+        let path = temp_file("lingfang-sfx-segment.bin", &raw);
+
+        let f = File::open(&path).unwrap();
+        let mut seg = SegmentReader::new(f, 6, 7);
+
+        let mut buf = vec![0u8; 16];
+        let n1 = seg.read(&mut buf).unwrap();
+        assert_eq!(&buf[..n1], b"PAYLOAD", "应恰好读出段内容且不含前后缀");
+        assert_eq!(seg.read(&mut buf).unwrap(), 0, "段读尽后返回 Ok(0)");
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// 越界 seek 饱和到边界；负向越界报 InvalidInput。
+    #[test]
+    fn segment_reader_seek_clamps_and_rejects() {
+        use std::io::{Seek, SeekFrom};
+        let path = temp_file("lingfang-sfx-seek.bin", b"0123456789");
+        let f = File::open(&path).unwrap();
+        let mut seg = SegmentReader::new(f, 2, 5); // 可见区间 b"23456"
+
+        assert_eq!(seg.seek(SeekFrom::Start(100)).unwrap(), 5, "Start 越界饱和到段尾");
+        assert_eq!(seg.seek(SeekFrom::End(-2)).unwrap(), 3);
+        assert_eq!(seg.seek(SeekFrom::Current(-3)).unwrap(), 0);
+        assert!(seg.seek(SeekFrom::Current(-1)).is_err(), "seek 到段起点之前应报错");
+        assert_eq!(seg.seek(SeekFrom::End(-100)).is_err(), true);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// 端到端（大偏移）：真实 exe 前缀 + payload + trailer 的布局下，
+    /// SegmentReader 视图与 Cursor 全量读取结果一致（回归旧实现的语义）。
+    #[test]
+    fn segment_reader_matches_full_read() {
+        use std::io::Write;
+        let mut raw = Vec::new();
+        raw.extend_from_slice(b"MZ-FAKE-PE-HEADER-PREFIX"); // exe 前缀
+        raw.extend_from_slice(b"\x50\x4b\x03\x04zip-bytes-here"); // zip 首部特征
+        raw.extend_from_slice(&[0u8; 64]);
+        let path = temp_file("lingfang-sfx-compare.bin", &raw);
+        let base = 25u64; // 前缀长度
+        let len = raw.len() as u64 - base;
+
+        let expected = raw[base as usize..].to_vec();
+
+        let f = File::open(&path).unwrap();
+        let mut seg = SegmentReader::new(f, base, len);
+        let mut got = Vec::new();
+        seg.read_to_end(&mut got).unwrap();
+        assert_eq!(got, expected);
+        let _ = std::fs::remove_file(&path);
     }
 }

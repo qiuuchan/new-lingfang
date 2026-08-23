@@ -28,15 +28,14 @@ pub enum Mode {
 
 /// 从 argv（不含程序名）解析模式。解析失败返回 Err(说明)。
 pub fn parse_args(args: &[String]) -> Result<Mode, String> {
-    // 第一个非 -- 前缀的 token 视为子命令；缺省为 install。
-    let sub = args
-        .iter()
-        .find(|a| !a.starts_with("--"))
-        .map(|s| s.as_str());
+    // 先消费全部 flag 及其值，再识别子命令——
+    // 只有「未被 flag 消费的非 -- 词元」才可能是子命令；
+    // 已知子命令之外的残留词元仍然报错（保留拼写错误检测）。
+    let mut consumed = vec![false; args.len()];
 
-    let target = flag_value(args, "--target");
-    let setup = flag_value(args, "--setup");
-    let wait_pid = flag_value(args, "--wait-pid")
+    let target = flag_value(args, &mut consumed, "--target");
+    let setup = flag_value(args, &mut consumed, "--setup");
+    let wait_pid = flag_value(args, &mut consumed, "--wait-pid")
         .map(|v| {
             v.parse::<u32>()
                 .map_err(|_| format!("--wait-pid 非法：{v}"))
@@ -44,6 +43,13 @@ pub fn parse_args(args: &[String]) -> Result<Mode, String> {
         .transpose()?;
     let restart = has_flag(args, "--restart");
     let silent = has_flag(args, "--silent");
+
+    let sub = args.iter().enumerate().find_map(|(i, a)| {
+        (!consumed[i] && !a.starts_with("--")).then(|| {
+            consumed[i] = true;
+            a.as_str()
+        })
+    });
 
     match sub {
         Some("uninstall") => Ok(Mode::Uninstall),
@@ -67,14 +73,25 @@ pub fn parse_args(args: &[String]) -> Result<Mode, String> {
     }
 }
 
-/// 取 `--key value` 形式的值（也支持 `--key=value`）。
-fn flag_value(args: &[String], key: &str) -> Option<String> {
-    let mut it = args.iter();
-    while let Some(a) = it.next() {
-        if a == key {
-            return it.next().cloned();
+/// 取 `--key value` 形式的值（也支持 `--key=value`），并标记被消费的下标。
+///
+/// 消费标记用于子命令识别：flag 的值本身是非 flag 词元（如路径），
+/// 若不排除会在下一步被误判为子命令——updater 正是以 `--silent --target <路径>`
+/// 形态拉起本程序，旧实现把该路径当成子命令导致静默安装必败。
+fn flag_value(args: &[String], consumed: &mut [bool], key: &str) -> Option<String> {
+    for i in 0..args.len() {
+        if consumed[i] {
+            continue;
         }
-        if let Some(rest) = a.strip_prefix(&format!("{key}=")) {
+        if args[i] == key {
+            if i + 1 < args.len() {
+                consumed[i + 1] = true;
+                return Some(args[i + 1].clone());
+            }
+            return None;
+        }
+        if let Some(rest) = args[i].strip_prefix(format!("{key}=").as_str()) {
+            consumed[i] = true;
             return Some(rest.to_string());
         }
     }
@@ -117,6 +134,39 @@ mod tests {
             parse_args(&args).unwrap(),
             Mode::Silent {
                 target: Some("C:\\Y".into())
+            }
+        );
+    }
+
+    /// 回归：updater 以「flag 在前、无子命令」形态拉起新安装包
+    /// （modes/mod.rs run_update 的 spawn 形态）。路径值不得被误判为子命令。
+    #[test]
+    fn flags_first_with_path_value_is_silent_install() {
+        let args = v(&["--silent", "--target", "C:\\Users\\u\\AppData\\Local\\LingFang"]);
+        assert_eq!(
+            parse_args(&args).unwrap(),
+            Mode::Silent {
+                target: Some("C:\\Users\\u\\AppData\\Local\\LingFang".into())
+            }
+        );
+        // update 模式 spawn 时的完整形态（含子命令 + 前置 flag 混排）。
+        let args = v(&[
+            "--restart",
+            "update",
+            "--wait-pid",
+            "42",
+            "--setup",
+            "C:\\tmp\\setup.exe",
+            "--target",
+            "C:\\X",
+        ]);
+        assert_eq!(
+            parse_args(&args).unwrap(),
+            Mode::Update {
+                target: Some("C:\\X".into()),
+                setup: "C:\\tmp\\setup.exe".into(),
+                wait_pid: Some(42),
+                restart: true,
             }
         );
     }

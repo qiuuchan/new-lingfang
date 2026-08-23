@@ -121,7 +121,13 @@
 | 2 | ffmpeg 实际 `sourceSha256` / `sourceSize` | ✅ 完成（2026-08-22） | 归档 166,721,853B / sha256 `0fff1889…` 已回填 lock；`source` 修正为 gyan.dev `/builds/packages/`（原 `/builds/` 路径已 404，GitHub 镜像字节一致）；包内 ffmpeg.exe / ffprobe.exe 与 keyFiles 逐字节一致 |
 | 3 | CI minisign 密钥 | ✅ 完成（2026-08-22） | `LINGFANG_RUNTIME_PUBKEY` / `LINGFANG_RUNTIME_SIGKEY` 已注册；`publish-runtimes` 六步全部 hard 并端到端跑绿：tag `v0.0.1-test` → Release `runtimes-bundle.zip`（约 1.7GB）+ `.minisig`，签名与自验通过。B 链路闭环 |
 
-后续（P2，不阻塞 B）：installer crate 接入 workspace 并注入 `runtimes/`，迁移至方案 C——待 B 的 CI 制品链路验证通过后启动。
+后续（P2）：installer crate 接入 workspace 并注入 `runtimes/`，迁移至方案 C。
+> ✅ **P2 已完成（2026-08-23，B3→C 迁移闭环）**：installer 入 workspace；`sfx.rs` 以
+> `SegmentReader` 流式解压（payload >1.5GB 不再整段进内存）；`build-installer.mjs` 打包前强制
+> runtime-lock 全量校验（sha256 硬门槛）、排除 `.download`、内置纯净 `updater.exe`、u32 容量守卫；
+> CI `publish-runtimes` 扩为双产物（runtimes-bundle.zip + 内嵌 runtimes 的 LingFang-Setup-*.exe，
+> 均经 minisign 签名）。顺带修复 `cli.rs` 子命令误判路径值的存量 bug（`--silent --target <路径>`
+> 形态此前必败）。本机端到端验证通过（打包 633MB → 静默解压 → 产物与锁逐字节一致）。
 
 ---
 
