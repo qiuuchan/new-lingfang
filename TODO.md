@@ -77,16 +77,37 @@
     `cargo check/test --workspace` 补验通过（此前因无工具链仅人工核查）。
   - 待实操（需 WebView2 + cargo build）：内置 notes 的 AI 摘要经设置凭据真正跑通。
 
-## 二、验证（可立即做，需 `cargo build` + WebView2 起桌面壳）
+## 二、验证（✅ 2026-08-23 已完成，经 WebView2 远程调试自动化实测）
 
-- [ ] **A5a · 内置 notes 插件端到端验证**
-  - 起桌面壳 → 打开内置 `notes`（client 运行时，声明 `storage.kv` + `llm.chat`）。
-  - 确认：`sdk.storage.kv` / `sdk.llm.chat` 经网关返回 `NotSupported`（而非静默无应）；
-    `read_plugin_file` 能解析内置插件目录；ui-tokens CSS 注入生效。
+- [x] **A5a · 内置 notes 插件端到端验证** ✅
+  - 方式：`tauri build --no-bundle --debug` 构建产物 + `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port`
+    启动桌面壳，Playwright `connectOverCDP` 驱动真实 UI 打开 notes 并在插件 iframe 内断言。
+  - 结果：iframe 渲染 notes 界面（sandbox allow-scripts、opaque origin）；`window.sdk`/`__lingfangInvoke`
+    注入成功；ui-tokens CSS 注入生效；`read_plugin_file` 解析内置插件目录成功；
+    `storage.kv` 明确 reject `capability_not_supported`（非静默无应）；
+    未声明的 `system.info` 拒绝 `capability_not_declared`；
+    `llm.chat` 返回 `relay_not_configured`——C2 落地后 AI 桥已接管该 kind，
+    原 runbook「预期 NotSupported」已被取代（凭据未配置时的正确表现）。
+  - 实测暴露并修复 **3 个真缺陷**（单测无法覆盖的集成问题）：
+    1. `read_plugin_file` 只认内置 manifest id，前端传 installationId 必失败
+       （main.rs 增安装账本回退解析；同时使安装插件的 entry HTML 可读）。
+    2. Tauri 构建期 CSP 改写把 `script-src` 的 `'unsafe-inline'` 替换为 nonce/hash，
+       srcdoc iframe 内所有内联脚本被阻断 → 插件 UI 全部无 JS。
+       已设 `dangerousDisableAssetCspModification: true` 并保留显式 `'unsafe-inline'`。
+    3. `api.ts` 依赖的 `window.__TAURI__` 全局实际不存在（IPC 真入口为 `__TAURI_INTERNALS__`）→
+       经 api 层的所有命令调用直接抛错；且 PluginRunner 宿主监听 effect 在 iframe 渲染前
+       注册时 ref 为 null 直接 return、永不重试 → 插件能力调用全部静默挂起。
+       修复：api.ts 回退 `__TAURI_INTERNALS__`（listen 按 v2 event 插件协议直连）+
+       PluginRunner 监听器无条件注册、事件到达时再解析 ref。
 
-- [ ] **A5b · 安装插件注册路径验证**
-  - `pnpm plugin:create` 生成 client 模板 → `pnpm plugin:build` → 安装运行。
-  - 确认：A4 生效，安装插件调用能力不再 `NotDeclared`（A4 价值的直接证明）。
+- [x] **A5b · 安装插件注册路径验证** ✅
+  - 方式：CLI 非交互生成 client 模板（声明 system.info+clipboard）→ validate/build 出 .lfplugin →
+    经页面内 IPC 调 `install_plugin_artifact` 安装（origin=local）→ UI 打开运行。
+  - 结果：已声明的 `system.info`/`clipboard.writeText` 真实执行返回数据（不再 not_declared），
+    未声明的 `storage.kv` 正确拒绝——A4 价值得到端到端证明。
+  - 实测暴露并修复第 4 个缺陷：**client 运行时的安装插件从不注册能力**
+    （原 A4 只覆盖进程型 start_plugin 路径）。已在 `load_installed_plugin` 命令层
+    打开时注册 manifest 声明能力（幂等），并抽出 `plugins::capabilities_from_manifest` 共用解析。
 
 ## 三、功能补全（需要写代码）
 
@@ -141,6 +162,9 @@
 ---
 
 ## 建议执行顺序
+
+> 2026-08-23：计划内全部任务（含 A5a/A5b 桌面端实操验证）已完成。剩余仅「可选」项：
+> 未实现 kind 的产品化（新需求）与文档行号校准（低价值）。
 
 1. **#3、#4**（A5a/A5b 验证）：成本低、价值高，先证明已交付代码真通路。
 2. **#1、#2**（B3/C2 决策）：需产品/人拍板。

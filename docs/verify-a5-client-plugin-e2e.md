@@ -1,5 +1,15 @@
 # A5 手动验证 Runbook · client 插件端到端
 
+> **✅ 执行记录（2026-08-23，已完成）**：本 runbook 已按自动化方式执行通过——
+> `tauri build --no-bundle --debug` + WebView2 远程调试端口 + Playwright `connectOverCDP`。
+> 两处预期更新：
+> 1. A5a 中 `llm.chat` 现预期 `relay_not_configured`（C2 已接管 AI kind），不再是 NotSupported；
+>    `storage.kv` 仍为 `capability_not_supported`。未声明的 kind（如 notes 调 system.info）为 `capability_not_declared`。
+> 2. 实测修复 4 个集成缺陷后才全绿（read_plugin_file installationId 失配 / Tauri CSP 改写阻断
+>    iframe 内联脚本 / api.ts 全局缺失与 PluginRunner 监听注册时序 / client 安装插件能力未注册），
+>    详见 TODO.md「二、验证」。A5b 的安装步骤实测可经页面 IPC `install_plugin_artifact` 完成，
+>    无需人工文件对话框。
+
 > 对应 `TODO.md` 中 **A5a / A5b** 两项验证。本文件为文档，不改动源码。
 > 目的：在当前已交付且单测通过的 client-plugin 代码上，一次性完成桌面壳（需 `cargo build` + WebView2）的端到端确认。
 

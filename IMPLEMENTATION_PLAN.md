@@ -108,7 +108,11 @@ client HTML 模板 `index.html.tmpl:27` 声明 `const sdk = window.sdk;` —— 
 - 在 `plugin_package_manager` / `plugin_store` 的安装与加载路径上,解析 manifest 的 `capabilities[]` 并注册进 `CapabilityRegistry`(含 fs.* 的 `paths` 模板展开,复用 `plugins.rs:53-72` 的解析逻辑)。否则市场安装/本地插件的所有 `invoke_capability` 调用恒 `NotDeclared`,A 阶段成果对它们不可见。
 - 执行回填:实际落点在 `plugin_runner.rs`——插件 start 时注册(`:1532`),并连带修复了 `parse_manifest` 丢失 `paths` 的既有 bug(`:126-139`)。
 
-### A5. 验证 ✅(代码级;桌面端实操待做)
+### A5. 验证 ✅（代码级 + 桌面端实操，2026-08-23 完成）
+- 实操已经 WebView2 远程调试自动化完成（A5a 内置 notes / A5b 安装插件注册路径均通过），
+  过程暴露并修复 4 个集成缺陷（read_plugin_file id 失配 / CSP 改写阻断 iframe 内联脚本 /
+  api.ts 全局缺失 + PluginRunner 监听注册时序 / client 运行时安装插件能力未注册），
+  详见 TODO.md「二、验证」节。
 - 用**内置 `notes` 插件**即可验证(`builtin-plugins/notes/manifest.json`:client 运行时,声明 `storage.kv` + `llm.chat`):桌面壳运行 → 打开 notes → 确认 `sdk.storage.kv` / `sdk.llm.chat` 经网关返回 `NotSupported`(而非静默无应)。
 - 再走 `pnpm plugin:create` 生成 client 模板 → `pnpm plugin:build` → 安装运行,验证 A4 注册路径(安装插件不再 `NotDeclared`)。
 
