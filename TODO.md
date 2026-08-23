@@ -2,6 +2,8 @@
 
 > 基于 `IMPLEMENTATION_PLAN.md` 三轮修订（A1–A4、B2、C1+C3、D1–D3 已交付）的执行结果梳理。
 > 前序交付状态见 `IMPLEMENTATION_PLAN.md` 的「执行状况」节。
+> **2026-08-23 起，后续工作以 `IMPROVEMENT_PLAN.md`（第二轮改进计划，阶段 E–H）为准**；
+> 本清单剩余「可选」项已被其吸收（未实现 kind 产品化 → 已由 `56a5c39` 交付并回填；行号校准 → G5）。
 
 ---
 
