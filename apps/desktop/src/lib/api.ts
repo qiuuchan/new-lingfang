@@ -2,25 +2,66 @@
 // 零服务器架构：不连接任何后端，全部能力经 Tauri 命令与本地文件系统完成。
 // 市场数据源：GitHub 仓库原始索引（marketplace.json）+ Release 产物下载。
 
-// Tauri 命令调用（桌面环境注入 __TAURI__，需 tauri.conf.json 开 withGlobalTauri）。
+// Tauri 命令调用。优先 window.__TAURI__（withGlobalTauri 注入的全局），缺失时回退
+// __TAURI_INTERNALS__.invoke（@tauri-apps/api v2 的底层 IPC 入口，桌面环境恒在）。
 export async function tauriInvoke<T = unknown>(
   cmd: string,
   args?: Record<string, unknown>
 ): Promise<T> {
-  const inv = (window as unknown as { __TAURI__?: { core?: { invoke?: Function } } }).__TAURI__
-    ?.core?.invoke;
+  const inv =
+    (window as unknown as { __TAURI__?: { core?: { invoke?: Function } } }).__TAURI__?.core
+      ?.invoke ??
+    (window as unknown as { __TAURI_INTERNALS__?: { invoke?: Function } }).__TAURI_INTERNALS__
+      ?.invoke;
   if (!inv) throw new Error('需在桌面环境中运行');
   return inv(cmd, args) as Promise<T>;
+}
+
+type TauriEventListen = (
+  event: string,
+  handler: (event: { payload: unknown }) => void,
+) => Promise<() => void>;
+
+function resolveTauriEventListener(): TauriEventListen | undefined {
+  const global = (window as unknown as { __TAURI__?: { event?: { listen?: TauriEventListen } } })
+    .__TAURI__?.event?.listen;
+  if (global) return global;
+  // 回退：按 @tauri-apps/api v2 的 event 插件协议直连 IPC
+  // （transformCallback 包装 handler → plugin:event|listen / remove_listener）。
+  const internals = (
+    window as unknown as {
+      __TAURI_INTERNALS__?: {
+        invoke?: Function;
+        transformCallback?: Function;
+      };
+    }
+  ).__TAURI_INTERNALS__;
+  if (!internals?.invoke || !internals?.transformCallback) return undefined;
+  const invoke = internals.invoke.bind(internals);
+  const transformCallback = internals.transformCallback.bind(internals);
+  return async (event: string, handler: (event: { payload: unknown }) => void) => {
+    const eventId = await invoke('plugin:event|listen', {
+      event,
+      target: { kind: 'Any' },
+      handler: transformCallback(handler, false),
+    });
+    return async () => {
+      await invoke('plugin:event|remove_listener', {
+        event,
+        eventId,
+        target: { kind: 'Any' },
+      });
+    };
+  };
 }
 
 export async function tauriListen<T = unknown>(
   event: string,
   handler: (event: { payload: T }) => void
 ): Promise<() => void> {
-  const listen = (window as unknown as { __TAURI__?: { event?: { listen?: Function } } })
-    ?.__TAURI__?.event?.listen;
+  const listen = resolveTauriEventListener();
   if (!listen) throw new Error('需在桌面环境中运行');
-  return listen(event, handler) as Promise<() => void>;
+  return listen(event, handler as (event: { payload: unknown }) => void) as Promise<() => void>;
 }
 
 export interface ApiError extends Error {

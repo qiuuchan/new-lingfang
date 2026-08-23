@@ -128,11 +128,14 @@ export function PluginRunner({
   }, [plugin.id, plugin.entry, runtimeType]);
 
   // A2：宿主监听 iframe 的 __lf_host_call，经 invokeRuntime 转发到 Rust 网关。
+  // 注意：iframe 在 entryHtml 异步读取完成后才渲染，effect 挂载时 ref 必为 null——
+  // 因此监听器必须无条件注册，在事件到达时再解析 iframeRef（否则监听器永不注册，
+  // 插件所有能力调用将静默挂起直到超时）。
   useEffect(() => {
     if (runtimeType !== 'client') return;
-    const frame = iframeRef.current;
-    if (!frame) return;
     const onMessage = (event: MessageEvent) => {
+      const frame = iframeRef.current;
+      if (!frame) return;
       handleClientHostMessage(event, {
         frame,
         pluginId: plugin.id,
