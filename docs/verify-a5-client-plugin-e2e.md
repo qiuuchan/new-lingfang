@@ -10,6 +10,19 @@
 >    详见 TODO.md「二、验证」。A5b 的安装步骤实测可经页面 IPC `install_plugin_artifact` 完成，
 >    无需人工文件对话框。
 
+> **⚠️ 当前预期（2026-08-23 `56a5c39` caps 落地后，覆盖下文旧断言；上方执行记录保持存档）**：
+> `storage.kv` / `fs.pick` / `system.notify` / `ui.view` 已产品化（`client_host_caps.rs` 三命令 + `uiViewHost` 纯前端落点）。
+> 对内置 notes（声明 `storage.kv` + `llm.chat`）：
+> - `storage.kv` set/get 现应**真实成功**（持久化到插件 data 目录 `kv.json`），不再 `capability_not_supported`；
+> - `llm.chat` 未配置 relay 凭据时为 `relay_not_configured`（配置真实凭据后应真实返回，见 `IMPROVEMENT_PLAN.md` G1）；
+> - 未声明 kind（notes 调 `system.info` 等）仍为 `capability_not_declared`；
+> - 仅 `plugin.upload` / `plugin.submitMarketplace` 保持 `capability_not_supported`（平台市场审核流，桌面壳不越权伪造）。
+>
+> 错误码全集见 `apps/desktop/src/lib/plugins-runtime.ts` 的 `normalizeCapabilityError`（8 个 code：
+> `capability_not_declared` / `capability_not_supported` / `capability_out_of_scope` / `capability_invalid_path` /
+> `net_fetch_ssrf_blocked` / `relay_not_configured` / `relay_error` / `capability_error`）。
+> E2E 冒烟自动化（断言即本段）见 `IMPROVEMENT_PLAN.md` 阶段 E2。
+
 > 对应 `TODO.md` 中 **A5a / A5b** 两项验证。本文件为文档，不改动源码。
 > 目的：在当前已交付且单测通过的 client-plugin 代码上，一次性完成桌面壳（需 `cargo build` + WebView2）的端到端确认。
 
@@ -73,5 +86,5 @@ pnpm dev:desktop            # = pnpm -C apps/desktop dev   = tauri dev（开发�
 ## 已知限制 / 待 B3·C2
 
 - **B3 · runtime 物料**：node/python 运行时需 `runtime-lock.json` 物料（`runtimes/` 在仓内为空），当前本地无法实际起进程；A5b 进阶项在 nodejs/python 宿主端需该物料后方能跑通。
-- **C2 · client 桥凭据**：client 的 `llm.chat` / `image.*` / `video.*` / `audio.*` 走 `BridgeSession`（需 relay `api_base`/`auth_token`），client HTML 无此通道且凭据来源待决策；故 **A5a 中 `llm.chat` 当前预期即为 `NotSupported`**，属正确行为。
-- `storage.kv` / `system.notify` / `ui.view` / `fs.pick` / `plugin.upload` / `plugin.submitMarketplace` 同样属「已声明但未实现」，预期 `capability_not_supported`，非缺陷。
+- **C2 · client 桥凭据**：已拍板 C-on-A（2026-08-22）并落地——凭据由用户在应用设置录入（`SettingsPanel` → `set_relay_settings`），client 调用一律经宿主 `client_*` 代理命令，iframe 永不持凭据。未配置时 `llm.chat` 等即 `relay_not_configured`，属正确行为；真实凭据实操待 G1。
+- ~~`storage.kv` / `system.notify` / `ui.view` / `fs.pick` 属「已声明但未实现」~~ **2026-08-23 起已实现**（`56a5c39`）；当前仅 `plugin.upload` / `plugin.submitMarketplace` 预期 `capability_not_supported`，非缺陷。
