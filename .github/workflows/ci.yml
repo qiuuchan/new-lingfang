@@ -9,6 +9,9 @@ on:
   pull_request:
     branches:
       - "**"
+  workflow_dispatch: {}   # 手动触发 desktop-e2e（IMPROVEMENT_PLAN E4）
+  schedule:
+    - cron: "0 19 * * *"  # nightly 03:00 (UTC+8) 跑 desktop-e2e 冒烟
 
 jobs:
   quality:
@@ -34,6 +37,74 @@ jobs:
 
       - name: Test
         run: pnpm test
+
+  # Rust 测试防线（IMPROVEMENT_PLAN E3）：desktop 218 + installer 30 个测试此前不在
+  # 任何 PR 级防线内，2026-08-23 前从未被 CI 编译过，已出现测试代码腐坏（缺 derive、
+  # 字面量缺字段等）。windows-latest 是硬要求——Tauri 壳绑 windows-sys 依赖。
+  rust-tests:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile || pnpm install
+
+      # tauri generate_context! 在编译期读 frontendDist（../dist），必须先产出前端
+      - name: Build frontend (required by tauri generate_context!)
+        run: pnpm -C apps/desktop vite:build
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Run workspace tests
+        run: cargo test --workspace
+
+  # E2E 冒烟（IMPROVEMENT_PLAN E2/E4）：WebView2 远程调试 + Playwright connectOverCDP
+  # 驱动真实桌面壳（构建 → 启动 → 打开内置 notes → iframe 内 8 条断言）。
+  # 仅 nightly / 手动触发：debug 构建分钟级，对每次 PR 太重；抓的是"单测全绿、
+  # 真机第一行就挂"级别的集成缺陷（2026-08-23 A5 曾一次抓出 4 个）。
+  desktop-e2e:
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile || pnpm install
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+
+      # runner 会话无交互桌面；桌面壳窗口仍可创建（WebView2 headless 不需要前台焦点，
+      # CDP 输入事件经协议注入）。若夜跑遇到窗口站问题，在此加 RDP/virtual-display 一步。
+      - name: Run desktop E2E smoke
+        run: pnpm -C apps/desktop test:e2e
 
   publish-runtimes:
     name: Publish bundled runtimes + SFX installer (B3→C)
