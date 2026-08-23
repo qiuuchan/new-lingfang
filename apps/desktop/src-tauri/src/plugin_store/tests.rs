@@ -327,6 +327,7 @@ fn config_roundtrip_custom_root() {
     store
         .write_config(&PluginStoreConfig {
             plugins_root_path: Some(custom.to_string_lossy().to_string()),
+            ..Default::default()
         })
         .unwrap();
     assert_eq!(store.plugins_root(), custom);
@@ -334,6 +335,7 @@ fn config_roundtrip_custom_root() {
     store
         .write_config(&PluginStoreConfig {
             plugins_root_path: None,
+            ..Default::default()
         })
         .unwrap();
     assert_eq!(store.plugins_root(), store.anchor_root);

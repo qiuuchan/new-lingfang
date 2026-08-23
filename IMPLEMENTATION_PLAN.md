@@ -48,7 +48,7 @@ client HTML 模板 `index.html.tmpl:27` 声明 `const sdk = window.sdk;` —— 
 | B2 | 脚本锁路径指向已提交的 `apps/desktop/runtime-lock.json` | ✅ 已交付 |
 | C1+C3 | `net.fetch` 直连 `plugin_net_fetch` + 8 个 vitest | ✅ 已交付 |
 | D1-D3 | cloud/workflow 占位 + 非阻塞告警规则 + 文档 + 清理过期注释 | ✅ 已交付 |
-| B3 | node/python/ffmpeg/chrome.dll 物料无仓内来源机制 | ✅ 决策已拍板（B→C，2026-08-22）；代码待外部物料（chrome.dll 分片/ffmpeg URL/CI 密钥）入库方可落 B 的 CI 灌装与 C 安装器改造 |
+| B3 | node/python/ffmpeg/chrome.dll 物料无仓内来源机制 | ✅ 决策已拍板（B→C，2026-08-22）；B 链路（CI 制品 + minisign）已端到端跑绿；**P2 方案 C 终态已于 2026-08-23 落地**（installer 入 workspace、sfx 流式解压、打包 runtime-lock 硬门槛、CI 双产物，含 `--silent` 子命令误判存量 bug 修复） |
 | C2 | llm/image/video/audio 依赖平台 relay 凭据,与零服务器定位有张力 | ✅ 决策已拍板（C-on-A，2026-08-22）；**代码已落地**（`client_ai_proxy.rs` 五命令 + `PluginStore` 设置 + 前端路由/设置页，`tsc` 干净、desktop vitest 45 测试全绿） |
 
 ### 本轮复验(逐条核对代码 + 重跑工具链)
@@ -153,7 +153,7 @@ client HTML 模板 `index.html.tmpl:27` 声明 `const sdk = window.sdk;` —— 
 - 已交付(`client_ai_proxy.rs`):`client_llm_chat` / `client_image_generate` / `client_image_edit` / `client_video_generate` / `client_audio_generate` 五个 `#[tauri::command]`,从 `PluginStore` 读设置凭据 → `registry.find` 校验声明能力 → 瞬态 `BridgeSession` 复用 `relay_*` 辅助转发;`relay_not_configured:` / `capability_not_declared:` / `relay_error:` 错误前缀供前端友好提示。
 - `PluginStore` 扩展 `relay_api_base` / `relay_auth_token` + `get_relay_settings` / `set_relay_settings`(原子写复用 `write_config`)。
 - 前端 `plugins-runtime.ts` 将五个 AI kind 路由到 `client_*` 命令;`SettingsPanel.tsx` + `Sidebar`「设置」入口录入凭据并优雅降级。
-- 验证:`tsc --noEmit` 干净;desktop vitest 8/8 文件 45 测试全绿(含 `plugins-runtime.spec.ts` 13)。Rust 侧未 `cargo build`(无工具链)。
+- 验证:`tsc --noEmit` 干净;desktop vitest 8/8 文件 45 测试全绿(含 `plugins-runtime.spec.ts` 13)。Rust 侧于 2026-08-23 补验:`cargo check/test --workspace` 通过(首次工具链编译,顺带修复 4 处存量测试代码问题,见 TODO「当前验证基线」)。
 
 ### C3. 验证 ✅
 - `capability.rs` 已有 NotSupported 用例(`:477`),可扩展覆盖新接通的 kind。

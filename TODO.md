@@ -26,7 +26,23 @@
     打包(~1.7GB) → minisign 签名+自验 → Release 上传，tag `v0.0.1-test` 全绿，
     产物见 `https://github.com/qiuuchan/new-lingfang/releases/tag/v0.0.1-test`。
     过程中实测修正：python.exe 历史哈希不可复现已按 stripped 构建回填、`@playwright/test@1.61.1` 补入依赖、
-    ffmpeg/python 归档走断点预取。**仅剩 P2：installer crate 注入 `runtimes/`（方案 C）。**
+    ffmpeg/python 归档走断点预取。~~仅剩 P2：installer crate 注入 `runtimes/`（方案 C）~~
+  - **P2 已完成（✅ 2026-08-23 方案 C 终态落地，B3→C 迁移闭环）**：
+    - installer crate 接入 Cargo workspace（根 `Cargo.toml` members 增 `apps/desktop/installer`）。
+    - `sfx.rs` 改流式解压：新增 `SegmentReader`（把 exe 内 payload 段映射为有界 Read+Seek 视图），
+      >1.5GB 的 runtimes payload 不再整段读进内存；trailer 格式不变（u32 上限 ≈4GiB，打包脚本守卫）。
+    - `build-installer.mjs` 打包硬门槛：注入前强制跑 `verify-bundled-runtimes.mjs`
+      （keyFiles sha256 + requiredFiles + materializedFiles + Playwright 漂移全量校验，不过即拒绝打包）；
+      排除 `runtimes/.download` 预取归档（省数百 MB）；payload 内置纯净 `updater.exe`
+      （避免兜底复制带包自身导致安装目录翻倍）；installer 裸 exe / u32 容量双重防御。
+    - **顺带修复存量 bug**：`cli.rs` 把「第一个非 `--` 词元」当子命令——updater 以
+      `--silent --target <路径>` 形态拉起新安装包时路径被误判为未知子命令，静默安装/热更必败；
+      现改为先消费 flag 及其值再识别子命令（含回归测试）。
+    - CI：`publish-runtimes` job 扩为「B3→C」双产物——在已校验的 runtimes/ 上构建桌面壳 +
+      SFX 安装器，minisign 签名后随 Release 上传 `LingFang-Setup-*.exe`（+ `.minisig`）。
+    - 本机端到端验证：runtime-lock 校验通过 → 打包（payload 629.6MB / Setup 633.2MB）→
+      `--silent --target` 静默解压 exit=0 → 解压产物 python.exe/chrome.dll 与锁逐字节一致、
+      updater.exe 为无尾部裸 exe。`cargo test -p lingfang-installer` 30/30 全绿。
   - **可立即准备（代码侧，本会话已完成 ✅ 2026-08-22）**：
     - `.gitattributes`：Git LFS 跟踪 `apps/desktop/runtime-parts/**` 与 `*.part-*`（chrome.dll 分片不拖垮克隆；
       团队初始化/提交流程见 `docs/lfs-setup.md`）。
@@ -57,8 +73,8 @@
       其余 capability 不变）；错误归一化新增 `relay_not_configured` / `relay_error` 码。
     - 新增 `SettingsPanel.tsx` + `Sidebar`「设置」入口 + `PanelDialog` 挂载，录入 relay 凭据并优雅降级提示。
     - 单测 `plugins-runtime.spec.ts`（13）覆盖五类 AI kind → `client_*` 路由、net.fetch / fs.read 不变。
-  - 验证：`tsc --noEmit` 干净；desktop vitest 8/8 文件 45 测试全绿；Rust 侧因无工具链未 `cargo build`
-    （逻辑已对齐命令名 / `AppState.registry` / `BridgeSession::new_transient`）。
+  - 验证：`tsc --noEmit` 干净；desktop vitest 8/8 文件 45 测试全绿；Rust 侧已于 2026-08-23
+    `cargo check/test --workspace` 补验通过（此前因无工具链仅人工核查）。
   - 待实操（需 WebView2 + cargo build）：内置 notes 的 AI 摘要经设置凭据真正跑通。
 
 ## 二、验证（可立即做，需 `cargo build` + WebView2 起桌面壳）
@@ -133,7 +149,16 @@
 
 ## 当前验证基线（已通过）
 
-- `cargo check`（apps/desktop/src-tauri）：未在本环境跑（无 Rust 工具链）；C2 新增模块已人工核查跨模块引用一致。
+- **2026-08-23 更新**：本机已装 Rust 工具链（cargo 1.97.1），Rust 侧验证缺口已补齐：
+  - `cargo check --workspace`：通过（31+6 个历史 warning，无新增错误）。
+  - `cargo test --workspace`：desktop bin 218 passed / installer 30 passed 全绿。
+  - 首次编译暴露并修复 3 处存量测试代码问题（均非生产代码缺陷）：
+    `BridgeResponse` 缺 `#[derive(Debug)]`、`plugin_store/tests.rs` 两处
+    `PluginStoreConfig` 字面量缺 C2 新增字段（补 `..Default::default()`）、
+    `plugin_runner/tests.rs` 对 `ProcessTable::take` 三元组返回值的旧二元组解构；
+    另修复 `route_video_generate_relay_forward_error_passthrough` 与
+    `relay_with_retry`（502 重试 3 次）的 mock 单次应答不匹配——mock 改为可应答
+    4 轮并断言恰 4 次转发，透传语义不被重试改写。
 - `tsc --noEmit`（apps/desktop）：干净（含新增 `SettingsPanel` / `App` / `Sidebar` / `plugins-runtime` 改动）。
 - `vitest run`（apps/desktop）：8/8 文件 45 测试全绿（含 C2 `plugins-runtime.spec.ts` 13；并修掉
   `clientActionBridge.spec.ts` 的 `vi.resetModules()` 跨文件泄漏导致 5 个 spec 的 `@` 别名解析失败）。

@@ -1010,9 +1010,10 @@ pub fn set_plugins_root(
         fs::create_dir_all(&target).map_err(|e| format!("创建插件根目录失败：{e}"))?;
         Some(normalized)
     };
-    let config = PluginStoreConfig {
-        plugins_root_path: effective.clone(),
-    };
+    // 只更新 plugins_root_path，其余字段（relay_* 凭据）读旧值保留——
+    // 整体重建会把手写的 relay 设置清掉。
+    let mut config = state.read_config();
+    config.plugins_root_path = effective.clone();
     state.write_config(&config)?;
     // 返回最终生效路径（自定义则规范化后原样，默认则 plugins_root() 计算的默认值）。
     Ok(match effective {

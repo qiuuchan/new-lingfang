@@ -310,7 +310,7 @@ fn process_table_stop_plugin_kills_running_process() {
     let child = cmd.spawn().expect("测试长进程应能 spawn");
     let (_pid, _arc) = table.register_with_handle("long-plugin", child, SandboxHandle::default(), "2000Z".to_string());
     // 取出并杀。
-    let (mut killed_child, _sandbox) = table.take("long-plugin").expect("应能取出注册的进程");
+    let (mut killed_child, _sandbox, _session_key) = table.take("long-plugin").expect("应能取出注册的进程");
     let started = std::time::Instant::now();
     kill_child_tree(&killed_child);
     let _ = killed_child.kill();

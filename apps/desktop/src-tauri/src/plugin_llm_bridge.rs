@@ -408,6 +408,7 @@ pub fn respond_plugin_action_bridge(
 /// SSE 用于 `stream: true` 的 /v1/chat/completions 请求：桥从 relay 拿完整响应后，
 /// 包装成单个 `data:` 事件 + `data: [DONE]` 返回，兼容 OpenAI SDK 的流式消费。
 /// 非真正流式（relay 固定非流式），但解除了插件 SDK `stream: true` 的 400 报错。
+#[derive(Debug)]
 enum BridgeResponse {
     Json(Value),
     Sse(String),
@@ -2417,18 +2418,33 @@ mod tests {
     }
 
     fn spawn_relay_response(status: u16, body: Value) -> (String, mpsc::Receiver<HttpRequest>) {
+        spawn_relay_response_times(status, body, 1)
+    }
+
+    /// 可应答多次的 mock relay：relay_with_retry 对 502/503 重试至多 4 次请求，
+    /// 透传语义的用例需要 mock 在全部重试轮次上返回同一响应。
+    fn spawn_relay_response_times(
+        status: u16,
+        body: Value,
+        times: usize,
+    ) -> (String, mpsc::Receiver<HttpRequest>) {
         let listener = TcpListener::bind("127.0.0.1:0").expect("应启动测试 relay");
         let endpoint = format!("http://{}", listener.local_addr().unwrap());
         let (tx, rx) = mpsc::channel();
         thread::spawn(move || {
-            let (mut stream, _) = listener.accept().expect("应收到测试 relay 请求");
-            let request = read_request(&mut stream).expect("测试 relay 请求应有效");
-            tx.send(request).expect("应回传测试请求");
-            let response = http_json(status, &body);
-            stream
-                .write_all(response.as_bytes())
-                .expect("应写入测试 relay 响应");
-            stream.flush().expect("应刷新测试 relay 响应");
+            for _ in 0..times {
+                let Ok((mut stream, _)) = listener.accept() else {
+                    break;
+                };
+                let request = match read_request(&mut stream) {
+                    Ok(request) => request,
+                    Err(_) => break,
+                };
+                tx.send(request).expect("应回传测试请求");
+                let response = http_json(status, &body);
+                let _ = stream.write_all(response.as_bytes());
+                let _ = stream.flush();
+            }
         });
         (endpoint, rx)
     }
@@ -2937,9 +2953,12 @@ mod tests {
     fn route_video_generate_relay_forward_error_passthrough() {
         // relay 转发 RBFLow 失败（relay 内部已退款）→ 返回 502 rbflow_forward_failed → 桥透传给插件。
         // 退款由 relay 内部完成（relay 侧测试覆盖），桥不参与退款逻辑。
-        let (_endpoint, _request_rx) = spawn_relay_response(
+        // relay_with_retry 对 502 重试至多 3 次：mock 须应答全部 4 轮（初始 + 3 重试），
+        // 重试用尽后桥返回的仍是 relay 的原始错误码（透传语义不被重试改写）。
+        let (_endpoint, request_rx) = spawn_relay_response_times(
             502,
             json!({ "code": "rbflow_forward_failed", "message": "RBFLow 服务转发失败", "requestId": "req-fwd" }),
+            4,
         );
         let session = video_session(_endpoint, true);
         let body = serde_json::to_vec(&json!({
@@ -2949,6 +2968,13 @@ mod tests {
         let error = route_video_generate(&session, body).unwrap_err();
         assert_eq!(error.status, 502);
         assert_eq!(error.code, "rbflow_forward_failed");
+        // 恰好转发 4 次（初始 1 + 重试 3），无更多静默重试。
+        for attempt in 1..=4 {
+            let request = request_rx
+                .recv_timeout(Duration::from_secs(10))
+                .unwrap_or_else(|_| panic!("第 {attempt} 轮转发请求应到达 mock relay"));
+            assert!(request.path.starts_with("/api/relay/v1/videos/generations"));
+        }
     }
 
     #[test]
