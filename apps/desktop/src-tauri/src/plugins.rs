@@ -51,8 +51,29 @@ fn parse_manifest(dir: &Path) -> Option<(LoadedPlugin, Vec<DeclaredCapability>)>
         .to_string();
 
     // 解析 capabilities，并展开 fs.* 的路径模板。
+    let caps = capabilities_from_manifest(&v);
+
+    let plugin = LoadedPlugin {
+        id,
+        name,
+        version,
+        description,
+        entry,
+        runtime_type,
+        capabilities: caps.clone(),
+        dir: dir.to_string_lossy().to_string(),
+        builtin: true,
+    };
+    Some((plugin, caps))
+}
+
+/// 从 manifest JSON 提取声明能力（含 fs.* 的 paths 模板展开）。
+///
+/// 内置加载（parse_manifest）与安装插件打开路径（load_installed_plugin 命令层，
+/// client 运行时不走 start_plugin 进程路径，需在打开时注册能力）共用。
+pub fn capabilities_from_manifest(manifest: &Value) -> Vec<DeclaredCapability> {
     let mut caps = Vec::new();
-    if let Some(arr) = v.get("capabilities").and_then(|x| x.as_array()) {
+    if let Some(arr) = manifest.get("capabilities").and_then(|x| x.as_array()) {
         for c in arr {
             let kind = match c.get("kind").and_then(|x| x.as_str()) {
                 Some(k) => k.to_string(),
@@ -71,24 +92,17 @@ fn parse_manifest(dir: &Path) -> Option<(LoadedPlugin, Vec<DeclaredCapability>)>
             caps.push(DeclaredCapability { kind, paths });
         }
     }
-
-    let plugin = LoadedPlugin {
-        id,
-        name,
-        version,
-        description,
-        entry,
-        runtime_type,
-        capabilities: caps.clone(),
-        dir: dir.to_string_lossy().to_string(),
-        builtin: true,
-    };
-    Some((plugin, caps))
+    caps
 }
 
 /// 从安装账本给出的不可变 release 目录加载内置插件。
+///
+/// `dir_aliases`：release 目录（规范字符串）→ 额外注册别名（安装账本 installationId）。
+/// 前端 `LoadedPlugin.id` 与进程端 start_plugin 均以 installationId 调用能力网关，
+/// 内置插件必须同时按 manifest id 与 installationId 注册才能命中同一注册表。
 pub fn load_builtin_plugins_from_dirs(
     mut release_dirs: Vec<PathBuf>,
+    dir_aliases: &std::collections::HashMap<PathBuf, String>,
     registry: &CapabilityRegistry,
 ) -> Vec<LoadedPlugin> {
     let mut result = Vec::new();
@@ -96,7 +110,10 @@ pub fn load_builtin_plugins_from_dirs(
     for path in release_dirs {
         match parse_manifest(&path) {
             Some((plugin, caps)) => {
-                registry.register(&plugin.id, caps);
+                registry.register(&plugin.id, caps.clone());
+                if let Some(alias) = dir_aliases.get(&path) {
+                    registry.register(alias, caps);
+                }
                 result.push(plugin);
             }
             None => {

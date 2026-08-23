@@ -247,21 +247,32 @@ async fn plugin_net_fetch(
 
 /// 命令：读取插件资源文件内容（用于壳加载 entry HTML）。
 /// 仅允许读取该插件自身目录下的文件，防止路径穿越。
+///
+/// 插件根解析顺序：内置插件按 manifest id 命中 `AppState.plugins`；否则把
+/// `plugin_id` 视为安装账本 installationId（前端 `LoadedPlugin.id` 即安装 id，
+/// 安装插件不在 AppState.plugins 中）→ 解析其活动版本目录。
 #[tauri::command]
 fn read_plugin_file(
     state: tauri::State<AppState>,
+    manager: tauri::State<plugin_package_manager::PluginPackageManager>,
     plugin_id: String,
     file: String,
 ) -> Result<String, String> {
-    let plugin = state
+    let base = state
         .plugins
         .iter()
         .find(|p| p.id == plugin_id)
+        .map(|p| std::path::PathBuf::from(&p.dir))
+        .or_else(|| {
+            manager
+                .list_installations()
+                .into_iter()
+                .find(|installation| installation.installation_id == plugin_id)
+                .map(|installation| std::path::PathBuf::from(installation.active_release.path))
+        })
         .ok_or_else(|| format!("插件不存在: {plugin_id}"))?;
 
-    let base = std::path::Path::new(&plugin.dir)
-        .canonicalize()
-        .map_err(|e| e.to_string())?;
+    let base = base.canonicalize().map_err(|e| e.to_string())?;
     let target = base.join(&file).canonicalize().map_err(|e| e.to_string())?;
     // 防穿越：目标必须仍在插件目录内。
     if !target.starts_with(&base) {
@@ -363,15 +374,28 @@ fn main() {
                 Err(error) => eprintln!("[plugin-v4-builtins] 注册失败：{error}"),
             }
             let registry = CapabilityRegistry::default();
-            let builtin_release_dirs = plugin_package_manager
+            let builtin_installations = plugin_package_manager
                 .list_installations()
                 .into_iter()
                 .filter(|installation| {
                     installation.origin == plugin_package_manager::InstallationOrigin::Builtin
                 })
+                .collect::<Vec<_>>();
+            // release 目录 → installationId 别名：内置插件双 key 注册（manifest id + 安装 id）。
+            let dir_aliases = builtin_installations
+                .iter()
+                .map(|installation| {
+                    (
+                        std::path::PathBuf::from(&installation.active_release.path),
+                        installation.installation_id.clone(),
+                    )
+                })
+                .collect::<std::collections::HashMap<_, _>>();
+            let builtin_release_dirs = builtin_installations
+                .into_iter()
                 .map(|installation| std::path::PathBuf::from(installation.active_release.path))
                 .collect();
-            let loaded = plugins::load_builtin_plugins_from_dirs(builtin_release_dirs, &registry);
+            let loaded = plugins::load_builtin_plugins_from_dirs(builtin_release_dirs, &dir_aliases, &registry);
             eprintln!("已从本机安装账本加载 {} 个内置插件", loaded.len());
             app.manage(AppState {
                 registry,

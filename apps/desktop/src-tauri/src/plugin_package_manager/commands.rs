@@ -28,9 +28,18 @@ pub(crate) fn install_plugin_artifact(
 #[tauri::command]
 pub(crate) fn load_installed_plugin(
     manager: tauri::State<'_, PluginPackageManager>,
+    app_state: tauri::State<'_, crate::AppState>,
     installation_id: String,
 ) -> Result<InstalledPluginPayload, String> {
-    manager.load_installed_plugin(&installation_id)
+    let payload = manager.load_installed_plugin(&installation_id)?;
+    // A4 补全：client 运行时的安装插件不经 start_plugin 进程路径（无进程概念），
+    // 打开/加载入口时把 manifest 声明能力注册进网关注册表（幂等），
+    // 否则已声明能力调用恒 capability_not_declared。
+    let caps = crate::plugins::capabilities_from_manifest(&payload.manifest);
+    if !caps.is_empty() {
+        app_state.registry.register(&installation_id, caps);
+    }
+    Ok(payload)
 }
 
 #[tauri::command]
