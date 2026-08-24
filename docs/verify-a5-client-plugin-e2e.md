@@ -88,3 +88,82 @@ pnpm dev:desktop            # = pnpm -C apps/desktop dev   = tauri dev（开发�
 - **B3 · runtime 物料**：node/python 运行时需 `runtime-lock.json` 物料（`runtimes/` 在仓内为空），当前本地无法实际起进程；A5b 进阶项在 nodejs/python 宿主端需该物料后方能跑通。
 - **C2 · client 桥凭据**：已拍板 C-on-A（2026-08-22）并落地——凭据由用户在应用设置录入（`SettingsPanel` → `set_relay_settings`），client 调用一律经宿主 `client_*` 代理命令，iframe 永不持凭据。未配置时 `llm.chat` 等即 `relay_not_configured`，属正确行为；真实凭据实操待 G1。
 - ~~`storage.kv` / `system.notify` / `ui.view` / `fs.pick` 属「已声明但未实现」~~ **2026-08-23 起已实现**（`56a5c39`）；当前仅 `plugin.upload` / `plugin.submitMarketplace` 预期 `capability_not_supported`，非缺陷。
+
+---
+
+## LF-04a · 自动化 harness（凭据环境变量注入）
+
+> 工单 `docs/WORK_ORDERS.md` LF-04（G1 notes AI 摘要真实凭据实操）被标记为「需用户介入，暂缓派发」。
+> 其中 **LF-04a（Agent 可做）** 已交付：**以环境变量注入真实 relay 凭据、驱动桌面壳走 notes AI 摘要闭环、凭据缺失时明确跳过而非假阳性**。
+> **LF-04b（真实闭环 + 执行记录节 + 截图）仍阻塞于真实凭据（`api_base` + token），由你提供后单独派发。**
+
+### 凭据注入 seam（Rust）
+`apps/desktop/src-tauri/src/client_ai_proxy.rs` 的 `require_relay` 现在按以下优先级解析凭据：
+1. 用户设置（磁盘 `config.json`，经 `SettingsPanel` 录入）；
+2. 环境变量 `LINGFANG_RELAY_API_BASE` / `LINGFANG_RELAY_TOKEN`（仅当设置未配置时回退）。
+
+两条来源解析出的 `api_base` 都必须是 **https**（F5 防御在 Rust 侧兜底，环境变量路径不再绕过前端校验）。
+凭据**仅存在于进程环境**，不进仓库、不进设置 UI、不落盘 `config.json`、不进日志——满足 LF-04 验收「凭据不落地」。
+
+### 自动化 harness
+`scripts/e2e-relay-verify.mjs`（复用 `e2e-desktop-smoke.mjs` 的 CDP 驱动手法）：
+- **凭据缺失** → 打印明确提示并以 **exit 2 退出**（预期行为，非失败；假阳性防护）；
+- **凭据存在** → 透传进桌面进程 env，打开内置 notes，在 iframe 内 `window.sdk.llm.chat({ model:'fast', messages:[...] })`，
+  断言返回**真实非空 content**（非 `relay_not_configured`、非 `relay_error`）；
+- 退出码：0=真实闭环通过，2=凭据缺失跳过，1=真实闭环失败。
+
+运行（cwd = 仓库根），需先有 `target/debug` 产物（或 `E2E_SKIP_BUILD=1` 复用）：
+```bash
+LINGFANG_RELAY_API_BASE=https://<relay>/v1 LINGFANG_RELAY_TOKEN=<token> \
+  node scripts/e2e-relay-verify.mjs
+# 经由 apps/desktop 脚本：
+LINGFANG_RELAY_API_BASE=... LINGFANG_RELAY_TOKEN=... pnpm -C apps/desktop test:relay
+```
+
+### 待 LF-04b（你提供凭据后）
+提供 `LINGFANG_RELAY_API_BASE` + `LINGFANG_RELAY_TOKEN`（或确认可用测试凭据），即可跑通真实闭环，
+并在本文件新增「执行记录」节，附真实输出片段与截图；如有失败项如实标注。
+
+---
+
+## LF-04b · 真实凭据闭环（✅ 2026-08-24 已跑通，经官方模型商直连）
+
+> 阻塞解除方式（用户拍板）：不用灵坊平台 relay，改用**官方模型商**（DeepSeek）+ 本机**本地 relay 适配器**。
+> 链路：桌面壳 `client_llm_chat` → 本地适配器（模拟平台 relay 协议）→ DeepSeek API 直连 → 回传 notes。
+
+### 本地 relay 适配器（`scripts/relay-adapter.mjs`，零依赖）
+- 只监听 `127.0.0.1`（环回）；对外实现 `POST /api/relay/v1/chat/completions`（含 `fast/premium` 档位映射、
+  OpenAI 形状响应透传、`{code,message,requestId,details.upstreamDetail}` 错误体——与 `plugin_llm_bridge.rs`
+  的 `relay_response_json`/`extract_chat_content` 解析契约对齐）与 `GET /api/relay/v1/models`。
+- 上游任意 OpenAI 兼容端点（默认 `https://api.deepseek.com`，可用 `RELAY_ADAPTER_UPSTREAM_BASE` 覆盖）；
+  `fast → deepseek-chat`、`premium → deepseek-reasoner`（可用 `RELAY_ADAPTER_MODEL_FAST/PREMIUM` 覆盖）。
+- 上游 key 仅经 `RELAY_ADAPTER_UPSTREAM_KEY` 环境变量注入；日志不含任何凭据/头/body。
+- 支持 `HTTPS_PROXY` 环境变量走 CONNECT 隧道（手写实现，无 npm 依赖）；`RELAY_ADAPTER_MOCK=1` 时返回带
+  标识的假响应（无 key/无网时验证链路用）。
+
+### Rust 侧安全例外（LF-04b 配套，F5 收紧的受控放宽）
+`client_ai_proxy.rs::is_allowed_api_base`：https 恒允许；**明文 http 仅限环回地址**
+（`127.0.0.1` / `localhost`）——凭据只发往本机适配器进程、不跨网络，无泄露风险；其余 http 一律拒绝。
+配套单测 3 个（`cargo test -p lingfang-desktop client_ai_proxy` 全绿）。
+
+### 执行记录（2026-08-24 实测，harness `scripts/e2e-relay-verify.mjs` exit 0）
+```
+RELAY_ADAPTER_UPSTREAM_KEY=<DeepSeek key 环境变量> \
+  node scripts/relay-adapter.mjs                      # 监听 http://127.0.0.1:8787
+LINGFANG_RELAY_API_BASE=http://127.0.0.1:8787 \
+LINGFANG_RELAY_TOKEN=<任意非空> \
+  E2E_SKIP_BUILD=1 node scripts/e2e-relay-verify.mjs
+```
+断言全部通过：CDP 连接 → 插件中心渲染 → notes iframe 打开 → `window.sdk` 注入 →
+`llm.chat({model:'fast', messages:[{system:'用一句话回答：1+1 等于几？只回答数字。'},{role:'user',content:'请回答。'}]})`
+→ **真实返回 `"2"`（长度 1，DeepSeek 真实模型输出，非 mock 非 relay_not_configured 非 relay_error）**。
+
+附：adapter 直连复测（同 system+user 摘要 prompt）返回真实长文本摘要；`ping` 返回 `Pong! 🏓`。
+凭据全程仅存于进程环境（`RELAY_ADAPTER_UPSTREAM_KEY`），未入仓库/设置 UI/磁盘/日志。
+
+### 注意事项
+- 本机直连 `api.deepseek.com` 实际可用（此前 `HEAD` 探测超时属误判，`POST` 正常）；若上游不可达，
+  可给 adapter 设 `HTTPS_PROXY` 走代理。
+- 桌面壳要求 `api_base` 为 https 或环回 http——本地适配器走环回例外；若后续要远程 relay，必须是 https。
+- 首次运行 harness 若残留 `lingfang-desktop.exe` 进程（WebView2 目录锁），先 `taskkill /T /F` 清理再跑。
+
