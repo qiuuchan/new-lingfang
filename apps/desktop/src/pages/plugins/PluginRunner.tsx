@@ -4,9 +4,9 @@
 //   注入 window.sdk / window.__lingfangInvoke，把插件的能力调用经 invokeRuntime 接到 Rust 网关。
 // - nodejs/python 运行时：以独立进程运行（GUI 自行弹窗），本页仅展示运行状态占位。
 // - cloud/workflow 运行时：本地桌面壳不支持，渲染明确占位（需平台云）。
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import type { LoadedPlugin } from '@/lib/types';
-import { tauriInvoke, errorMessage } from '@/lib/api';
+import { tauriInvoke, tauriListen, errorMessage } from '@/lib/api';
 import { invokeRuntime } from '@/lib/plugins-runtime';
 import { handleClientHostMessage } from '@/lib/pluginRunnerHost';
 import { initClientActionBridge } from '@/lib/clientActionBridge';
@@ -113,7 +113,8 @@ export function PluginRunner({
   }, [plugin.id]);
 
   // A2：client 插件 → 读取 entry HTML 注入 iframe（srcdoc + sandbox，opaque origin 'null'）。
-  useEffect(() => {
+  // 抽离为 reloadEntry，供挂载与 dev-reload 事件复用。
+  const reloadEntry = useCallback(() => {
     if (runtimeType !== 'client') return;
     let cancelled = false;
     tauriInvoke<string>('read_plugin_file', { pluginId: plugin.id, file: plugin.entry })
@@ -127,6 +128,35 @@ export function PluginRunner({
       cancelled = true;
     };
   }, [plugin.id, plugin.entry, runtimeType]);
+
+  useEffect(() => {
+    reloadEntry();
+  }, [reloadEntry]);
+
+  // A5：dev 安装的热重载。宿主在 dev 目录文件变更后发出 plugin:dev-reload，
+  // 仅当 installationId 匹配当前插件时重新读取 entry（iframe srcDoc 变化 → 自动刷新）。
+  useEffect(() => {
+    if (runtimeType !== 'client') return;
+    let unlisten: (() => void) | undefined;
+    tauriListen<{ installationId: string; runtimeType: string }>('plugin:dev-reload', (event) => {
+      const payload = event.payload;
+      if (
+        payload.installationId === plugin.installationId ||
+        payload.installationId === plugin.id
+      ) {
+        reloadEntry();
+      }
+    })
+      .then((u) => {
+        unlisten = u;
+      })
+      .catch(() => {
+        /* 非桌面环境静默忽略 */
+      });
+    return () => {
+      unlisten?.();
+    };
+  }, [plugin.id, plugin.installationId, runtimeType, reloadEntry]);
 
   // A2：宿主监听 iframe 的 __lf_host_call，经 invokeRuntime 转发到 Rust 网关。
   // 注意：iframe 在 entryHtml 异步读取完成后才渲染，effect 挂载时 ref 必为 null——

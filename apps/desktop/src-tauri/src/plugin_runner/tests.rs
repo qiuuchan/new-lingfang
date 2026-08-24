@@ -837,3 +837,44 @@ fn write_crash_dump_notes_empty_output() {
     assert!(content.contains("空"), "空输出应有诊断提示");
     let _ = std::fs::remove_dir_all(&tmp);
 }
+
+// === 开发态文件监听测试 ===
+
+#[test]
+fn process_table_new_has_empty_dev_watchers() {
+    // PluginProcessTable::new() 必须初始化 dev_watchers 为空（无监听器泄漏）。
+    let table = PluginProcessTable::new();
+    let map = table.dev_watchers.lock().unwrap();
+    assert!(
+        map.is_empty(),
+        "新建进程表不应有任何开发态监听器"
+    );
+}
+
+#[test]
+fn stop_dev_watch_is_noop_for_unknown_id() {
+    // 对未知 installation_id 调用 stop_dev_watch 不应 panic / 不应插入条目。
+    let table = PluginProcessTable::new();
+    stop_dev_watch(&table, "no-such-watch");
+    let map = table.dev_watchers.lock().unwrap();
+    assert!(map.is_empty(), "stop 未知监听器后表应仍为空");
+}
+
+// peek_runtime_type：缺 manifest 时默认 client，存在时读取 runtime_type。
+#[test]
+fn peek_runtime_type_defaults_to_client() {
+    let tmp = temp_dir_unique("peek-none");
+    std::fs::create_dir_all(&tmp).unwrap();
+    // 目录无 manifest.json → 默认 client。
+    assert_eq!(peek_runtime_type(&tmp), "client");
+    let _ = std::fs::remove_dir_all(&tmp);
+}
+
+#[test]
+fn peek_runtime_type_reads_from_manifest() {
+    let tmp = temp_dir_unique("peek-node");
+    std::fs::create_dir_all(&tmp).unwrap();
+    std::fs::write(tmp.join("manifest.json"), r#"{"runtime_type":"nodejs"}"#).unwrap();
+    assert_eq!(peek_runtime_type(&tmp), "nodejs");
+    let _ = std::fs::remove_dir_all(&tmp);
+}

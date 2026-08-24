@@ -52,6 +52,8 @@ lingfang-plugin — 灵方插件开发工具
      --client <kind>       客户端类型
      --no-build            跳过自动 build
 
+  dev [path]         注册插件目录为 dev 安装（免打包直读，v1 仅 client）
+
   --help             显示此帮助
   --version          显示版本号
 `);
@@ -135,6 +137,19 @@ async function main(): Promise<number> {
         build: args.flags['no-build'] === true ? false : undefined,
       };
       return publishCommand(restArgs, opts);
+    }
+    case 'dev': {
+      const { devCommand } = await import('./commands/dev.ts');
+      const opts = {
+        path:
+          typeof restArgs[0] === 'string' && restArgs[0].length > 0
+            ? restArgs[0]
+            : typeof args.flags['path'] === 'string'
+              ? args.flags['path']
+              : undefined,
+        json: args.flags['json'] === true,
+      };
+      return devCommand(restArgs, opts);
     }
     case '':
       return help();

@@ -399,6 +399,33 @@ fn main() {
                 .collect();
             let loaded = plugins::load_builtin_plugins_from_dirs(builtin_release_dirs, &dir_aliases, &registry);
             eprintln!("已从本机安装账本加载 {} 个内置插件", loaded.len());
+
+            // 启动还原开发态安装（origin = Dev）：直接以源目录为 release.path 加载，
+            // 并把其 manifest 声明能力注册进网关注册表（与 register_dev_dir 命令一致）。
+            // 开发态 client 插件无进程，不在此启动进程、不加载政策源。单个损坏的安装
+            // 不应阻断整条启动链路——出错仅记录日志。
+            for installation in plugin_package_manager
+                .list_installations()
+                .into_iter()
+                .filter(|installation| {
+                    installation.origin
+                        == plugin_package_manager::InstallationOrigin::Dev
+                })
+            {
+                match plugin_package_manager.load_installed_plugin(&installation.installation_id) {
+                    Ok(payload) => {
+                        let caps = plugins::capabilities_from_manifest(&payload.manifest);
+                        if !caps.is_empty() {
+                            registry.register(&installation.installation_id, caps);
+                        }
+                    }
+                    Err(error) => eprintln!(
+                        "[plugin-v4-dev] 启动还原开发态安装 {} 失败，已跳过：{error}",
+                        installation.installation_id
+                    ),
+                }
+            }
+
             app.manage(AppState {
                 registry,
                 plugins: loaded,
@@ -469,6 +496,8 @@ fn main() {
             client_host_caps::client_system_notify,
             plugin_package_manager::commands::list_plugin_installations,
             plugin_package_manager::commands::install_plugin_artifact,
+            plugin_package_manager::commands::register_dev_dir,
+            plugin_package_manager::commands::unregister_dev_dir,
             plugin_package_manager::commands::load_installed_plugin,
             plugin_package_manager::commands::preview_pending_installed_plugin,
             plugin_package_manager::commands::read_installed_plugin_policy_source,

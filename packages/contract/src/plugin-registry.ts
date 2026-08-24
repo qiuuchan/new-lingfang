@@ -355,7 +355,7 @@ export const PluginEntitlement = z.object({
 });
 export type PluginEntitlement = z.infer<typeof PluginEntitlement>;
 
-export const LocalPluginOrigin = z.enum(['builtin', 'local', 'team', 'marketplace']);
+export const LocalPluginOrigin = z.enum(['builtin', 'local', 'team', 'marketplace', 'dev']);
 export const DependencyPreparationStatus = z.enum(['pending', 'preparing', 'ready', 'failed']);
 
 export const LocalPluginReleaseRef = z.object({

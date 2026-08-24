@@ -8,6 +8,7 @@ use base64::{engine::general_purpose, Engine as _};
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
 use crate::builtin_plugin_index::parse_builtin_index;
@@ -58,6 +59,7 @@ pub(crate) enum InstallationOrigin {
     Local,
     Team,
     Marketplace,
+    Dev,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -323,6 +325,14 @@ pub(crate) struct InstallArtifactInput {
     pub origin: InstallationOrigin,
     #[serde(default)]
     pub protected: bool,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct RegisterDevDirInput {
+    pub dir: PathBuf,
+    #[serde(default)]
+    pub package_id: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -717,7 +727,7 @@ impl PluginPackageManager {
             "package_id": installation.package_id,
             "release_id": installation.active_release.release_id,
             "release_sha256": installation.active_release.sha256,
-            "installation_origin": match installation.origin { InstallationOrigin::Builtin => "builtin", InstallationOrigin::Local => "local", InstallationOrigin::Team => "team", InstallationOrigin::Marketplace => "marketplace" },
+            "installation_origin": match installation.origin { InstallationOrigin::Builtin => "builtin", InstallationOrigin::Local => "local", InstallationOrigin::Team => "team", InstallationOrigin::Marketplace => "marketplace", InstallationOrigin::Dev => "dev" },
             "name": manifest.get("name").and_then(Value::as_str).unwrap_or("Action Plugin"),
             "description": manifest.get("description").and_then(Value::as_str).unwrap_or(""),
             "version": manifest.get("version").and_then(Value::as_str).unwrap_or("0.0.0"),
@@ -1602,6 +1612,156 @@ impl PluginPackageManager {
             serde_json::json!({ "packageId": installation.package_id }),
         );
         Ok(())
+    }
+
+    /// `lingfang-plugin dev` 命令：将本地源目录登记为开发态安装（origin = Dev）。
+    ///
+    /// 与正式安装的关键差异：dev 安装直接以源目录作为 `active_release.path`，
+    /// 不经 unpack/校验，也不走 `checked_release_package_path`（目录安全性由源目录本身负责）。
+    /// 零服务器模型下，dev 安装仅允许 client 运行时（F2 v1 政策，进程插件保留给内置/一方签名插件）。
+    pub(crate) fn register_dev_dir(
+        &self,
+        input: RegisterDevDirInput,
+    ) -> Result<LocalInstallation, String> {
+        let _guard = lock_or_recover(&self.file_lock);
+        let canonical_dir = input
+            .dir
+            .canonicalize()
+            .map_err(|error| format!("开发目录不可用：{error}"))?;
+        if !canonical_dir.is_dir() {
+            return Err("开发目录不存在或不是目录".to_string());
+        }
+        let manifest_path = canonical_dir.join("manifest.json");
+        let manifest: Value = read_json(&manifest_path)
+            .ok_or_else(|| "开发目录 manifest.json 无法读取".to_string())?;
+        let manifest_id = manifest
+            .get("id")
+            .and_then(Value::as_str)
+            .ok_or_else(|| "manifest.id 缺失".to_string())?;
+        if manifest_id.trim().is_empty() {
+            return Err("manifest.id 不能为空".to_string());
+        }
+        let runtime_type = manifest
+            .get("runtime_type")
+            .and_then(Value::as_str)
+            .unwrap_or("client");
+        if runtime_type != "client" {
+            // F2 v1 安全政策 + IMPROVEMENT_PLAN LF-02：v1 中 dev 安装仅支持 client 运行时，
+            // nodejs/python 进程插件的开发态挂载待签名信任根建立后再放开。
+            return Err(
+                "v1 安全政策（LF-02）：开发态安装暂仅支持 client 运行时；nodejs/python 进程插件保留给内置或一方签名插件（进程沙箱非安全边界，见 IMPROVEMENT_PLAN.md F2）"
+                    .to_string(),
+            );
+        }
+        let package_id = input
+            .package_id
+            .clone()
+            .unwrap_or_else(|| format!("dev:{manifest_id}"));
+        if package_id.trim().is_empty() {
+            return Err("开发目录 packageId 不能为空".to_string());
+        }
+        let mut hasher = Sha256::new();
+        hasher.update(canonical_dir.to_string_lossy().as_bytes());
+        let digest = hasher.finalize();
+        let mut hash_hex = String::with_capacity(16);
+        for byte in digest.iter().take(8) {
+            hash_hex.push_str(&format!("{byte:02x}"));
+        }
+        let release_id = format!("dev-{hash_hex}");
+        let version = manifest
+            .get("version")
+            .and_then(Value::as_str)
+            .unwrap_or("0.0.0-dev")
+            .to_string();
+        let canonical_dir_string = canonical_dir.to_string_lossy().to_string();
+
+        let mut ledger = self.read_installations();
+        let now = Utc::now().to_rfc3339();
+        let existing_index = ledger.installations.iter().position(|installation| {
+            installation.origin == InstallationOrigin::Dev
+                && (installation.active_release.path == canonical_dir_string
+                    || installation.package_id == package_id)
+        });
+        let (installation_id, installed_at) = match existing_index {
+            Some(index) => {
+                let current = &ledger.installations[index];
+                (current.installation_id.clone(), current.installed_at.clone())
+            }
+            None => (Uuid::new_v4().to_string(), now.clone()),
+        };
+
+        let data_path = self.installed_root().join(&installation_id).join("data");
+        fs::create_dir_all(&data_path)
+            .map_err(|error| format!("创建开发插件 data 目录失败：{error}"))?;
+
+        let active_release = InstalledRelease {
+            release_id,
+            version,
+            sha256: "dev".to_string(),
+            path: canonical_dir_string.clone(),
+            dependency_status: DependencyStatus::Ready,
+        };
+        let installation = LocalInstallation {
+            installation_id: installation_id.clone(),
+            package_id: package_id.clone(),
+            origin: InstallationOrigin::Dev,
+            protected: false,
+            active_release: active_release.clone(),
+            pending_release: None,
+            previous_release: None,
+            data_path: data_path.to_string_lossy().to_string(),
+            installed_at: installed_at.clone(),
+            updated_at: now,
+        };
+        if let Some(index) = existing_index {
+            ledger.installations[index] = installation.clone();
+        } else {
+            ledger.installations.push(installation.clone());
+        }
+        self.write_installations(&ledger)?;
+
+        // 登记前校验源目录确实可被正常加载（防止登记一个无法读取的开发目录）。
+        if let Err(error) = self.load_release_payload(installation.clone(), &active_release) {
+            // 校验失败则回滚账本写入。
+            if let Some(index) = existing_index {
+                let mut rollback = self.read_installations();
+                if let Some(entry) = rollback.installations.get_mut(index) {
+                    entry.updated_at = installed_at;
+                }
+                let _ = self.write_installations(&rollback);
+            } else {
+                let mut rollback = self.read_installations();
+                rollback.installations.retain(|item| {
+                    !(item.origin == InstallationOrigin::Dev
+                        && item.installation_id == installation_id)
+                });
+                let _ = self.write_installations(&rollback);
+            }
+            return Err(format!("开发目录无法加载：{error}"));
+        }
+        Ok(installation)
+    }
+
+    /// 移除一个 dev 安装账本条目（幂等）。不删除源目录，也不删除其 data 目录。
+    pub(crate) fn unregister_dev_dir(&self, dir: PathBuf) -> Result<(), String> {
+        let _guard = lock_or_recover(&self.file_lock);
+        let canonical_dir = match dir.canonicalize() {
+            Ok(path) => path.to_string_lossy().to_string(),
+            Err(_) => {
+                // 源目录已不存在，无需报错——直接视为已移除。
+                return Ok(());
+            }
+        };
+        let mut ledger = self.read_installations();
+        let before = ledger.installations.len();
+        ledger.installations.retain(|installation| {
+            !(installation.origin == InstallationOrigin::Dev
+                && installation.active_release.path == canonical_dir)
+        });
+        if ledger.installations.len() == before {
+            return Ok(());
+        }
+        self.write_installations(&ledger)
     }
 
     pub(crate) fn list_workspaces(&self) -> Vec<DraftWorkspace> {

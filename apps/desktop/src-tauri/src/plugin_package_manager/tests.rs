@@ -867,3 +867,135 @@ fn legacy_invalid_readme_degrades_without_disabling_the_installation() {
     assert_eq!(load_legacy_readme(&readme), "# 可用说明");
     let _ = fs::remove_dir_all(root);
 }
+
+fn dev_source_dir(root: &Path, manifest: &str, entry_name: &str, entry_content: &str) -> PathBuf {
+    let dir = root.join(format!("dev-source-{}", Uuid::new_v4()));
+    fs::create_dir_all(&dir).unwrap();
+    fs::write(dir.join("manifest.json"), manifest).unwrap();
+    fs::write(dir.join(entry_name), entry_content).unwrap();
+    dir
+}
+
+#[test]
+fn dev_register_client_ok() {
+    let (manager, root) = manager();
+    let dir = dev_source_dir(
+        &root,
+        r#"{"id":"com.dev.test","name":"Dev Test","version":"0.1.0","runtime_type":"client","entry":"index.html"}"#,
+        "index.html",
+        "<main>dev ok</main>",
+    );
+    let installation = manager
+        .register_dev_dir(RegisterDevDirInput {
+            dir: dir.clone(),
+            package_id: None,
+        })
+        .unwrap();
+    assert_eq!(installation.origin, InstallationOrigin::Dev);
+    assert_eq!(installation.package_id, "dev:com.dev.test");
+    // register_dev_dir canonicalizes the dir (Windows 前缀 \\?\); 以规范化形式比对。
+    let canonical_dir = dir.canonicalize().unwrap();
+    assert_eq!(
+        installation.active_release.path,
+        canonical_dir.to_string_lossy()
+    );
+    assert_eq!(installation.active_release.sha256, "dev");
+    // 直接读取源目录（不经 unpack），证明 directory direct-read 生效。
+    let payload = manager.load_installed_plugin(&installation.installation_id).unwrap();
+    assert_eq!(payload.manifest["id"], "com.dev.test");
+    assert_eq!(payload.manifest["version"], "0.1.0");
+    assert_eq!(payload.entry_content, "<main>dev ok</main>");
+    assert!(Path::new(&installation.data_path).is_dir());
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
+fn dev_register_rejects_non_client() {
+    let (manager, root) = manager();
+    let dir = dev_source_dir(
+        &root,
+        r#"{"id":"com.dev.node","name":"Dev Node","version":"0.1.0","runtime_type":"nodejs","entry":"index.js"}"#,
+        "index.js",
+        "console.log('ok')",
+    );
+    let err = manager
+        .register_dev_dir(RegisterDevDirInput {
+            dir,
+            package_id: None,
+        })
+        .unwrap_err();
+    assert!(
+        err.contains("client") || err.contains("F2") || err.contains("LF-02"),
+        "错误文案应指向 client-only 政策：{err}"
+    );
+    assert!(manager.list_installations().is_empty());
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
+fn dev_register_dedupes_same_dir() {
+    let (manager, root) = manager();
+    let dir = dev_source_dir(
+        &root,
+        r#"{"id":"com.dev.dup","name":"Dev Dup","version":"0.1.0","runtime_type":"client","entry":"index.html"}"#,
+        "index.html",
+        "<main>dup</main>",
+    );
+    let first = manager
+        .register_dev_dir(RegisterDevDirInput {
+            dir: dir.clone(),
+            package_id: None,
+        })
+        .unwrap();
+    let second = manager
+        .register_dev_dir(RegisterDevDirInput {
+            dir: dir.clone(),
+            package_id: None,
+        })
+        .unwrap();
+    // 同一源目录重复登记应复用同一 installationId，且账本只有一个 dev 条目。
+    assert_eq!(first.installation_id, second.installation_id);
+    let dev_count = manager
+        .list_installations()
+        .into_iter()
+        .filter(|installation| installation.origin == InstallationOrigin::Dev)
+        .count();
+    assert_eq!(dev_count, 1);
+
+    // 用显式 packageId 再次登记同目录，应仍按路径去重并复用。
+    let third = manager
+        .register_dev_dir(RegisterDevDirInput {
+            dir: dir.clone(),
+            package_id: Some("dev:com.dev.dup".to_string()),
+        })
+        .unwrap();
+    assert_eq!(third.installation_id, first.installation_id);
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
+fn dev_unregister_is_idempotent_and_does_not_touch_source() {
+    let (manager, root) = manager();
+    let dir = dev_source_dir(
+        &root,
+        r#"{"id":"com.dev.unreg","name":"Dev Unreg","version":"0.1.0","runtime_type":"client","entry":"index.html"}"#,
+        "index.html",
+        "<main>unreg</main>",
+    );
+    let installation = manager
+        .register_dev_dir(RegisterDevDirInput {
+            dir: dir.clone(),
+            package_id: None,
+        })
+        .unwrap();
+    assert_eq!(manager.list_installations().len(), 1);
+    // 首次注销成功。
+    manager.unregister_dev_dir(dir.clone()).unwrap();
+    assert_eq!(manager.list_installations().len(), 0);
+    // 源目录与 data 目录仍保留（不删除用户数据）。
+    assert!(dir.join("manifest.json").is_file());
+    assert!(Path::new(&installation.data_path).is_dir());
+    // 二次注销幂等返回 Ok。
+    manager.unregister_dev_dir(dir.clone()).unwrap();
+    let _ = fs::remove_dir_all(root);
+}

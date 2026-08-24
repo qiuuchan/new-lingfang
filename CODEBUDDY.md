@@ -48,11 +48,12 @@ pnpm -C apps/desktop build:frontend   # runtime:verify + vite build (frontend on
 # Rust shell directly
 cd apps/desktop/src-tauri && cargo build && cargo test
 
-# Plugin SDK CLI (create / validate / build / publish)
+# Plugin SDK CLI (create / validate / build / publish / dev)
 pnpm plugin:create        # = pnpm -C packages/plugin-sdk exec lingfang-plugin create
 pnpm plugin:validate
 pnpm plugin:build
 pnpm plugin:publish
+pnpm plugin:dev <dir>     # = pnpm -C packages/plugin-sdk exec lingfang-plugin dev <dir>  (注册 dev 安装，免打包直读，v1 仅 client)
 pnpm -C packages/plugin-sdk cli:dev     # run the CLI source directly (tsx)
 
 # Bundled runtimes (see "Runtimes" below). NOTE: `apps/desktop/runtimes/` is
@@ -137,7 +138,14 @@ cd apps/desktop/installer && cargo build
 - **Host↔plugin communication**:
   - Frontend ⇄ Rust: `tauriInvoke` / `tauriListen` on `window.__TAURI__`; events
     `plugin:output`, `plugin:exited`, `plugin:start-progress`, `close-requested`, plus
-    `tauri::Channel` for transfer progress.
+    `tauri::Channel` for transfer progress. The host also emits `plugin:dev-reload` with
+    `{ installationId, runtimeType }` when a dev-install directory changes; `PluginRunner` listens
+    and re-reads the client entry (iframe auto-reload).
+  - **Dev installs (v1)**: `lingfang-plugin dev <dir>` registers a plugin directory as a dev
+    installation (`origin=dev`, direct-read, no packaging). Per F2 security policy, **v1 dev installs
+    are client-only** — `nodejs`/`python` runtime types are rejected by the CLI. The host exposes
+    `register_dev_dir(input: { dir, packageId? })` returning a `LocalInstallation`; outside the
+    desktop host (no `window.__TAURI__`) the CLI is best-effort and only prints a hint.
   - Client iframe ⇄ host: host injects `window.__lingfangInvoke(capability, args)` into the iframe.
   - nodejs/python ⇄ host: a localhost HTTP bridge at `LINGFANG_PLUGIN_BRIDGE_URL` with routes
     `/llm/chat`, `/image/generate`, `/image/edit`, `/video/generate`, `/actions/call`,

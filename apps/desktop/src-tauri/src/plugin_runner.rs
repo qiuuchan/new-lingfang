@@ -1160,12 +1160,16 @@ pub struct PluginProcessTable {
     /// plugin_id → (Child 共享句柄, SandboxHandle, started_at ISO 字符串)。
     /// SandboxHandle 存活到 take/替换时 drop → Job 句柄关闭 → 整棵进程树被杀（安全网）。
     inner: Arc<Mutex<HashMap<String, (Arc<Mutex<Option<Child>>>, SandboxHandle, String)>>>,
+    /// installation_id → 开发态目录文件监听器。监听器存活 = 持句柄；drop 即停止监听。
+    /// 仅 Dev 来源插件占用；普通安装不 entries 此表（best-effort 写，失败仅告警）。
+    dev_watchers: Arc<Mutex<HashMap<String, notify::RecommendedWatcher>>>,
 }
 
 impl PluginProcessTable {
     pub fn new() -> Self {
         Self {
             inner: Arc::new(Mutex::new(HashMap::new())),
+            dev_watchers: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
@@ -1244,6 +1248,133 @@ impl PluginProcessTable {
             map.remove(plugin_id);
         }
         None
+    }
+}
+
+// === 开发态文件监听（file-watch + 自动重载） ===
+//
+// register_dev_dir 注册的开发目录（origin = Dev，v1 仅 client 运行时）在文件变更时：
+// - client：emit `plugin:dev-reload`（前端刷新 iframe，宿主不重启任何进程）。
+// - nodejs/python：宿主直接 stop + start 重启进程（前端收不到宿主内部事件，必须宿主侧重启）。
+//
+// 注意：监听器句柄必须长期存活（notify 在 drop 时停止监听），故存入 PluginProcessTable.dev_watchers，
+// 以 installation_id 为键；unregister/卸载时调 stop_dev_watch 移除（best-effort）。
+
+/// 从目录 manifest.json 读取 runtime_type（缺省视为 client）。
+/// watch_dev_dir 需要运行时类型决定「发事件」还是「重启进程」，但 LocalInstallation /
+/// InstalledRelease 不携带该字段，故在此从发行版目录就地解析（轻量只读）。
+pub(crate) fn peek_runtime_type(plugin_dir: &std::path::Path) -> String {
+    let manifest_path = plugin_dir.join("manifest.json");
+    match std::fs::read_to_string(&manifest_path) {
+        Ok(raw) => serde_json::from_str::<serde_json::Value>(&raw)
+            .ok()
+            .and_then(|v| v.get("runtime_type").and_then(|x| x.as_str()).map(str::to_string))
+            .unwrap_or_else(|| "client".to_string()),
+        Err(_) => "client".to_string(),
+    }
+}
+
+/// 开始监听开发态目录。non-fatal：失败仅 eprintln 告警，不阻断插件启动。
+/// - dir：被监听的发行版目录（release.path）。
+/// - runtime_type：client / nodejs / python，决定事件语义（见本段顶部注释）。
+pub(crate) fn watch_dev_dir(
+    app: &tauri::AppHandle,
+    process_table: &PluginProcessTable,
+    installation_id: &str,
+    dir: &std::path::Path,
+    runtime_type: &str,
+) {
+    use notify::{recommended_watcher, RecursiveMode, Watcher};
+    use tauri::Emitter;
+
+    let installation_id = installation_id.to_string();
+    let runtime_type = runtime_type.to_string();
+    let installation_id_for_map = installation_id.clone();
+
+    // 先停掉同 id 的旧监听器（如有），避免重复 watch 叠加。
+    stop_dev_watch(process_table, &installation_id);
+
+    let app_for_cb = app.clone();
+    let dir_for_restart = dir.to_path_buf();
+    let handler = move |res: notify::Result<notify::Event>| {
+        // 忽略事件解析错误与无关事件（创建/写/重命名均触发重载）。
+        if res.is_err() {
+            return;
+        }
+        if runtime_type == "client" {
+            // client：仅通知前端刷新 iframe，宿主不重启。
+            let _ = app_for_cb.emit(
+                "plugin:dev-reload",
+                serde_json::json!({
+                    "installationId": installation_id,
+                    "runtimeType": runtime_type,
+                }),
+            );
+            return;
+        }
+        // nodejs/python：宿主侧重启进程（best-effort，错误仅记录）。
+        let app = app_for_cb.clone();
+        let installation_id = installation_id.clone();
+        let runtime_type = runtime_type.clone();
+        let restart_dir = dir_for_restart.clone();
+        tauri::async_runtime::spawn(async move {
+            // 等文件写入落盘（编辑器常原子替换临时文件，留一点余量避免读到半截）。
+            tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+            let bridge = app.state::<PluginLlmBridge>();
+            let process_table = app.state::<PluginProcessTable>();
+            // register_with_handle 在新启动时杀旧进程树，故 stop+start 组合即重启。
+            stop_plugin_by_id(&process_table, &bridge, &installation_id)
+                .map_err(|e| eprintln!("[dev-watch] 重启前停止插件 {installation_id} 失败：{e}"))
+                .ok();
+            match start_plugin_from_dir(
+                &app,
+                &process_table,
+                &bridge,
+                &installation_id,
+                restart_dir,
+                None,
+                None,
+            ) {
+                Ok(_) => {}
+                Err(e) => eprintln!(
+                    "[dev-watch] 重启插件 {installation_id}（{runtime_type}）失败：{e}"
+                ),
+            }
+        });
+    };
+
+    let mut watcher = match recommended_watcher(handler) {
+        Ok(w) => w,
+        Err(e) => {
+            eprintln!(
+                "[dev-watch] 创建监听器失败（{}）：{e}",
+                dir.display()
+            );
+            return;
+        }
+    };
+    if let Err(e) = watcher.watch(dir, RecursiveMode::Recursive) {
+        eprintln!(
+            "[dev-watch] 监听目录失败（{}）：{e}",
+            dir.display()
+        );
+        return;
+    }
+    let mut map = process_table
+        .dev_watchers
+        .lock()
+        .unwrap_or_else(|p| p.into_inner());
+    map.insert(installation_id_for_map, watcher);
+}
+
+/// 移除并停止某个开发态目录的监听器（best-effort）。
+pub(crate) fn stop_dev_watch(process_table: &PluginProcessTable, installation_id: &str) {
+    let mut map = process_table
+        .dev_watchers
+        .lock()
+        .unwrap_or_else(|p| p.into_inner());
+    if map.remove(installation_id).is_some() {
+        eprintln!("[dev-watch] 已停止监听开发目录：{installation_id}");
     }
 }
 

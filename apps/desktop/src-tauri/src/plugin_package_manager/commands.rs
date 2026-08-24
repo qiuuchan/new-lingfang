@@ -8,6 +8,7 @@ use super::{
     CreateWorkspaceInput, DependencyStatus, DraftWorkspace, DraftWorkspaceFilePayload,
     InstallArtifactInput, InstallationOrigin, InstalledPluginPayload, InstalledPluginPolicySource,
     LocalInstallation, PackWorkspaceResult, PluginPackageManager, PluginReleaseSourceKind,
+    RegisterDevDirInput,
 };
 
 #[tauri::command]
@@ -27,8 +28,10 @@ pub(crate) fn install_plugin_artifact(
 
 #[tauri::command]
 pub(crate) fn load_installed_plugin(
+    app: tauri::AppHandle,
     manager: tauri::State<'_, PluginPackageManager>,
     app_state: tauri::State<'_, crate::AppState>,
+    process_table: tauri::State<'_, PluginProcessTable>,
     installation_id: String,
 ) -> Result<InstalledPluginPayload, String> {
     let payload = manager.load_installed_plugin(&installation_id)?;
@@ -39,7 +42,41 @@ pub(crate) fn load_installed_plugin(
     if !caps.is_empty() {
         app_state.registry.register(&installation_id, caps);
     }
+    // LF-02-R：开发态（Dev）来源在「打开/加载」时即启动目录监听（幂等，先停旧监听器）。
+    // 前端列表加载/刷新、以及重启应用后的 hydration 均会调用本命令加载插件，
+    // 而 start_installed_plugin（原 watch 调用点）前端零调用方——client 插件打开只走本路径，
+    // 故 watch 必须补在「加载」入口，否则改文件永不触发 v2 自动重载（实测 30s 无重载）。
+    if payload.installation.origin == InstallationOrigin::Dev {
+        let dev_dir = std::path::PathBuf::from(&payload.installation.active_release.path);
+        let dev_rt = plugin_runner::peek_runtime_type(&dev_dir);
+        plugin_runner::watch_dev_dir(&app, &process_table, &installation_id, &dev_dir, &dev_rt);
+    }
     Ok(payload)
+}
+
+#[tauri::command]
+pub(crate) fn register_dev_dir(
+    manager: tauri::State<'_, PluginPackageManager>,
+    app_state: tauri::State<'_, crate::AppState>,
+    input: RegisterDevDirInput,
+) -> Result<LocalInstallation, String> {
+    let installation = manager.register_dev_dir(input)?;
+    // 与 load_installed_plugin 一致：开发态 client 插件无进程，加载/登记时把 manifest
+    // 声明能力幂等注册进网关注册表，否则已声明能力调用恒 capability_not_declared。
+    let payload = manager.load_installed_plugin(&installation.installation_id)?;
+    let caps = crate::plugins::capabilities_from_manifest(&payload.manifest);
+    if !caps.is_empty() {
+        app_state.registry.register(&installation.installation_id, caps);
+    }
+    Ok(installation)
+}
+
+#[tauri::command]
+pub(crate) fn unregister_dev_dir(
+    manager: tauri::State<'_, PluginPackageManager>,
+    dir: PathBuf,
+) -> Result<(), String> {
+    manager.unregister_dev_dir(dir)
 }
 
 #[tauri::command]
@@ -95,6 +132,8 @@ pub(crate) fn uninstall_plugin_installation(
     installation_id: String,
 ) -> Result<(), String> {
     plugin_runner::stop_plugin_by_id(&process_table, &bridge, &installation_id)?;
+    // 卸载开发态目录时一并停掉文件监听器（best-effort）。
+    plugin_runner::stop_dev_watch(&process_table, &installation_id);
     manager.uninstall(&installation_id)
 }
 
@@ -116,6 +155,13 @@ pub(crate) async fn start_installed_plugin(
     ) && registry_access_granted != Some(true)
     {
         return Err("远端插件运行前必须完成在线访问权与发行版校验".to_string());
+    }
+    // 开发态（Dev）来源：启动即监听源目录，文件变更触发自动重载 / 进程重启（best-effort）。
+    // 必须放在 process_table 被 .inner().clone() 遮蔽之前（下方 offload 会移动 State）。
+    if installation.origin == InstallationOrigin::Dev {
+        let dev_dir = PathBuf::from(&release.path);
+        let dev_rt = plugin_runner::peek_runtime_type(&dev_dir);
+        plugin_runner::watch_dev_dir(&app, &process_table, &installation_id, &dev_dir, &dev_rt);
     }
     manager.mark_dependency_status(
         &installation_id,
@@ -176,7 +222,10 @@ pub(crate) fn stop_installed_plugin(
     bridge: tauri::State<'_, PluginLlmBridge>,
     installation_id: String,
 ) -> Result<(), String> {
-    plugin_runner::stop_plugin_by_id(&process_table, &bridge, &installation_id)
+    plugin_runner::stop_plugin_by_id(&process_table, &bridge, &installation_id)?;
+    // 停止开发态插件时一并移除监听器（best-effort）。
+    plugin_runner::stop_dev_watch(&process_table, &installation_id);
+    Ok(())
 }
 
 #[tauri::command]

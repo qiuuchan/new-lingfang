@@ -29,7 +29,7 @@ export interface LoadedPlugin {
   packageId?: string;
   releaseId?: string;
   releaseSha256?: string;
-  installationOrigin?: 'builtin' | 'local' | 'team' | 'marketplace';
+  installationOrigin?: 'builtin' | 'local' | 'team' | 'marketplace' | 'dev';
   /** 用户显式运行后预览的 pending client 制品；iframe onLoad 成功后才能原子激活。 */
   pendingActivation?: { releaseId: string };
   // 作者用户 ID（来自后端 publicPlugin.authorUserId）：用于前端判断「能否修改该插件」。
