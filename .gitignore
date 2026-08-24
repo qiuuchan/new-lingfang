@@ -1,4 +1,4 @@
-# 依赖
+﻿# 依赖
 node_modules/
 .pnpm-store/
 
@@ -36,3 +36,6 @@ eslintcache
 
 # B3: 本地生成的运行时 minisign 密钥（绝不入库；仅本机/CI 通过 Org secret 持有）
 .runtime-signing/
+# AI 工具本地目录（.codebuddy: workflows/plans；.zcode）——不进仓库
+.codebuddy/
+.zcode/
