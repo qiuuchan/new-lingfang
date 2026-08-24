@@ -10,6 +10,7 @@ cd <plugin-directory>
 lingfang-plugin validate
 lingfang-plugin build
 lingfang-plugin publish
+lingfang-plugin dev <dir>   # 把插件目录注册为 dev 安装（免打包直读；v1 仅 client 运行时）
 ```
 
 `create` 支持 `client`、`nodejs` 和 `python` 模板，并生成 `manifest.json`、运行时入口和可直接修改的 `README.md`。

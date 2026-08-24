@@ -1,0 +1,370 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>剪藏摘要</title>
+    <style>
+      :root {
+        --bg: #f8f9fa;
+        --surface: #ffffff;
+        --text: #212529;
+        --text-secondary: #868e96;
+        --border: #dee2e6;
+        --accent: #3b82f6;
+        --accent-hover: #2563eb;
+        --danger: #ef4444;
+        --warning-bg: #fff7e6;
+        --warning-border: #ffd591;
+        --warning-text: #ad6800;
+        --shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+        --radius: 8px;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #0f1117;
+          --surface: #1a1b26;
+          --text: #c9d1d9;
+          --text-secondary: #8b949e;
+          --border: #30363d;
+          --accent: #58a6ff;
+          --accent-hover: #79c0ff;
+          --danger: #f87171;
+          --warning-bg: #2d2410;
+          --warning-border: #5c4a1a;
+          --warning-text: #e3b341;
+          --shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+        }
+      }
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        font-family:
+          -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans SC', 'PingFang SC',
+          'Microsoft YaHei', sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        font-size: 14px;
+        line-height: 1.5;
+        padding: 16px;
+      }
+      .card {
+        max-width: 560px;
+        margin: 0 auto;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow);
+        padding: 20px;
+      }
+      h1 {
+        font-size: 18px;
+        font-weight: 700;
+        margin-bottom: 4px;
+      }
+      .subtitle {
+        font-size: 12px;
+        color: var(--text-secondary);
+        margin-bottom: 16px;
+      }
+      .actions {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 16px;
+      }
+      button {
+        padding: 8px 16px;
+        font-size: 13px;
+        font-weight: 600;
+        border-radius: var(--radius);
+        border: 1px solid var(--border);
+        background: var(--surface);
+        color: var(--text);
+        cursor: pointer;
+        transition: all 0.15s;
+        white-space: nowrap;
+      }
+      button.primary {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: #fff;
+      }
+      button.primary:hover {
+        background: var(--accent-hover);
+      }
+      button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      .section {
+        border-top: 1px solid var(--border);
+        padding-top: 12px;
+        margin-top: 12px;
+      }
+      .section-title {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--text-secondary);
+        margin-bottom: 6px;
+      }
+      .clipped {
+        font-size: 13px;
+        white-space: pre-wrap;
+        word-break: break-word;
+        max-height: 120px;
+        overflow-y: auto;
+        background: var(--bg);
+        border-radius: 6px;
+        padding: 8px;
+        color: var(--text);
+      }
+      .summary {
+        font-size: 13px;
+        white-space: pre-wrap;
+        word-break: break-word;
+        color: var(--text);
+      }
+      .loading {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--text-secondary);
+        font-size: 13px;
+      }
+      .spinner {
+        width: 14px;
+        height: 14px;
+        border: 2px solid var(--border);
+        border-top-color: var(--accent);
+        border-radius: 50%;
+        animation: spin 0.6s linear infinite;
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      .error {
+        color: var(--danger);
+        font-size: 13px;
+      }
+      .notice {
+        margin-top: 12px;
+        padding: 10px 12px;
+        font-size: 13px;
+        border-radius: 6px;
+        background: var(--warning-bg);
+        border: 1px solid var(--warning-border);
+        color: var(--warning-text);
+      }
+      .muted {
+        color: var(--text-secondary);
+        font-style: italic;
+        font-size: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h1>剪藏摘要</h1>
+      <div class="subtitle">读取剪贴板 → 本地剪藏 → 灵坊平台 LLM 摘要</div>
+
+      <div class="actions">
+        <button class="primary" id="btnClip">读取剪贴板并剪藏</button>
+      </div>
+
+      <div id="status" class="muted">点击上方按钮，从剪贴板剪藏一段文本。</div>
+
+      <div class="section" id="clipSection" style="display: none">
+        <div class="section-title">剪藏原文</div>
+        <div class="clipped" id="clippedText"></div>
+      </div>
+
+      <div class="section" id="summarySection" style="display: none">
+        <div class="section-title">AI 摘要（同时弹出宿主弹层）</div>
+        <div class="summary" id="summaryText"></div>
+      </div>
+    </div>
+
+    <script>
+      const sdk = window.sdk;
+
+      if (!sdk) {
+        document.getElementById('status').textContent = '当前运行环境未注入 SDK';
+        document.getElementById('btnClip').disabled = true;
+      }
+
+      function escapeHtml(text) {
+        if (text == null) return '';
+        return String(text)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#39;');
+      }
+
+      function truncate(text, n) {
+        if (!text) return '';
+        return text.length > n ? text.slice(0, n) + '…' : text;
+      }
+
+      function setStatus(html, isError) {
+        const el = document.getElementById('status');
+        el.innerHTML = isError
+          ? '<span class="error">' + html + '</span>'
+          : html;
+      }
+
+      function showNotice(message) {
+        const existing = document.getElementById('notice');
+        if (existing) existing.remove();
+        const div = document.createElement('div');
+        div.className = 'notice';
+        div.id = 'notice';
+        div.textContent = message;
+        document.querySelector('.card').appendChild(div);
+      }
+
+      // localStorage 安全网：仅在 sdk.storage 抛错时使用
+      function localFallbackGet(key) {
+        try {
+          return Promise.resolve(JSON.parse(localStorage.getItem(key)));
+        } catch {
+          return Promise.resolve(null);
+        }
+      }
+      function localFallbackSet(key, val) {
+        try {
+          localStorage.setItem(key, JSON.stringify(val));
+        } catch {
+          /* ignore quota */
+        }
+        return Promise.resolve();
+      }
+
+      async function storeValue(key, val) {
+        try {
+          await sdk.storage.set(key, val);
+        } catch {
+          await localFallbackSet(key, val);
+        }
+      }
+
+      async function handleClip() {
+        const btn = document.getElementById('btnClip');
+        btn.disabled = true;
+
+        let text;
+        try {
+          text = await sdk.clipboard.readText();
+        } catch (err) {
+          setStatus('读取剪贴板失败：' + escapeHtml(err.message || '未知错误'), true);
+          btn.disabled = false;
+          return;
+        }
+
+        if (!text || !text.trim()) {
+          setStatus('剪贴板为空，没有可剪藏的文本。');
+          btn.disabled = false;
+          return;
+        }
+
+        const key = 'clip-digest:' + Date.now().toString(36);
+        const record = {
+          text: text,
+          summary: null,
+          createdAt: new Date().toISOString(),
+        };
+
+        // 持久化剪藏原文（storage.kv，单值 <= 256KB）
+        await storeValue(key, record);
+
+        document.getElementById('clipSection').style.display = 'block';
+        document.getElementById('clippedText').textContent = truncate(text, 2000);
+        setStatus('已剪藏原文，正在生成摘要…');
+
+        const summaryEl = document.getElementById('summaryText');
+        const summarySection = document.getElementById('summarySection');
+        summarySection.style.display = 'block';
+        summaryEl.innerHTML =
+          '<div class="loading"><div class="spinner"></div>灵坊平台 LLM 正在总结…</div>';
+
+        const SYSTEM_PROMPT =
+          '你是剪藏摘要助手，用简洁中文总结要点，分条列出，控制在200字内。';
+
+        try {
+          if (typeof sdk.llm?.chat !== 'function') {
+            throw new Error('relay_not_configured');
+          }
+          const summary = await sdk.llm.chat({
+            model: 'fast',
+            messages: [
+              { role: 'system', content: SYSTEM_PROMPT },
+              { role: 'user', content: text },
+            ],
+          });
+          const summaryBody = typeof summary === 'string' ? summary : summary.content || '';
+
+          // 持久化摘要
+          record.summary = summaryBody;
+          await storeValue(key, record);
+
+          summaryEl.textContent = summaryBody;
+          setStatus('摘要已生成，并通过宿主弹层展示。');
+
+          // ui.view：宿主侧渲染，仅 Markdown/JSON，不注入 HTML
+          try {
+            await sdk.ui.render({ type: 'markdown', body: summaryBody });
+          } catch (uiErr) {
+            // ui.view 失败不应影响已完成的剪藏与摘要
+            setStatus(
+              '摘要已生成（本地展示成功，弹层调用失败：' +
+                escapeHtml(uiErr.message || '未知错误') +
+                '）。'
+            );
+          }
+        } catch (err) {
+          const msg = (err && err.message) || '';
+          if (msg.includes('relay_not_configured')) {
+            // 优雅降级：凭据缺失，原文已保存，不抛出
+            record.summary = null;
+            await storeValue(key, record);
+
+            summaryEl.textContent =
+              'AI 摘要暂不可用：未配置灵坊平台 LLM 凭据（relay_not_configured）。已为你保存原文剪藏。';
+            showNotice(
+              'AI 摘要暂不可用：未配置灵坊平台 LLM 凭据（relay_not_configured）。已为你保存原文剪藏。'
+            );
+            setStatus('已保存原文剪藏；AI 摘要因凭据缺失跳过。');
+
+            // 降级路径同样调用 ui.view，保证能力被使用
+            try {
+              await sdk.ui.render({
+                type: 'markdown',
+                body:
+                  '## 剪藏摘要（降级）\n\nAI 摘要暂不可用：未配置灵坊平台 LLM 凭据（relay_not_configured）。\n\n已为你保存原文剪藏。',
+              });
+            } catch (uiErr) {
+              /* 降级弹层失败可忽略 */
+            }
+          } else {
+            // 其他错误：展示但不崩溃
+            summaryEl.textContent = '摘要生成失败。原文剪藏已保存。';
+            setStatus('摘要生成失败：' + escapeHtml(msg) + '（原文剪藏已保存）', true);
+          }
+        } finally {
+          btn.disabled = false;
+        }
+      }
+
+      // 脚本位于 body 末尾，DOM 已就绪；直接绑定即可（无需再监听 DOMContentLoaded）。
+      if (sdk) {
+        document.getElementById('btnClip').addEventListener('click', handleClip);
+      }
+    </script>
+  </body>
+</html>
