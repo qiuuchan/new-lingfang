@@ -116,7 +116,7 @@
 - [x] **A3 · client-action 注册表生产者** ✅ 已交付（2026-08-22）
   - 现状（交付前）：`clientActionBridge` 已监听 `plugin-action-bridge-call` 并回传，但**没有生产者**把
     `caller → action 源码/导出名` 填进 registry。且监听器取 `actionId` 的方式与 Rust 实际发出的
-    `caller` 载荷不匹配——`caller`（`plugin_package_manager.rs:710`）只含调用方 `installation_id`、
+    `caller` 载荷不匹配——`caller`（`plugin_package_manager.rs` 的调用方载荷）只含调用方 `installation_id`、
    不含 `actionId`，而真实被调的 action id 在 `args.dependency_id`（SDK `sdk.actions.call` 发出）。
     故原取法会拿到「调用方 installation_id」，与生产者按 `action_id` 注册的 key 永不匹配。
   - 修复 + 补全：
@@ -172,11 +172,8 @@
     手动验证清单，含前置环境与 `pnpm build:desktop` 命令；标注 B3/C2 限制。
   - 三者均为文档，不改源码；B3/C2 仍待产品/人拍板后方可落码。
 
-- [x] **校准文档行号** ✅ 已完成（2026-08-23）
-  - 已按当前代码校准 `IMPLEMENTATION_PLAN.md`「执行状况/复验/偏差/阶段」节的活性引用
-    （plugin_runner.rs parse_manifest :84 起、invoke_capability main.rs:287、net_fetch :159、
-    adapter 白名单 :213-221、materialize lockPath :25、capability 用例 :478、api.ts errorMessage :74 等）。
-  - 附录「核实关键证据」为二次修订时的**历史快照**（其开头已声明），行号保持原样不回改。
+- [x] **文档行号→符号引用** ✅ 已完成（LF-03 / G5）
+  - `IMPLEMENTATION_PLAN.md` 与 `TODO.md` 前瞻性（非存档）节的 `file:行号` 引用已批量替换为符号名（`parse_manifest`、`registry.register`、`plugin_net_fetch`、`route_llm_chat`、`respond_plugin_action_bridge` 等）；存档节（「0. 核实结论」快照表、「核实关键证据」附录）保持原样不动。
 
 ---
 

@@ -140,7 +140,11 @@
 
 - **H1. 契约瘦身**:平台云专属模块(marketplace-discovery/marketplace-commerce/plugin-governance/web-plugin-center/admin-governance/rbac/billing)标注归属注释或拆出 `@lingfang/platform-contract` 包,让桌面开发的"单一权威来源"不再拖拽用不到的形状。
 - **H2. Windows-only ADR**:`docs/decisions/platform-windows-only.md`——一段话决策(v1 就是 Windows)+ 移植最硬骨头清单(Job Object 沙箱、SFX 安装器、WebView2、rc.exe)。
-- **H3. 重申不做**(维持现状即可):`plugin.upload`/`plugin.submitMarketplace` 保持网关 NotSupported;不建市场/计费/审核流基础设施;不扩能力面直到真实插件提出需求;不仓促上 mac/Linux(先有 H2 的 ADR)。
+- **H3. 重申不做(已落地记录,LF-03 核对 ✅)**:以下为 v1 明确维持现状的非目标,未经产品重新拍板不得动工:
+  - **`plugin.upload` / `plugin.submitMarketplace` 保持网关 NotSupported**:属平台市场审核流交互(需平台凭据与流程),零服务器桌面壳不越权伪造;网关语义与文案不变(`plugins-runtime.ts` / SDK 文档已标注"契约已定义、桌面壳未实现")。
+  - **不建市场 / 计费 / 审核流基础设施**:无后端、无平台账号体系是零服务器叙事的基石,任何市场/计费/审核闭环都违背该定位。
+  - **不扩能力面**(`CapabilityKind` 17 种之外的 kind,或既有 6 个 NotSupported kind 的桌面落点)直到真实插件需求提出:能力面每增一项都需宿主侧真实落点 + 安全复核,无需求不提前投资。
+  - **不仓促上 mac / Linux**:v1 就是 Windows(参见 H2 的 `docs/decisions/platform-windows-only.md` ADR);跨平台须先有 Job Object 沙箱 / SFX 安装器 / WebView2 / rc.exe 的移植评估,未评估前不排期。
 
 ---
 

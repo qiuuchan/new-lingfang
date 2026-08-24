@@ -60,18 +60,18 @@ client HTML 模板 `index.html.tmpl:27` 声明 `const sdk = window.sdk;` —— 
   - `apps/desktop/src/lib/plugins-runtime.ts`:`net.fetch` 直连 `plugin_net_fetch`,其余 kind 走 `invoke_capability`;错误按文案归一化为 5 类 code。
   - `apps/desktop/src/lib/clientActionBridge.ts`:监听 `plugin-action-bridge-call` → `executeClientActionAdapter` → `respond_plugin_action_bridge` 回传;未注册 action 显式回 `action_dependency_unresolved`(进程端不再静默挂起)。
   - `apps/desktop/src/pages/plugins/PluginRunner.tsx`(38 行占位 → 214 行实现):`srcdoc` + `sandbox="allow-scripts"`(未开 `allow-same-origin`),origin `'null'` 校验,注入 `window.sdk` / `__lingfangInvoke` 与 ui-tokens CSS,cloud/workflow 显式占位。
-  - `plugin-action-client-adapter.ts:213-221`:白名单 4 → 6 kind(新增 `ui.view`、`storage.kv`)。
-  - `plugin_runner.rs:126-139`:`parse_manifest` 保留 fs.* 的 `paths`;`:1532` 插件 start 时 `registry.register`。
-  - `scripts/materialize-bundled-runtimes.mjs:25`:`lockPath` 指向 `apps/desktop/runtime-lock.json`。
+  - `plugin-action-client-adapter.ts`(client-action 放行白名单):白名单 4 → 6 kind(新增 `ui.view`、`storage.kv`)。
+  - `plugin_runner.rs` 的 `parse_manifest` 保留 fs.* 的 `paths`;插件 start 时 `registry.register`。
+  - `scripts/materialize-bundled-runtimes.mjs` 的 `lockPath` 指向 `apps/desktop/runtime-lock.json`。
   - `packages/plugin-sdk/src/manifest/index.ts`:`ManifestResult` 增加非阻塞 `warnings`(cloud/workflow 报 `runtime_locally_unsupported`)。
 - A5 的桌面端实操验证(打开内置 notes 插件、安装自建插件走注册路径)未在本轮执行,本轮仅完成代码级与单测级验证。
 
 ### 执行中发现并修正的偏差
 
 1. **PluginRunner prop 实为 `onBack`**(本文附录原误写 `onRun`,已更正)。
-2. **`plugin_runner::parse_manifest` 原丢弃 fs.* 的 `paths`**(仓内既有 bug,非计划误判):只捕获 kind 字符串,fs.read/fs.write 即便声明也因空 paths 落入 `OutOfScope`。已在 A4 一并修复(`plugin_runner.rs:84` 起 parse_manifest;2026-08-23 行号校准)。
-3. **`invoke_capability` 命令在 `main.rs:287`**(不在 capability.rs;本计划附录记载无误,执行初期曾按 capability.rs 寻找,记录以免重蹈;2026-08-23 行号校准)。
-4. plugin-sdk `ManifestResult` 加 `warnings` 后,spec 的类型谓词需同步(`manifest/index.spec.ts:45`),已补。
+2. **`plugin_runner::parse_manifest` 原丢弃 fs.* 的 `paths`**(仓内既有 bug,非计划误判):只捕获 kind 字符串,fs.read/fs.write 即便声明也因空 paths 落入 `OutOfScope`。已在 A4 一并修复(`plugin_runner.rs` 的 `parse_manifest`)。
+3. **`invoke_capability` 命令在 `main.rs`**(不在 capability.rs;本计划附录记载无误,执行初期曾按 capability.rs 寻找,记录以免重蹈)。
+4. plugin-sdk `ManifestResult` 加 `warnings` 后,spec 的类型谓词需同步(`manifest/index.spec.ts` 的 `ManifestResult` spec),已补。
 
 ---
 
@@ -87,26 +87,26 @@ client HTML 模板 `index.html.tmpl:27` 声明 `const sdk = window.sdk;` —— 
 
 ### A1. 新建 `apps/desktop/src/lib/plugins-runtime.ts`(宿主能力落点) ✅
 - 导出 `invokeRuntime(pluginId: string, kind: string, args: unknown): Promise<unknown>`。
-- 内部调用 `tauriInvoke('invoke_capability', { pluginId, kind, args })`,复用 `apps/desktop/src/lib/api.ts:6` 的 `tauriInvoke`(该文件当前**未包裹** `invoke_capability`,在此统一收敛;net.fetch 的路由见 C1)。
-- 错误归一化注意:`api.ts:74` 的 `errorMessage` 只归一化为**字符串**;Tauri 命令错误是 `Result<_, String>` 裸字符串,不含结构化 code。要产出 `{ code, message }` 需自行按文案映射,或改 Rust 侧返回结构化错误(工作量另计)。(2026-08-23 行号校准;另 `api.ts` 已回退 `__TAURI_INTERNALS__`,见 TODO 验证节)
-- **注释对齐**:`capability.rs:113-116`、`capability.rs:251-252`、`plugin-sdk/src/index.ts:140,353` 三处注释引用了 `plugins-runtime.ts`。本文件创建后注释即成真,只需核对措辞(如 `RUNTIME_BRIDGE_TIMEOUT_MS` 是否真实存在并对齐),不必删除。
+- 内部调用 `tauriInvoke('invoke_capability', { pluginId, kind, args })`,复用 `apps/desktop/src/lib/api.ts` 的 `tauriInvoke`(该文件当前**未包裹** `invoke_capability`,在此统一收敛;net.fetch 的路由见 C1)。
+- 错误归一化注意:`api.ts` 的 `errorMessage` 只归一化为**字符串**;Tauri 命令错误是 `Result<_, String>` 裸字符串,不含结构化 code。要产出 `{ code, message }` 需自行按文案映射,或改 Rust 侧返回结构化错误(工作量另计)。(另 `api.ts` 已回退 `__TAURI_INTERNALS__`,见 TODO 验证节)
+- **注释对齐**:`capability.rs`(两处)、`plugin-sdk/src/index.ts`(两处)注释引用了 `plugins-runtime.ts`。本文件创建后注释即成真,只需核对措辞(如 `RUNTIME_BRIDGE_TIMEOUT_MS` 是否真实存在并对齐),不必删除。
 
 ### A2. 宿主向 client iframe 注入 `window.sdk`(`PluginRunner.tsx`) ✅
 对 `runtime_type === 'client'`(`entry` 为 `.html`):
-- 渲染 `<iframe sandbox="allow-scripts">` + **`srcdoc`**(entry 内容经 `read_plugin_file` 读取,`main.rs:250`,已带插件目录防穿越;该命令当前前端零调用方)。**不建议** `allow-same-origin`:与 `plugin-action-client-adapter.ts:157` 的安全姿态保持一致(opaque origin,`clientActionMessageFromFrame:51` 校验 `event.origin === 'null'`)。若 entry 有相对资源引用,需注入 `<base>` 或改自定义协议,另行评估。
-- 注入分两层:先注入原语 `window.__lingfangInvoke(kind, args)`(SDK 的 typed `sdk` 对象也走它,见 `plugin-sdk/src/index.ts:360-362`),再在其上构建模板期望的 `window.sdk` 外观(`fs.read/write`、`net.fetch`、`clipboard`、`llm.chat`、`image.*`、`storage.kv`、`system.*`、`ui.view`、`plugin.*`),每个方法最终调 A1 的 `invokeRuntime`。
+- 渲染 `<iframe sandbox="allow-scripts">` + **`srcdoc`**(entry 内容经 `read_plugin_file`(`main.rs`)读取,已带插件目录防穿越;该命令当前前端零调用方)。**不建议** `allow-same-origin`:与 `plugin-action-client-adapter.ts` 的 `clientActionMessageFromFrame`(校验 `event.origin === 'null'`)安全姿态保持一致。若 entry 有相对资源引用,需注入 `<base>` 或改自定义协议,另行评估。
+- 注入分两层:先注入原语 `window.__lingfangInvoke(kind, args)`(SDK 的 typed `sdk` 对象也走它,见 `plugin-sdk/src/index.ts` 的 `__lingfangInvoke` 注入),再在其上构建模板期望的 `window.sdk` 外观(`fs.read/write`、`net.fetch`、`clipboard`、`llm.chat`、`image.*`、`storage.kv`、`system.*`、`ui.view`、`plugin.*`),每个方法最终调 A1 的 `invokeRuntime`。
 - 注入/调用协议:宿主页监听 `window` 的 `message` 事件(校验 `event.source === iframe.contentWindow` 且 `event.origin === 'null'`);iframe 内通过 `parent.postMessage({ __lf_host_call })` 请求能力,宿主回 `postMessage({ __lf_host_reply })`。**协议命名与 client-action 的 `__lf_client_action_*` 区分开**,避免两套消息互相干扰。
 - 顺带:按 CODEBUDDY.md 的架构描述,宿主应向每个插件 iframe 注入 `@lingfang/ui-tokens` 的 CSS 变量(模板 `:root` 使用 `var(--lf-bg)` 等);目前无任何代码做这件事,一并补上。
 
 ### A3. client-action 导出路径接入(补全 adapter 调用方) ✅
-- `executeClientActionAdapter` 已完整但无人调用。**设计调用方**是 `plugin-action-bridge-call` 事件的监听器:用 `tauriListen` 监听该事件(`plugin_llm_bridge.rs:609` emit),按 caller 信息执行对应 action——client 导出走 `executeClientActionAdapter`,注入 `onCapability` = A1 的 `invokeRuntime`;结果经 `tauriInvoke('respond_plugin_action_bridge', { requestId, result | error })`(`plugin_llm_bridge.rs:352`)回传。
-- **扩展放行白名单**:`plugin-action-client-adapter.ts:213-218` 当前仅放行 `actions.call / artifacts.create / artifacts.materialize / artifacts.import` 四个 kind。按契约 `CapabilityKind` 中 client 可合法声明的子集补齐(至少 `ui.view`、`storage.kv`),避免合法 kind 被 `action_dependency_denied` 卡死。
+- `executeClientActionAdapter` 已完整但无人调用。**设计调用方**是 `plugin-action-bridge-call` 事件的监听器:用 `tauriListen` 监听该事件(`plugin_llm_bridge.rs` 的 `emit("plugin-action-bridge-call")` 处),按 caller 信息执行对应 action——client 导出走 `executeClientActionAdapter`,注入 `onCapability` = A1 的 `invokeRuntime`;结果经 `tauriInvoke('respond_plugin_action_bridge', { requestId, result | error })`(`plugin_llm_bridge.rs` 的 `respond_plugin_action_bridge`)回传。
+- **扩展放行白名单**:`plugin-action-client-adapter.ts`(client-action 放行白名单)当前仅放行 `actions.call / artifacts.create / artifacts.materialize / artifacts.import` 四个 kind。按契约 `CapabilityKind` 中 client 可合法声明的子集补齐(至少 `ui.view`、`storage.kv`),避免合法 kind 被 `action_dependency_denied` 卡死。
 - 至此两条 client 路径(client HTML 的 `window.sdk` ↔ client-action 的 `__lingfangInvoke`)都接到同一网关。
 
 ### A4. 能力注册表补齐(非内置插件) ✅
-- 现状:`registry.register` 仅 `plugins.rs:99` 一处,只服务内置插件(`main.rs:371`)。
-- 在 `plugin_package_manager` / `plugin_store` 的安装与加载路径上,解析 manifest 的 `capabilities[]` 并注册进 `CapabilityRegistry`(含 fs.* 的 `paths` 模板展开,复用 `plugins.rs:53-72` 的解析逻辑)。否则市场安装/本地插件的所有 `invoke_capability` 调用恒 `NotDeclared`,A 阶段成果对它们不可见。
-- 执行回填:实际落点在 `plugin_runner.rs`——插件 start 时注册(`:1532`),并连带修复了 `parse_manifest` 丢失 `paths` 的既有 bug(`:84` 起)。
+- 现状:`registry.register` 仅 `plugins.rs` 一处,只服务内置插件(`main.rs` 的内置注册调用)。
+- 在 `plugin_package_manager` / `plugin_store` 的安装与加载路径上,解析 manifest 的 `capabilities[]` 并注册进 `CapabilityRegistry`(含 fs.* 的 `paths` 模板展开,复用 `plugins.rs` 的 manifest 解析逻辑)。否则市场安装/本地插件的所有 `invoke_capability` 调用恒 `NotDeclared`,A 阶段成果对它们不可见。
+- 执行回填:实际落点在 `plugin_runner.rs`——插件 start 时注册,并连带修复了 `parse_manifest` 丢失 `paths` 的既有 bug。
 
 ### A5. 验证 ✅（代码级 + 桌面端实操，2026-08-23 完成）
 - 实操已经 WebView2 远程调试自动化完成（A5a 内置 notes / A5b 安装插件注册路径均通过），
@@ -126,7 +126,7 @@ client HTML 模板 `index.html.tmpl:27` 声明 `const sdk = window.sdk;` —— 
 二次核实证伪:`apps/desktop/package.json:11-12` 的 `../../scripts/` 从 `apps/desktop` 解析即仓库根 `scripts/`,实测脚本可正常加载运行。无 bug,无需改动。
 
 ### B2. 修脚本锁路径(注意:方向与初版建议相反) ✅
-- 改 `materialize-bundled-runtimes.mjs:20` 与 `verify-bundled-runtimes.mjs:11`:`lockPath` 默认指向 `apps/desktop/runtime-lock.json`(锁所在的真实位置),`runtimeRoot` 仍作输出目录。
+- 改 `materialize-bundled-runtimes.mjs` 与 `verify-bundled-runtimes.mjs` 的 `lockPath`:默认指向 `apps/desktop/runtime-lock.json`(锁所在的真实位置),`runtimeRoot` 仍作输出目录。
 - **不要**把锁移进 `apps/desktop/runtimes/`:根 `.gitignore:11-13` 明确忽略 `runtimes/`("随包分发,不入仓"),移入即让锁文件脱出版本控制。锁是描述物料的来源数据,留在已入库的 `apps/desktop/runtime-lock.json` 是正确位置。
 
 ### B3. 补 runtime 物料(决策: B→C) ✅ 决策已拍板 / 脚手架已落地,待外部物料入库
@@ -141,16 +141,16 @@ client HTML 模板 `index.html.tmpl:27` 声明 `const sdk = window.sdk;` —— 
 
 ## 阶段 C:网关能力面补齐 —— C1+C3 ✅ / C2 ✅(代码已落地)
 
-**策略**:17 种 `CapabilityKind`(`contract/src/plugin.ts:21-39`)按落点分四类:
-- **网关已落(5)**:fs.read / fs.write / system.info / clipboard / system.screenshot(`capability.rs:107-118`)。
-- **有独立命令(1)**:`net.fetch` → `plugin_net_fetch` 命令在 **`main.rs:159`**(不在 `plugin_net_fetch.rs`,该文件不存在;CODEBUDDY.md 的描述同样过时)。命令自带 manifest 声明校验 + SSRF 守卫 + 30s / 10 MiB 限制。
-- **有桥路由但 session/relay 耦合(5)**:llm.chat(`plugin_llm_bridge.rs:675`)/ image.generate / image.edit / video.generate / **audio.generate(`:1191`,初版误判为"无落点")**。这些是 localhost 桥的路由函数,按 `BridgeSession` 键控(逐能力 `allow_*` 标志 + `api_base` / `auth_token`),最终转发**平台 relay** `/api/relay/v1/*`。
+**策略**:17 种 `CapabilityKind`(`contract/src/plugin.ts` 的枚举)按落点分四类:
+- **网关已落(5)**:fs.read / fs.write / system.info / clipboard / system.screenshot(`capability.rs` 的 `invoke()` / `require_capability` 分派)。
+- **有独立命令(1)**:`net.fetch` → `plugin_net_fetch` 命令在 **`main.rs`**(不在 `plugin_net_fetch.rs`,该文件不存在;CODEBUDDY.md 的描述同样过时)。命令自带 manifest 声明校验 + SSRF 守卫 + 30s / 10 MiB 限制。
+- **有桥路由但 session/relay 耦合(5)**:llm.chat(`plugin_llm_bridge.rs` 的 `route_llm_chat`)/ image.generate / image.edit / video.generate / **audio.generate(`plugin_llm_bridge.rs` 的 `route_audio_generate`,初版误判为"无落点")**。这些是 localhost 桥的路由函数,按 `BridgeSession` 键控(逐能力 `allow_*` 标志 + `api_base` / `auth_token`),最终转发**平台 relay** `/api/relay/v1/*`。
 - **无后台落点(6)**:ui.view / fs.pick / storage.kv / system.notify / plugin.upload / plugin.submitMarketplace。保持 `NotSupported`(已具备),并在 `plugins-runtime.ts` / SDK 文档标注"契约已定义、桌面壳未实现"。
 - 注意:**`system.requestPermission` 不在 `CapabilityKind` 枚举内**(初版误列为第 8 种无落点 kind),它只是设想的 TS 侧辅助函数名,非网关 kind。
 
 ### C1. `net.fetch` 接入(在 plugins-runtime.ts 路由,勿改 capability.rs) ✅
 - `invokeRuntime` 对 `net.fetch` 直接调 `tauriInvoke('plugin_net_fetch', { pluginId, args })`,其余 kind 走 `invoke_capability`。
-- **不要**在 `capability.rs:107` 的 `match` 加 `net.fetch` 分支:`invoke()` 是**同步**函数,而 `plugin_net_fetch` 是 async reqwest;且该命令已自校验声明与 SSRF,重复走网关只会错配。`capability.rs:113-116` 注释本来就假设这个设计。
+- **不要**在 `capability.rs` 的 `invoke()` match 加 `net.fetch` 分支:`invoke()` 是**同步**函数,而 `plugin_net_fetch` 是 async reqwest;且该命令已自校验声明与 SSRF,重复走网关只会错配。`capability.rs` 注释本来就假设这个设计。
 
 ### C2. llm / image / video / audio(决策: C-on-A,代码已落地) ✅
 - 决策(2026-08-22):client AI 是 notes 等插件核心卖点,**不接受 D**;**不引入平台账号体系(B 出局)**,守住零服务器叙事;凭据由用户在应用设置显式配置(A),client 调用一律经宿主代理命令、iframe 永不持凭据(C);计费按配置 token 归属既有灵石模型。
@@ -168,14 +168,14 @@ client HTML 模板 `index.html.tmpl:27` 声明 `const sdk = window.sdk;` —— 
 ## 阶段 D:边界清理与文档 —— ✅ 已交付
 
 ### D1. cloud/workflow 幽灵类型 ✅
-- `apps/desktop/src/lib/types.ts:41` 的 `'cloud'|'workflow'`:`PluginRunner` 显式渲染"当前桌面壳不支持 cloud/workflow 运行时"占位(当前它对**所有** runtime_type 渲染同一占位,完全不区分)。
+- `apps/desktop/src/lib/types.ts` 的 `runtime_type` 联合类型含 `'cloud'|'workflow'`:`PluginRunner` 显式渲染"当前桌面壳不支持 cloud/workflow 运行时"占位(当前它对**所有** runtime_type 渲染同一占位,完全不区分)。
 - `packages/plugin-sdk` 的 validate(`manifest/rules.ts`):加一条规则——`runtime_type` 为 cloud/workflow 时提示"本地桌面壳不支持,需平台云"(不阻断,仅告警)。注意 `ruleEntryRuntimeMatch:87` 已对 cloud 做 entry 必须是 URL 的校验,新规则只补 workflow 与告警语义。
 
 ### D2. 修文档死链 ✅
 - `packages/plugin-sdk/README.md:3` 指向 `../../docs/plugin-development.md`,仓内无 `docs/`(glob 为空)。二选一:创建 `docs/plugin-development.md`,或改指 contract 内对应说明 / 在线文档。
 
 ### D3. 清理残留注释 ✅
-- 全仓 grep 已删除的 "Rust 后端 / relay / billing" 引用,统一加 CONTRACT 风格说明或删除(如 `main.rs:283-284` 指向不存在文档的注释)。
+- 全仓 grep 已删除的 "Rust 后端 / relay / billing" 引用,统一加 CONTRACT 风格说明或删除(如 `main.rs` 中指向不存在文档的注释)。
 
 ---
 

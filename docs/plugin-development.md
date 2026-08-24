@@ -77,10 +77,26 @@ lingfang-plugin create      # 从 client / nodejs / python 模板脚手架，生
 lingfang-plugin validate    # Zod schema + 业务规则双层校验；cloud/workflow 会提示非阻塞警告
 lingfang-plugin build       # 通过 archive.ts 打包为 .lfplugin v4（请勿手动 zip）
 lingfang-plugin publish     # 上传至插件注册中心
+lingfang-plugin dev <dir>   # 把插件目录注册为 dev 安装（免打包直读，v1 仅 client 运行时；v2 改文件自动重载）
 ```
 
 校验（`validate`）的退出码约定：**存在阻塞性错误 → 退出码 1**；仅存在警告 → 退出码 0（校验通过）。
 `build` 也会先执行同样的 manifest 校验，失败则快速报错。
+
+### dev 安装（免打包直读）
+
+`lingfang-plugin dev <dir>` 把开发中的插件目录直接注册为 **dev 安装**（origin=`dev`），
+跳过 `build` 的打包环节：宿主直接读取 `<dir>` 下的 `manifest.json` 与入口文件。
+
+- **v1（当前）**：仅支持 `client` 运行时。这与本地导入三方插件仅限 client 的政策一致
+  （`IMPROVEMENT_PLAN.md` F2 / `CODEBUDDY.md` Security model）：`nodejs` / `python` 进程插件
+  在 v1 下保留给内置或一方签名插件，因此 `dev` 也会对 `runtime_type !== 'client'` 直接报错。
+  宿主挂载该安装后，可监听目录文件变更并触发 `plugin:dev-reload` 事件，前端 `PluginRunner`
+  据此重新拉取 entry HTML，使 client 插件在保存后即时刷新（无需重新打包）。
+- **v2（规划）**：引入 watch 守护与更细粒度的增量重载，进一步缩短 client 插件的热更新延迟。
+
+在桌面宿主之外运行 `dev`（无 `window.__TAURI__`）时为 best-effort：命令仍完成校验并打印提示，
+告知用户回到宿主中打开该插件以获得监听能力，不会因缺少 Tauri 运行时而崩溃。
 
 ### 零服务端模型要点（回顾）
 
