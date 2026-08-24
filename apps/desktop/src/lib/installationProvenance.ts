@@ -17,6 +17,8 @@ export function installationOriginBadge(origin?: string): OriginBadge | null {
       return null; // 已由「受保护」徽标覆盖
     case 'local':
       return { label: '本地导入', tone: 'amber' };
+    case 'dev':
+      return { label: '开发态', tone: 'neutral' };
     case 'team':
       return { label: '团队', tone: 'neutral' };
     case 'marketplace':

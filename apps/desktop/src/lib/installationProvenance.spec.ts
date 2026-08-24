@@ -17,9 +17,10 @@ describe('installationOriginBadge', () => {
     expect(badge?.tone).toBe('amber');
   });
 
-  it('team / marketplace 中性徽标', () => {
+  it('team / marketplace / dev 中性徽标', () => {
     expect(installationOriginBadge('team')).toEqual({ label: '团队', tone: 'neutral' });
     expect(installationOriginBadge('marketplace')).toEqual({ label: '市场', tone: 'neutral' });
+    expect(installationOriginBadge('dev')).toEqual({ label: '开发态', tone: 'neutral' });
   });
 
   it('未知与缺失 origin 视为可疑来源（琥珀）', () => {
