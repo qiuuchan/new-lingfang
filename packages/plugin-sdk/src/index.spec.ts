@@ -43,6 +43,60 @@ describe('plugin AI SDK', () => {
     expect(bridge).not.toHaveBeenCalled();
   });
 
+  it('does not leak timeoutMs into the host bridge arguments', async () => {
+    const bridge = vi.fn().mockResolvedValue('ok');
+    (globalThis as TestGlobal).__lingfangInvoke = bridge;
+
+    await sdk.llm.chat({
+      messages: [{ role: 'user', content: 'hello' }],
+      timeoutMs: 5000,
+    });
+    expect(bridge).toHaveBeenCalledWith('llm.chat', {
+      messages: [{ role: 'user', content: 'hello' }],
+      model: 'fast',
+    });
+  });
+
+  it('clamps a too-large timeoutMs down to 180s', async () => {
+    const bridge = vi.fn().mockResolvedValue('ok');
+    (globalThis as TestGlobal).__lingfangInvoke = bridge;
+    const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout');
+
+    await sdk.image.generate({ prompt: 'demo', timeoutMs: 999_999 });
+
+    expect(setTimeoutSpy).toHaveBeenCalledWith(expect.any(Function), 180_000);
+  });
+
+  it('clamps a too-small timeoutMs up to 1s', async () => {
+    const bridge = vi.fn().mockResolvedValue('ok');
+    (globalThis as TestGlobal).__lingfangInvoke = bridge;
+    const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout');
+
+    await sdk.image.generate({ prompt: 'demo', timeoutMs: 10 });
+
+    expect(setTimeoutSpy).toHaveBeenCalledWith(expect.any(Function), 1_000);
+  });
+
+  it('passes a valid timeoutMs through to the race timer', async () => {
+    const bridge = vi.fn().mockResolvedValue('ok');
+    (globalThis as TestGlobal).__lingfangInvoke = bridge;
+    const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout');
+
+    await sdk.image.generate({ prompt: 'demo', timeoutMs: 45_000 });
+
+    expect(setTimeoutSpy).toHaveBeenCalledWith(expect.any(Function), 45_000);
+  });
+
+  it('defaults to the 180s AI timeout when no timeoutMs is given', async () => {
+    const bridge = vi.fn().mockResolvedValue('ok');
+    (globalThis as TestGlobal).__lingfangInvoke = bridge;
+    const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout');
+
+    await sdk.image.generate({ prompt: 'demo' });
+
+    expect(setTimeoutSpy).toHaveBeenCalledWith(expect.any(Function), 180_000);
+  });
+
   it('preserves structured host errors', async () => {
     (globalThis as TestGlobal).__lingfangInvoke = vi.fn().mockRejectedValue({
       message: '团队额度不足',

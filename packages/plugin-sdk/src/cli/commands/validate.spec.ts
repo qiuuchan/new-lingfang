@@ -286,3 +286,58 @@ describe('validateCommand — JSON 输出', () => {
     expect(Array.isArray(result.errors)).toBe(true);
   });
 });
+
+// ── LF-08 / J3：--quiet 输出形状 ───────────────────────────────────
+
+async function runValidateRaw(dir: string, quiet: boolean): Promise<string> {
+  const originalStdout = process.stdout.write;
+  let captured = '';
+  process.stdout.write = ((chunk: string | Uint8Array) => {
+    captured += typeof chunk === 'string' ? chunk : new TextDecoder().decode(chunk);
+    return true;
+  }) as typeof process.stdout.write;
+
+  try {
+    await validateCommand([], { path: dir, quiet });
+  } finally {
+    process.stdout.write = originalStdout;
+  }
+  return captured;
+}
+
+describe('validateCommand — --quiet 模式 (LF-08)', () => {
+  it('合法插件在 --quiet 下不输出任何内容', async () => {
+    const out = await runValidateRaw(notesPath, true);
+    expect(out).toBe('');
+  });
+
+  it('非法插件在 --quiet 下逐行输出错误 code（脚本可解析）', async () => {
+    const dir = await tempDir();
+    await writeFile(path.join(dir, 'manifest.json'), '{ bad json }');
+
+    const out = await runValidateRaw(dir, true);
+    const lines = out.split('\n').filter((l) => l.length > 0);
+    expect(lines).toEqual(['manifest_invalid_json']);
+  });
+
+  it('--quiet 与 --json 互斥：--json 优先生效', async () => {
+    const dir = await tempDir();
+    await writeFile(path.join(dir, 'manifest.json'), '{ bad json }');
+
+    const originalStdout = process.stdout.write;
+    let captured = '';
+    process.stdout.write = ((chunk: string | Uint8Array) => {
+      captured += typeof chunk === 'string' ? chunk : new TextDecoder().decode(chunk);
+      return true;
+    }) as typeof process.stdout.write;
+    try {
+      await validateCommand([], { path: dir, json: true, quiet: true });
+    } finally {
+      process.stdout.write = originalStdout;
+    }
+    const parsed = JSON.parse(captured) as ValidateResult;
+    expect(parsed.valid).toBe(false);
+    expect(parsed.errors[0].code).toBe('manifest_invalid_json');
+  });
+});
+

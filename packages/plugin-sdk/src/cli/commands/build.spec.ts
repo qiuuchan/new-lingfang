@@ -30,8 +30,8 @@ async function tempDir(): Promise<string> {
 
 async function runBuild(
   dir: string,
-  opts?: { out?: string; json?: boolean }
-): Promise<{ exitCode: number; result?: BuildResult }> {
+  opts?: { out?: string; json?: boolean; quiet?: boolean }
+): Promise<{ exitCode: number; result?: BuildResult; raw: string }> {
   const originalStdout = process.stdout.write;
   let captured = '';
   process.stdout.write = ((chunk: string | Uint8Array) => {
@@ -41,16 +41,19 @@ async function runBuild(
 
   let exitCode: number;
   try {
-    exitCode = await buildCommand([], { path: dir, json: true, ...opts });
+    // 仅在未显式请求 --quiet 时默认 JSON 输出；--quiet 优先于 JSON。
+    const mergedOpts = { path: dir, ...opts };
+    if (opts?.quiet !== true) mergedOpts.json = true;
+    exitCode = await buildCommand([], mergedOpts);
   } finally {
     process.stdout.write = originalStdout;
   }
 
   try {
     const result = JSON.parse(captured) as BuildResult;
-    return { exitCode, result };
+    return { exitCode, result, raw: captured };
   } catch {
-    return { exitCode };
+    return { exitCode, raw: captured };
   }
 }
 
@@ -215,5 +218,38 @@ describe('buildCommand — README.md contract', () => {
     const invalidUtf8 = await runBuild(dir);
     expect(invalidUtf8.exitCode).toBe(1);
     expect(invalidUtf8.result?.errors[0]?.code).toBe('readme_invalid_utf8');
+  });
+});
+
+// ── LF-08 / J3：BuildError 与 ValidateError 形状对齐（含 path 字段） ──
+
+describe('buildCommand — BuildError.path 对齐 (LF-08)', () => {
+  it('错误对象含 path 字段（与 validate 的 ValidateError 对齐）', async () => {
+    const dir = await tempDir();
+    await writeFile(path.join(dir, 'manifest.json'), '{ bad json }');
+
+    const { result } = await runBuild(dir);
+    expect(result!.errors[0]).toHaveProperty('path');
+    expect(typeof result!.errors[0].path).toBe('string');
+  });
+});
+
+// ── LF-08 / J3：--quiet 输出形状 ──────────────────────────────────────
+
+describe('buildCommand — --quiet 模式 (LF-08)', () => {
+  it('成功构建在 --quiet 下不输出任何内容', async () => {
+    const outDir = await tempDir();
+    const outFile = path.join(outDir, 'notes.lfplugin');
+    const { exitCode, raw } = await runBuild(notesPath, { out: outFile, quiet: true });
+    expect(exitCode).toBe(0);
+    expect(raw).toBe('');
+  });
+
+  it('失败构建在 --quiet 下仅逐行输出错误 code', async () => {
+    const dir = await tempDir();
+    const { exitCode, raw } = await runBuild(dir, { quiet: true });
+    expect(exitCode).toBe(1);
+    const lines = raw.split('\n').filter((l) => l.length > 0);
+    expect(lines).toEqual(['manifest_not_found']);
   });
 });

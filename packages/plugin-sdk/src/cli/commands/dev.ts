@@ -10,6 +10,7 @@ import { resolvePluginPath } from '../util/resolvePath.ts';
 export interface DevOptions {
   path?: string;
   json?: boolean;
+  quiet?: boolean;
 }
 
 export interface DevResult {
@@ -31,7 +32,7 @@ export async function devCommand(argv: string[], opts?: DevOptions): Promise<num
   // 1. 解析目录（绝对路径；LF-05 / g2-sdk-friction #2 路径归一化防二次拼接）
   const dir = resolvePluginPath(opts?.path ?? argv[0] ?? process.cwd());
   if (!existsSync(dir) || !statSync(dir).isDirectory()) {
-    return printError('dir_not_found', `目录不存在或不是目录: ${dir}`, opts?.json ?? false, dir);
+    return printError('dir_not_found', `目录不存在或不是目录: ${dir}`, opts?.json ?? false, dir, opts?.quiet ?? false);
   }
 
   // 2. 读取 manifest.json
@@ -41,7 +42,8 @@ export async function devCommand(argv: string[], opts?: DevOptions): Promise<num
       'manifest_not_found',
       `manifest.json 不存在，期望路径: ${manifestPath}`,
       opts?.json ?? false,
-      dir
+      dir,
+      opts?.quiet ?? false
     );
   }
 
@@ -53,7 +55,8 @@ export async function devCommand(argv: string[], opts?: DevOptions): Promise<num
       'manifest_read_error',
       `无法读取 manifest.json: ${(e as Error).message}`,
       opts?.json ?? false,
-      dir
+      dir,
+      opts?.quiet ?? false
     );
   }
 
@@ -65,7 +68,8 @@ export async function devCommand(argv: string[], opts?: DevOptions): Promise<num
       'manifest_invalid_json',
       `manifest.json 不是合法的 JSON: ${(e as SyntaxError).message}`,
       opts?.json ?? false,
-      dir
+      dir,
+      opts?.quiet ?? false
     );
   }
 
@@ -77,7 +81,8 @@ export async function devCommand(argv: string[], opts?: DevOptions): Promise<num
       'manifest_validation_failed',
       `manifest 校验失败:\n${lines.join('\n')}`,
       opts?.json ?? false,
-      dir
+      dir,
+      opts?.quiet ?? false
     );
   }
   const manifest: PluginManifest = result.manifest;
@@ -90,7 +95,8 @@ export async function devCommand(argv: string[], opts?: DevOptions): Promise<num
       `v1 dev 安装仅支持 client 运行时（F2 政策 / LF-02）。当前 runtime_type="${runtimeType}"。` +
         ` nodejs/python 进程插件在 v1 下仅限内置或一方签名插件。`,
       opts?.json ?? false,
-      dir
+      dir,
+      opts?.quiet ?? false
     );
   }
 
@@ -101,7 +107,8 @@ export async function devCommand(argv: string[], opts?: DevOptions): Promise<num
       'entry_not_found',
       `入口文件不存在: ${manifest.entry}（完整路径: ${entryPath}）`,
       opts?.json ?? false,
-      dir
+      dir,
+      opts?.quiet ?? false
     );
   }
 
@@ -115,7 +122,8 @@ export async function devCommand(argv: string[], opts?: DevOptions): Promise<num
       'register_failed',
       `dev 注册失败: ${(e as Error).message}`,
       opts?.json ?? false,
-      dir
+      dir,
+      opts?.quiet ?? false
     );
   }
 
@@ -130,6 +138,8 @@ export async function devCommand(argv: string[], opts?: DevOptions): Promise<num
       errors: [],
     };
     process.stdout.write(JSON.stringify(out, null, 2) + '\n');
+  } else if (opts?.quiet ?? false) {
+    // LF-08：--quiet 成功不输出（退出码 0 即成功）。
   } else {
     log.success(`dev 安装已注册：${dir} (origin=dev)`);
     if (installationId) {
@@ -187,7 +197,13 @@ export async function registerDevDir(
 
 // ── 错误输出 ──────────────────────────────────────────────────────────
 
-function printError(code: string, message: string, json: boolean, dir: string): number {
+function printError(
+  code: string,
+  message: string,
+  json: boolean,
+  dir: string,
+  quiet = false
+): number {
   if (json) {
     const out: DevResult = {
       ok: false,
@@ -196,6 +212,8 @@ function printError(code: string, message: string, json: boolean, dir: string): 
       errors: [`${code}: ${message}`],
     };
     process.stdout.write(JSON.stringify(out, null, 2) + '\n');
+  } else if (quiet) {
+    process.stdout.write(code + '\n');
   } else {
     log.error(`${code}: ${message}`);
   }

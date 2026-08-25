@@ -1274,6 +1274,25 @@ pub(crate) fn peek_runtime_type(plugin_dir: &std::path::Path) -> String {
     }
 }
 
+/// client dev-reload 节流判定（LF-08 / J4）。
+///
+/// 维护上次 emit 时刻；若距离上次不足 300ms 则跳过（返回 false），
+/// 否则更新时间戳并返回 true（leading-edge 节流，合并保存风暴里的高频
+/// notify 事件）。`now` 由调用方传入以便单测用确定值驱动，不依赖真实时钟。
+pub(crate) fn should_emit_dev_reload(
+    last: &Arc<Mutex<Option<std::time::Instant>>>,
+    now: std::time::Instant,
+) -> bool {
+    let mut guard = last.lock().unwrap();
+    if let Some(prev) = *guard {
+        if now.duration_since(prev) < std::time::Duration::from_millis(300) {
+            return false;
+        }
+    }
+    *guard = Some(now);
+    true
+}
+
 /// 开始监听开发态目录。non-fatal：失败仅 eprintln 告警，不阻断插件启动。
 /// - dir：被监听的发行版目录（release.path）。
 /// - runtime_type：client / nodejs / python，决定事件语义（见本段顶部注释）。
@@ -1296,6 +1315,9 @@ pub(crate) fn watch_dev_dir(
 
     let app_for_cb = app.clone();
     let dir_for_restart = dir.to_path_buf();
+    // LF-08 / J4：client 分支 300ms 节流，避免编辑器保存时的高频 notify 事件连发
+    // plugin:dev-reload（对齐 nodejs 分支 :1322 的 300ms 语义）。窗口内只发一次。
+    let last_client_emit: Arc<Mutex<Option<std::time::Instant>>> = Arc::new(Mutex::new(None));
     let handler = move |res: notify::Result<notify::Event>| {
         // 忽略事件解析错误与无关事件（创建/写/重命名均触发重载）。
         if res.is_err() {
@@ -1303,6 +1325,11 @@ pub(crate) fn watch_dev_dir(
         }
         if runtime_type == "client" {
             // client：仅通知前端刷新 iframe，宿主不重启。
+            // 300ms 窗口内只发一次：leading-edge 节流，合并保存风暴。
+            let now = std::time::Instant::now();
+            if !should_emit_dev_reload(&last_client_emit, now) {
+                return;
+            }
             let _ = app_for_cb.emit(
                 "plugin:dev-reload",
                 serde_json::json!({
