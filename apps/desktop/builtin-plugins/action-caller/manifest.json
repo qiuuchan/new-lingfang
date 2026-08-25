@@ -1,0 +1,26 @@
+{
+  "id": "builtin.action-caller",
+  "name": "Action Caller",
+  "version": "0.1.0",
+  "description": "LF-06 fixture：启动时裸 fetch 直连桥 /actions/call 调 demo.hello，结果写 result.json 供 harness 断言。",
+  "runtime_type": "nodejs",
+  "entry": "main.js",
+  "capabilities": [
+    {
+      "kind": "ui.view",
+      "reason": "fixture 输出观察",
+      "risk": "none",
+      "requires_admin": false
+    }
+  ],
+  "visibility": "tenant",
+  "action_dependencies": [
+    {
+      "dependency_id": "demo.hello",
+      "package_id": "builtin:builtin.action-demo",
+      "release_version_range": "*",
+      "action_id": "demo.hello",
+      "action_contract_version_range": "*"
+    }
+  ]
+}

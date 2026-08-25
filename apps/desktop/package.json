@@ -15,7 +15,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:e2e": "node ../../scripts/e2e-desktop-smoke.mjs",
-    "test:relay": "node ../../scripts/e2e-relay-verify.mjs"
+    "test:relay": "node ../../scripts/e2e-relay-verify.mjs",
+    "test:actions": "node ../../scripts/e2e-actions-verify.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.5.0",

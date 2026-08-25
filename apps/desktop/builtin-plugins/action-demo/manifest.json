@@ -1,0 +1,39 @@
+{
+  "id": "builtin.action-demo",
+  "name": "Action Demo",
+  "version": "0.1.0",
+  "description": "LF-06 fixture：声明 demo.hello client action，供内置 nodejs 插件经桥调用验证 action 桥真机闭环。",
+  "runtime_type": "client",
+  "entry": "ui/index.html",
+  "capabilities": [
+    {
+      "kind": "storage.kv",
+      "reason": "fixture 演示用（handler 可经 sdk 落盘）",
+      "risk": "low",
+      "requires_admin": false
+    }
+  ],
+  "visibility": "tenant",
+  "actions": [
+    {
+      "action_id": "demo.hello",
+      "name": "Demo Hello",
+      "description": "回显问候语，验证 client action handler 被桥真机执行",
+      "action_contract_version": "1.0.0",
+      "input_schema": {
+        "type": "object",
+        "properties": { "name": { "type": "string" } },
+        "additionalProperties": false
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": { "greeting": { "type": "string" } },
+        "additionalProperties": false
+      },
+      "execution_semantics": "read_only",
+      "timeout_seconds": 30,
+      "cloud_capable": false,
+      "handler": { "entry": "handler.js", "export": "default" }
+    }
+  ]
+}
