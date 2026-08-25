@@ -100,6 +100,21 @@ export type PluginAiErrorInit = {
   cause?: unknown;
 };
 
+// LF-05 / g2-sdk-friction #1：AI 桥错误的稳定错误码常量。
+// 与宿主侧 plugins-runtime.ts 的归一化语义对齐（relay_not_configured / relay_error），
+// 插件按 code 判断即可，不再依赖 message 字符串前缀。
+export const PluginAiErrorCode = {
+  RelayNotConfigured: 'relay_not_configured',
+  RelayError: 'relay_error',
+  RequestTimeout: 'request_timeout',
+  BridgeUnavailable: 'bridge_unavailable',
+  UnsupportedModel: 'unsupported_model',
+  PluginAiError: 'plugin_ai_error',
+} as const;
+
+export type PluginAiErrorCodeValue =
+  (typeof PluginAiErrorCode)[keyof typeof PluginAiErrorCode];
+
 export class PluginAiError extends Error {
   readonly code?: string;
   readonly status?: number;
@@ -160,20 +175,44 @@ function pluginAiError(
   if (error instanceof PluginAiError) return error;
   const source = record(error);
   const nested = record(source.error);
+  // 裸字符串拒绝（宿主 Result<_, String> 的常见 reject 形态，如 client_ai_proxy.rs 的
+  // `relay_not_configured:` / `relay_error:` 前缀）也要能提取出 message 参与前缀归一。
+  const rawString =
+    typeof error === 'string' && error.trim().length > 0 ? error.trim() : undefined;
   const message =
     nonEmptyString(nested.message) ??
     nonEmptyString(source.message) ??
     (error instanceof Error ? nonEmptyString(error.message) : undefined) ??
+    rawString ??
     fallback.message ??
     '平台 AI 调用失败';
+  // LF-05 / g2-sdk-friction #1：宿主 Rust 侧以裸前缀字符串返回（relay_not_configured: /
+  // relay_error:），npm SDK 形态（nodejs/python 插件与单测）此前只把它透传为 message，
+  // code 落成泛化的 plugin_ai_error → 与 client iframe 形态不一致。这里按前缀补归一化，
+  // 使三种运行形态下「relay 未配置 / relay 错误」都拿到稳定 code（语义对齐 pluginActionError
+  // 对 bridge 前缀的既有处理）。relay_not_configured 先于 relay_error 匹配（更具体）。
+  const relayUnconfigured = message.includes('relay_not_configured');
+  const relayFailure = !relayUnconfigured && message.includes('relay_error');
   const statusValue = nested.status ?? source.status ?? fallback.status;
   return new PluginAiError(message, {
     code:
       nonEmptyString(nested.code) ??
       nonEmptyString(source.code) ??
       (nonEmptyString(source.message) ? nonEmptyString(source.error) : undefined) ??
+      (relayUnconfigured
+        ? PluginAiErrorCode.RelayNotConfigured
+        : relayFailure
+          ? PluginAiErrorCode.RelayError
+          : undefined) ??
       fallback.code,
-    status: typeof statusValue === 'number' ? statusValue : undefined,
+    status:
+      typeof statusValue === 'number'
+        ? statusValue
+        : relayUnconfigured
+          ? 503
+          : relayFailure
+            ? 502
+            : undefined,
     requestId:
       nonEmptyString(nested.requestId) ?? nonEmptyString(source.requestId) ?? fallback.requestId,
     cause: error,
@@ -395,10 +434,14 @@ async function invokeAi<T>(
     throw pluginAiError(
       error,
       timedOut
-        ? { code: 'request_timeout', status: 408, message: `平台 AI 调用超时: ${capability}` }
+        ? {
+            code: PluginAiErrorCode.RequestTimeout,
+            status: 408,
+            message: `平台 AI 调用超时: ${capability}`,
+          }
         : bridgeUnavailable
-          ? { code: 'bridge_unavailable', status: 503 }
-          : { code: 'plugin_ai_error' }
+          ? { code: PluginAiErrorCode.BridgeUnavailable, status: 503 }
+          : { code: PluginAiErrorCode.PluginAiError }
     );
   }
 }

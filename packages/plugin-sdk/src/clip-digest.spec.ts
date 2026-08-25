@@ -4,7 +4,7 @@
 // 使降级分支被测试覆盖。
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { PluginAiError, sdk } from './index';
+import { PluginAiError, PluginAiErrorCode, sdk } from './index';
 
 type TestGlobal = typeof globalThis & {
   __lingfangInvoke?: (capability: string, args: unknown) => Promise<unknown>;
@@ -15,9 +15,14 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-// 复刻 examples/clip-digest/ui/index.html 中的降级判定逻辑。
+// 复刻 examples/clip-digest/ui/index.html 中的降级判定逻辑（LF-05 / g2-sdk-friction #1：
+// code-first，message 前缀兜底旧形态）。
 function isRelayNotConfigured(err: unknown): boolean {
-  return !!(err && (err as { message?: string }).message && (err as { message?: string }).message!.includes('relay_not_configured'));
+  const e = err as { code?: string; message?: string } | null | undefined;
+  return (
+    e?.code === PluginAiErrorCode.RelayNotConfigured ||
+    !!e?.message?.includes('relay_not_configured')
+  );
 }
 
 describe('clip-digest: clipboard + storage SDK calls', () => {
@@ -72,15 +77,49 @@ describe('clip-digest: llm + ui SDK calls', () => {
 });
 
 describe('clip-digest: graceful degradation (relay_not_configured)', () => {
-  it('isRelayNotConfigured returns true when message contains relay_not_configured', () => {
-    expect(isRelayNotConfigured(new Error('relay_not_configured'))).toBe(true);
-    expect(isRelayNotConfigured({ message: 'xxx relay_not_configured yyy' })).toBe(true);
+  it('isRelayNotConfigured returns true when code equals relay_not_configured', () => {
+    const e = Object.assign(new Error('请先在设置中配置 relay 凭据'), {
+      code: 'relay_not_configured',
+    });
+    expect(isRelayNotConfigured(e)).toBe(true);
+    expect(isRelayNotConfigured({ code: 'relay_not_configured', message: 'x' })).toBe(true);
   });
 
   it('isRelayNotConfigured returns false for other errors', () => {
     expect(isRelayNotConfigured(new Error('普通错误'))).toBe(false);
+    expect(isRelayNotConfigured({ code: 'relay_error', message: '上游 500' })).toBe(false);
     expect(isRelayNotConfigured(null)).toBe(false);
     expect(isRelayNotConfigured({})).toBe(false);
+  });
+
+  it('sdk.llm.chat 的 relay_not_configured 拒绝现在带稳定 code（不再只有 message 前缀）', async () => {
+    // 宿主 Rust 侧以裸前缀字符串 reject（client_ai_proxy.rs ERR_RELAY_NOT_CONFIGURED）。
+    const bridge = vi.fn().mockRejectedValue('relay_not_configured: 请先在设置中配置 relay 凭据');
+    (globalThis as TestGlobal).__lingfangInvoke = bridge;
+
+    const error = await sdk.llm
+      .chat({ messages: [{ role: 'user', content: 'hi' }] })
+      .catch((caught) => caught);
+
+    expect(error).toBeInstanceOf(PluginAiError);
+    expect(error).toMatchObject({
+      name: 'PluginAiError',
+      code: 'relay_not_configured',
+      status: 503,
+    });
+    expect(isRelayNotConfigured(error)).toBe(true);
+  });
+
+  it('sdk.llm.chat 的 relay_error 拒绝归一为 relay_error（非 plugin_ai_error）', async () => {
+    const bridge = vi.fn().mockRejectedValue('relay_error: 上游 500');
+    (globalThis as TestGlobal).__lingfangInvoke = bridge;
+
+    const error = await sdk.llm
+      .chat({ messages: [{ role: 'user', content: 'hi' }] })
+      .catch((caught) => caught);
+
+    expect(error).toMatchObject({ code: 'relay_error', status: 502 });
+    expect(error).toBeInstanceOf(PluginAiError);
   });
 
   it('a relay_not_configured flow degrades gracefully without throwing', async () => {

@@ -13,6 +13,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { log } from '../log.ts';
 import { pathExists } from '../util/fs.ts';
+import { resolvePluginPath } from '../util/resolvePath.ts';
 
 // ── Types ──────────────────────────────────────────────────────────────
 
@@ -160,6 +161,8 @@ async function deriveSuggestedFilename(workspacePath: string): Promise<string | 
 export async function publishCommand(argv: string[], opts?: PublishOptions): Promise<number> {
   // ── 1. 解析配置 ──────────────────────────────────────────────────
   const resolvedPath = opts?.path ?? (argv.length > 0 ? argv[0] : process.cwd());
+  // LF-05 / g2-sdk-friction #2：路径归一化防二次拼接（cwd 固定为 packages/plugin-sdk 的场景）。
+  const targetPath = resolvePluginPath(resolvedPath);
 
   let token: string;
   let base: string;
@@ -178,12 +181,12 @@ export async function publishCommand(argv: string[], opts?: PublishOptions): Pro
   let artifactPath: string;
 
   // 情况 A：路径以 .lfplugin 结尾且文件存在 → 直接使用
-  if (resolvedPath.endsWith('.lfplugin') && (await pathExists(resolvedPath))) {
-    artifactPath = path.resolve(resolvedPath);
+  if (targetPath.endsWith('.lfplugin') && (await pathExists(targetPath))) {
+    artifactPath = targetPath;
     log.info(`使用已有制品：${artifactPath}`);
   }
   // 情况 B：工作区目录 → 构建（除非显式跳过）
-  else if (await isWorkspace(resolvedPath)) {
+  else if (await isWorkspace(targetPath)) {
     if (opts?.build === false) {
       log.error(
         '当前为工作区目录，未找到 .lfplugin 制品。请先运行 lingfang-plugin build，或去掉 --no-build 选项让 publish 自动构建。'
@@ -191,22 +194,22 @@ export async function publishCommand(argv: string[], opts?: PublishOptions): Pro
       return 1;
     }
 
-    const built = await runBuild(path.resolve(resolvedPath), opts?.out);
+    const built = await runBuild(targetPath, opts?.out);
     if (!built) return 1;
     artifactPath = built;
   }
   // 情况 C：既不是 .lfplugin 文件也不是有效工作区
   else {
-    if (await pathExists(resolvedPath)) {
-      if ((await stat(resolvedPath)).isDirectory()) {
+    if (await pathExists(targetPath)) {
+      if ((await stat(targetPath)).isDirectory()) {
         log.error(
-          `目录 "${resolvedPath}" 不像插件工作区（缺少 manifest.json），请确认路径是否正确。`
+          `目录 "${targetPath}" 不像插件工作区（缺少 manifest.json），请确认路径是否正确。`
         );
       } else {
-        log.error(`文件 "${resolvedPath}" 不是 .lfplugin 插件制品。`);
+        log.error(`文件 "${targetPath}" 不是 .lfplugin 插件制品。`);
       }
     } else {
-      log.error(`路径 "${resolvedPath}" 不存在。`);
+      log.error(`路径 "${targetPath}" 不存在。`);
     }
     return 1;
   }

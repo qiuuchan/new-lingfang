@@ -98,6 +98,26 @@ lingfang-plugin dev <dir>   # 把插件目录注册为 dev 安装（免打包直
 在桌面宿主之外运行 `dev`（无 `window.__TAURI__`）时为 best-effort：命令仍完成校验并打印提示，
 告知用户回到宿主中打开该插件以获得监听能力，不会因缺少 Tauri 运行时而崩溃。
 
+### CLI 命令形态（本仓库内开发）
+
+仓库内推荐用以下形态运行 CLI（`bin` 链接可能未建立，`pnpm exec lingfang-plugin` 会报
+`Command not found`）：
+
+```bash
+# 相对 packages/plugin-sdk 的短路径
+pnpm -C packages/plugin-sdk cli:dev -- validate examples/clip-digest
+pnpm -C packages/plugin-sdk cli:dev -- build   examples/clip-digest
+# 也接受仓库根相对路径（LF-05 起自动归一化，不再二次拼接）
+pnpm -C packages/plugin-sdk cli:dev -- validate packages/plugin-sdk/examples/clip-digest
+# 或根 package.json 脚本（底层仍是同一 CLI）
+pnpm plugin:validate
+pnpm plugin:build
+```
+
+CLI 的路径参数（`validate` / `build` / `publish` / `dev`）解析规则：绝对路径原样使用；
+相对路径先按当前工作目录、再按仓库（pnpm 工作区）根解析——两种相对写法都可用，
+不再有「传错相对基准导致路径翻倍」的坑。
+
 ### 零服务端模型要点（回顾）
 
 1. 没有后端服务；所有能力由桌面宿主在本地执行。
@@ -107,7 +127,96 @@ lingfang-plugin dev <dir>   # 把插件目录注册为 dev 安装（免打包直
 
 ---
 
-## 5. 参考
+## 5. 错误处理与降级
+
+**统一以 `code` 判断错误，不要解析中文文案或 message 前缀。**
+
+插件拿到能力错误时，不同运行形态下结构已对齐（LF-05 / g2-sdk-friction #1）：
+
+- **client 插件（iframe 内 `window.sdk`）**：宿主 `plugins-runtime.ts` 归一化，
+  错误对象带稳定 `code` 字段。
+- **nodejs / python 插件（npm 包 `@lingfang/plugin-sdk`）**：`sdk.llm.*` 类 AI 调用
+  统一抛出 `PluginAiError`，`code` 与 client 形态一致；其余能力错误为裸字符串
+  `前缀: 中文文案` 形态，`code` 即前缀本身。
+
+标准降级范式（relay 凭据未配置时优雅降级，不崩溃不白屏）：
+
+```ts
+import { sdk, PluginAiErrorCode } from '@lingfang/plugin-sdk';
+
+try {
+  const summary = await sdk.llm.chat({ messages: [{ role: 'user', content: text }] });
+} catch (err) {
+  if (err?.code === PluginAiErrorCode.RelayNotConfigured) {
+    // 保存原文，提示用户去设置页配置 relay 凭据
+  } else {
+    throw err;
+  }
+}
+```
+
+常用错误码表（`code` 为稳定值；client 形态经宿主归一化，脚本形态为 message 前缀）：
+
+| code | 含义 | 建议处理 |
+| --- | --- | --- |
+| `relay_not_configured` | 平台 LLM 凭据未配置 | 优雅降级 / 引导去设置页 |
+| `relay_error` | relay 转发失败（上游错误、配额超限等，message 含可读原因） | 展示 message 后可重试 |
+| `request_timeout` | 桥调用超时（AI 默认 180s） | 提示稍后重试 |
+| `bridge_unavailable` | 宿主桥未注入（容器未加载/旧版） | 提示宿主环境问题 |
+| `unsupported_model` | `model` 不是 `fast` / `premium` | 修插件入参 |
+| `capability_not_declared` | 插件未声明该能力 | 补 manifest.capabilities |
+| `capability_not_supported` | 已声明但桌面壳未实现 | 查本仓库能力面 |
+| `capability_out_of_scope` | 参数超出授权范围（如 fs 路径越界） | 修插件入参 |
+| `capability_invalid_path` | 文件路径非法 | 修插件入参 |
+| `net_fetch_ssrf_blocked` | net.fetch 命中 SSRF 防护 | 换公开 URL |
+| `kv_value_too_large` | storage.kv 单值超 256KB | 压缩/分片存储 |
+| `kv_quota_exceeded` | storage.kv 条目超 1024 | 提示「剪藏已达上限」或实现淘汰 |
+| `plugin_ai_error` / `capability_error` | 其他未分类错误 | 展示 message |
+
+### 超时语义
+
+| 调用 | 默认超时 |
+| --- | --- |
+| 通用能力（clipboard / storage.kv / ui.view / fs / notify 等） | 30s |
+| AI 桥（llm.chat / image / video / audio） | 180s |
+| action 桥（sdk.actions.call） | 24h + 30s（真实时限在宿主侧） |
+
+SDK 与宿主**各有一层超时计时，取先到者**——不要依赖单侧等待时间。AI 长文摘要
+（约 3 分钟档位）够用；若未来需要更长，请先在工单提出 manifest/调用级覆盖诉求。
+
+### ui.view content 契约
+
+`sdk.ui.render(content)` 是**纯宿主渲染**：宿主只做 Markdown / JSON 文本渲染，
+绝不执行插件传入的 HTML 或脚本（`UiViewHost` 队列，不经 Rust 网关）。
+
+推荐结构（宿主按 `type` 渲染，插件侧保持稳定）：
+
+```ts
+// Markdown 渲染（推荐）
+await sdk.ui.render({ type: 'markdown', body: '## 标题\n\n正文' });
+// 普通文本 / JSON（安全序列化展示）
+await sdk.ui.render({ type: 'json', body: { ok: true, count: 3 } });
+```
+
+纯字符串也可（按文本渲染）。content 必须可 JSON 序列化（循环引用会提前报错）。
+
+### storage.kv 限额
+
+按插件隔离持久化到宿主数据目录 `kv.json`，硬性边界：
+
+| 项 | 上限 |
+| --- | --- |
+| 单值（JSON 序列化后字节数） | 256KB |
+| 单插件条目数 | 1024 |
+| key 长度 | 256 字符 |
+| kv.json 整文件 | 8MB（读回防御） |
+
+超限时 `set` 会 reject 稳定码 `kv_value_too_large` / `kv_quota_exceeded`——**不要**静默
+降级到其他存储（如 localStorage）掩盖真实错误，应提示用户或实现淘汰策略。
+
+---
+
+## 6. 参考
 
 - 类型与契约：`packages/contract`（`@lingfang/contract`）
 - 插件 SDK 与 CLI：`packages/plugin-sdk`（`@lingfang/plugin-sdk`）

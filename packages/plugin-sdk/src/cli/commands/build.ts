@@ -8,6 +8,7 @@ import { packWorkspace } from '../util/archive.ts';
 import { log } from '../log.ts';
 import { parseArgs } from '../parser.ts';
 import { validateRootReadme } from '../util/readme.ts';
+import { resolvePluginPath } from '../util/resolvePath.ts';
 
 export interface BuildOptions {
   path?: string; // 默认 process.cwd()
@@ -39,8 +40,8 @@ export interface BuildResult {
 export async function buildCommand(argv: string[], opts?: BuildOptions): Promise<number> {
   const parsed = parseArgs(argv);
 
-  // 1. 解析插件路径
-  const pluginPath = path.resolve(parsed.positional[0] ?? opts?.path ?? process.cwd());
+  // 1. 解析插件路径（LF-05 / g2-sdk-friction #2：防 cwd 固定导致的二次拼接）
+  const pluginPath = resolvePluginPath(parsed.positional[0] ?? opts?.path ?? process.cwd());
 
   // 2. 读取 manifest.json
   const manifestPath = path.join(pluginPath, 'manifest.json');

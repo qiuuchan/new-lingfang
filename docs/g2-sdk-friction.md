@@ -5,6 +5,14 @@
 > 验证环境：Windows 11 / pnpm 9 / Node 20 / 无 WebView2 与 `cargo` 桌面闭环（见文末「未验证项」）
 > 记录人：本会话（ultracode 工作流 + 人工核对）
 > 目的：作为后续 SDK / CLI / API 调整的**唯一输入源**。每条摩擦含「现象 / 复现 / 建议」，无问题项显式标注「无问题」。
+>
+> **解决状态（LF-05，2026-08-25）**：#1 已修复（npm SDK `pluginAiError` 归一 relay 码 +
+> 导出 `PluginAiErrorCode` 常量，含裸字符串 reject 形态）；#2 已修复（`resolvePluginPath`
+> 防二次拼接，validate/build/dev/publish 接入）；#5 前半已修复（Rust kv 配额码
+> `kv_value_too_large` / `kv_quota_exceeded` + 宿主归一化，先于泛化「超出」匹配）；
+> #6 文档已补齐（错误处理/降级、ui.view content 契约、超时语义、kv 限额、CLI 形态）。
+> 未做：#3（--json 友好化，中优先）、#4（调用级 timeoutMs 覆盖）、#5 后半（list/delete/count
+> 管理能力）、#7（静态插件免 tsx）——留待真实插件需求驱动。
 
 ---
 

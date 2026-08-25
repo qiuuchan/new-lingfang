@@ -170,6 +170,21 @@ describe('normalizeCapabilityError — error string → { code, message }', () =
     expect(e.code).toBe('relay_error');
   });
 
+  it('maps kv_value_too_large prefix to kv_value_too_large（先于泛化「超出」匹配）', () => {
+    const e = normalizeCapabilityError('kv_value_too_large:value 超出 262144 字节上限');
+    expect(e.code).toBe('kv_value_too_large');
+  });
+
+  it('maps kv_quota_exceeded prefix to kv_quota_exceeded（先于泛化「超出」匹配）', () => {
+    const e = normalizeCapabilityError('kv_quota_exceeded:条目数超出 1024 上限');
+    expect(e.code).toBe('kv_quota_exceeded');
+  });
+
+  it('generic 授权范围「超出」文案仍归 capability_out_of_scope（kv 匹配不越权）', () => {
+    const e = normalizeCapabilityError('读取路径超出授权范围: ../secret');
+    expect(e.code).toBe('capability_out_of_scope');
+  });
+
   it('falls back to capability_error for unknown messages', () => {
     const e = normalizeCapabilityError('boom');
     expect(e.code).toBe('capability_error');

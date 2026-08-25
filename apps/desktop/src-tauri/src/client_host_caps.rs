@@ -46,6 +46,13 @@ fn err_kv(msg: impl Into<String>) -> String {
     format!("kv_error:{}", msg.into())
 }
 
+/// LF-05 / g2-sdk-friction #5：配额类错误用独立可识别前缀（kv_value_too_large /
+/// kv_quota_exceeded），宿主 normalizeCapabilityError 与文档据此给稳定 code，
+/// 插件才能可靠地提示「已达上限」而非静默降级掩盖真实错误。
+fn err_kv_code(code: &str, msg: impl Into<String>) -> String {
+    format!("{code}:{}", msg.into())
+}
+
 /// 从安装账本解析插件数据目录（installationId → dataPath）。内置与安装插件同表。
 fn resolve_data_dir(manager: &PluginPackageManager, plugin_id: &str) -> Result<PathBuf, String> {
     manager
@@ -105,13 +112,16 @@ fn kv_apply(
             let serialized = serde_json::to_string(&value)
                 .map_err(|e| err_kv(format!("value 不可序列化:{e}")))?;
             if serialized.len() > KV_MAX_VALUE_BYTES {
-                return Err(err_kv(format!(
-                    "value 超出 {} 字节上限",
-                    KV_MAX_VALUE_BYTES
-                )));
+                return Err(err_kv_code(
+                    "kv_value_too_large",
+                    format!("value 超出 {} 字节上限", KV_MAX_VALUE_BYTES),
+                ));
             }
             if !map.contains_key(&key) && map.len() >= KV_MAX_ENTRIES {
-                return Err(err_kv(format!("条目数超出 {} 上限", KV_MAX_ENTRIES)));
+                return Err(err_kv_code(
+                    "kv_quota_exceeded",
+                    format!("条目数超出 {} 上限", KV_MAX_ENTRIES),
+                ));
             }
             map.insert(key, value);
             Ok(json!({ "ok": true }))
@@ -255,7 +265,8 @@ mod tests {
     fn oversize_value_rejected() {
         let mut map = BTreeMap::new();
         let big = "x".repeat(KV_MAX_VALUE_BYTES + 1);
-        assert!(kv_apply(&mut map, &set_args("big", json!(big))).is_err());
+        let err = kv_apply(&mut map, &set_args("big", json!(big))).unwrap_err();
+        assert!(err.starts_with("kv_value_too_large:"), "got: {err}");
     }
 
     #[test]
@@ -264,8 +275,9 @@ mod tests {
         for i in 0..KV_MAX_ENTRIES {
             kv_apply(&mut map, &set_args(&format!("k{i}"), json!(i))).unwrap();
         }
-        // 新 key 被上限拒绝。
-        assert!(kv_apply(&mut map, &set_args("overflow", json!(1))).is_err());
+        // 新 key 被上限拒绝（可识别配额码）。
+        let err = kv_apply(&mut map, &set_args("overflow", json!(1))).unwrap_err();
+        assert!(err.starts_with("kv_quota_exceeded:"), "got: {err}");
         // 覆盖已有 key 不受上限影响。
         kv_apply(&mut map, &set_args("k0", json!("updated"))).unwrap();
     }

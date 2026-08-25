@@ -32,6 +32,8 @@ export type CapabilityCode =
   | 'net_fetch_ssrf_blocked'
   | 'relay_not_configured'
   | 'relay_error'
+  | 'kv_value_too_large'
+  | 'kv_quota_exceeded'
   | 'capability_error';
 
 // 网关返回的是 Result<_, String> 裸字符串；这里按文案归一化为结构化 { code, message }，
@@ -49,6 +51,10 @@ export function normalizeCapabilityError(err: unknown): CapabilityRuntimeError {
   if (message.includes('未声明能力')) code = 'capability_not_declared';
   else if (message.includes('暂未实现')) code = 'capability_not_supported';
   else if (message.includes('SSRF') || message.includes('内网')) code = 'net_fetch_ssrf_blocked';
+  // LF-05 / g2-sdk-friction #5：kv 配额错误先于泛化「超出」匹配——kv 文案含「超出」
+  // （value 超出 N 字节上限 / 条目数超出 N 上限），若后置会被 capability_out_of_scope 吞掉。
+  else if (message.includes('kv_value_too_large')) code = 'kv_value_too_large';
+  else if (message.includes('kv_quota_exceeded')) code = 'kv_quota_exceeded';
   else if (message.includes('授权范围') || message.includes('超出')) code = 'capability_out_of_scope';
   else if (message.includes('非法文件路径')) code = 'capability_invalid_path';
   else if (message.includes('relay_not_configured')) code = 'relay_not_configured';

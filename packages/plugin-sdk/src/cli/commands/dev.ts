@@ -5,6 +5,7 @@ import path from 'node:path';
 import { validateManifest, type ManifestResult } from '../../manifest/index.ts';
 import type { PluginManifest } from '@lingfang/contract';
 import { log } from '../log.ts';
+import { resolvePluginPath } from '../util/resolvePath.ts';
 
 export interface DevOptions {
   path?: string;
@@ -27,8 +28,8 @@ export interface DevResult {
  * @returns     退出码：0 成功，1 失败
  */
 export async function devCommand(argv: string[], opts?: DevOptions): Promise<number> {
-  // 1. 解析目录（绝对路径）
-  const dir = path.resolve(opts?.path ?? argv[0] ?? process.cwd());
+  // 1. 解析目录（绝对路径；LF-05 / g2-sdk-friction #2 路径归一化防二次拼接）
+  const dir = resolvePluginPath(opts?.path ?? argv[0] ?? process.cwd());
   if (!existsSync(dir) || !statSync(dir).isDirectory()) {
     return printError('dir_not_found', `目录不存在或不是目录: ${dir}`, opts?.json ?? false, dir);
   }

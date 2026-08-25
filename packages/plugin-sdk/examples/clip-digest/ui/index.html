@@ -328,8 +328,11 @@
             );
           }
         } catch (err) {
+          // LF-05 / g2-sdk-friction #1：优先按稳定 code 判定（client iframe 走宿主归一化，
+          // 拿到 err.code === 'relay_not_configured'）；message 前缀兜底旧形态。
+          const code = (err && err.code) || '';
           const msg = (err && err.message) || '';
-          if (msg.includes('relay_not_configured')) {
+          if (code === 'relay_not_configured' || msg.includes('relay_not_configured')) {
             // 优雅降级：凭据缺失，原文已保存，不抛出
             record.summary = null;
             await storeValue(key, record);
