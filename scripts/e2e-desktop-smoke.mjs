@@ -148,10 +148,35 @@ async function run() {
           return 'unknown';
         }
       })();
+      const webviewProcs = (() => {
+        try {
+          const out = spawnSync(
+            'tasklist',
+            ['/FI', 'IMAGENAME eq msedgewebview2.exe', '/FO', 'CSV'],
+            { stdio: ['ignore', 'pipe', 'ignore'] },
+          ).stdout.toString();
+          const n = (out.match(/msedgewebview2\.exe/gi) ?? []).length;
+          return `msedgewebview2.exe 进程数=${n}`;
+        } catch (e2) {
+          return `msedgewebview2 检查失败: ${e2.message}`;
+        }
+      })();
+      const portState = (() => {
+        try {
+          const out = spawnSync('netstat', ['-ano', '-p', 'tcp'], {
+            stdio: ['ignore', 'pipe', 'ignore'],
+          }).stdout.toString();
+          const hits = out.split(/\r?\n/).filter((l) => l.includes(`:${port}`));
+          return `端口 ${port} 状态:\n` + (hits.join('\n') || '（无监听）');
+        } catch (e2) {
+          return `netstat 失败: ${e2.message}`;
+        }
+      })();
       const diag = [
-        `等待 CDP(${port}) 超时；app 进程存活=${exeAlive}`,
-        `--- app stdout/stderr（tail 40）---`,
-        ...childOutput.slice(-40),
+        `等待 CDP(${port}) 超时；app 进程存活=${exeAlive}；${webviewProcs}`,
+        `--- app stdout/stderr（tail 80）---`,
+        ...childOutput.slice(-80),
+        `--- ${portState} ---`,
       ].join('\n');
       throw new Error(`${e.message}\n${diag}`);
     }
