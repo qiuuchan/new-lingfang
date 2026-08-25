@@ -25,6 +25,8 @@ apps/desktop/src-tauri/runtimes/
 *.log
 .vite/
 eslintcache
+# E2E：WebView2 用户数据目录（e2e-desktop-smoke.mjs 启动期设置）
+.e2e-webview2-data/
 
 # 打包产物
 *.lfplugin

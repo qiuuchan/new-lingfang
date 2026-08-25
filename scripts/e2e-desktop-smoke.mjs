@@ -92,7 +92,6 @@ async function waitForCdp(port, timeoutMs) {
   }
   throw new Error(`等待 CDP(${port}) 超时`);
 }
-
 function killTree(pid) {
   if (!pid) return;
   spawnSync('taskkill', ['/PID', String(pid), '/T', '/F'], { shell: true, stdio: 'ignore' });
@@ -120,10 +119,15 @@ async function run() {
     env: {
       ...process.env,
       WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${port}`,
+      WEBVIEW2_USER_DATA_FOLDER: path.join(path.dirname(exe), '..', '..', '.e2e-webview2-data'),
     },
-    stdio: 'ignore',
+    stdio: ['ignore', 'pipe', 'pipe'],
     detached: true, // 独立进程组，避免被本脚本信号牵连；退出时 taskkill /T 清树
   });
+
+  const childOutput = [];
+  child.stdout?.on('data', (d) => childOutput.push(d.toString()));
+  child.stderr?.on('data', (d) => childOutput.push(d.toString()));
 
   const timer = setTimeout(() => {
     killTree(child.pid);
@@ -132,7 +136,25 @@ async function run() {
   }, OVERALL_TIMEOUT_MS);
 
   try {
-    await waitForCdp(port, 90_000);
+    try {
+      await waitForCdp(port, 90_000);
+    } catch (e) {
+      const exeAlive = (() => {
+        try {
+          return spawnSync('tasklist', ['/FI', `PID eq ${child.pid}`], {
+            stdio: ['ignore', 'pipe', 'ignore'],
+          }).stdout.toString().includes('lingfang');
+        } catch {
+          return 'unknown';
+        }
+      })();
+      const diag = [
+        `等待 CDP(${port}) 超时；app 进程存活=${exeAlive}`,
+        `--- app stdout/stderr（tail 40）---`,
+        ...childOutput.slice(-40),
+      ].join('\n');
+      throw new Error(`${e.message}\n${diag}`);
+    }
     const browser = await chromium.connectOverCDP(`http://127.0.0.1:${port}`);
     const context = browser.contexts()[0];
     const page = context.pages().find((p) => /tauri/i.test(p.url())) ?? context.pages()[0];
