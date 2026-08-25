@@ -216,9 +216,22 @@ grep 零残留；PR 含工单号。
 
 ## 验收记录
 
-- **LF-07 🔧 已提交待验收（2026-08-25）**：分支 `feat/lf-07-storage-mgmt` 提交 `0a99f30`，未合并 main。
-  kv_apply 三 op（list prefix 过滤/delete/count）+ 落盘条件修正（set|delete）；sdk.storage
-  list/delete/count；Rust 12/12、plugin-sdk 139/139、typecheck 全绿（独立复验一致）。
+- **LF-06 ✅ 验收通过（2026-08-25）**：action 桥真机闭环。分支 `feat/lf-06-action-bridge`
+  （`343de6c` + `4b7f56a`，plugin_runner `start_plugin` hunk 自 d1c9b1a 按 hunk 剥离迁移）。
+  启动期内置 action 注册（Defect #1）+ 会话武装 + 内联 module 沙箱执行；e2e 真机闭环
+  ok=true；cargo 246/246、desktop vitest 65/65、typecheck 全绿。
+- **LF-07 ✅ 验收通过（2026-08-25）**：storage 管理 API。分支 `feat/lf-07-storage-mgmt`
+  提交 `0a99f30`。kv_apply 三 op（list prefix 过滤/delete/count）+ 落盘条件修正（set|delete）；
+  sdk.storage list/delete/count；Rust 12/12、plugin-sdk 139/139、typecheck 全绿（独立复验一致）。
+- **LF-08 ✅ 验收通过（2026-08-25）**：分支 `feat/lf-08-timeout-quiet-debounce`。
+  原提交 `d1c9b1a` 误并入 LF-06 的 plugin_runner 改动，经拆分手术重建为 `12dd30d`（纯 LF-08）：
+  J2 timeoutMs（clamp [1000,180_000]，不泄漏桥参）、J3 CLI `--quiet`（四命令 + BuildError.path
+  对齐）、J4 dev 重载 300ms 节流（should_emit_dev_reload）。
+  ⚠️ 复验口径：plugin-sdk **146/146**（交付报告 150 含 LF-07 未合 main 的 4 测，基数差异非缺陷）、
+  cargo 241/241、contract + desktop typecheck 干净；报告所称 App.tsx:214 typecheck 失败
+  复验时不可复现（LF-06 WIP 中间态）。
+  ⚠️ 流程教训：Agent 并发共享同一 checkout 导致跨工单 WIP 混入（LF-06 改动进 LF-08 提交、
+  工作树互踩）。已用拆分手术修复；后续并发建议 per-agent worktree 或串行派发。
 
 - **LF-01 ✅ 验收通过（2026-08-24）**：validate/build 干净、制品 v4 结构正确；`pnpm typecheck`/`pnpm test`（256）
   复跑全绿；桌面壳 CDP 实测（release 产物）：本地导入安装成功 → 运行 → sdk 注入 → storage.kv 真实落盘 →

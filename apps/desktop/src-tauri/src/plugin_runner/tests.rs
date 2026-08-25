@@ -878,3 +878,23 @@ fn peek_runtime_type_reads_from_manifest() {
     assert_eq!(peek_runtime_type(&tmp), "nodejs");
     let _ = std::fs::remove_dir_all(&tmp);
 }
+
+// LF-08 / J4：client dev-reload 300ms 节流语义（连续事件 → 单次 emit）。
+#[test]
+fn dev_reload_throttles_within_300ms_window() {
+    use std::time::{Duration, Instant};
+    let state: Arc<Mutex<Option<Instant>>> = Arc::new(Mutex::new(None));
+    let t0 = Instant::now();
+
+    // 首事件：立即放行（leading-edge）。
+    assert!(should_emit_dev_reload(&state, t0));
+    // 150ms 内连发：全部被节流。
+    assert!(!should_emit_dev_reload(&state, t0 + Duration::from_millis(100)));
+    assert!(!should_emit_dev_reload(&state, t0 + Duration::from_millis(250)));
+    // 300ms 之后：再次放行。
+    assert!(should_emit_dev_reload(&state, t0 + Duration::from_millis(300)));
+    // 又进入新窗口，立即再发被拦截。
+    assert!(!should_emit_dev_reload(&state, t0 + Duration::from_millis(350)));
+    // 距上次放行(300ms)已过 50ms，仍不足 300ms 窗口。
+    assert!(!should_emit_dev_reload(&state, t0 + Duration::from_millis(340)));
+}

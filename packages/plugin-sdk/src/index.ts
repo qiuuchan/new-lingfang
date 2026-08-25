@@ -21,8 +21,14 @@ export {
 } from './shared-recovery';
 
 type ChatMessage = { role: 'system' | 'user' | 'assistant'; content: string };
-type ChatInput = { messages: ChatMessage[]; model?: 'fast' | 'premium' };
-type ImageGenerateInput = { prompt: string; model?: 'fast' | 'premium'; size?: string; n?: number };
+type ChatInput = { messages: ChatMessage[]; model?: 'fast' | 'premium'; timeoutMs?: number };
+type ImageGenerateInput = {
+  prompt: string;
+  model?: 'fast' | 'premium';
+  size?: string;
+  n?: number;
+  timeoutMs?: number;
+};
 type ImageGenerateResult = { images: string[] };
 type ImageEditImage = { filename: string; mimeType: string; data: string };
 type ImageEditInput = {
@@ -31,6 +37,7 @@ type ImageEditInput = {
   model?: 'fast' | 'premium';
   size?: string;
   n?: number;
+  timeoutMs?: number;
 };
 type ImageEditResult = { images: string[] };
 // 视频生成（RBFLow 动作迁移）：image + video base64 + seconds（参考视频时长，按秒计费）+ tier。
@@ -46,6 +53,7 @@ type VideoGenerateInput = {
   image_mime_type?: string;
   video_mime_type?: string;
   callback_url?: string;
+  timeoutMs?: number;
 };
 type VideoGenerateResult = {
   task_id: string;
@@ -425,8 +433,18 @@ async function invokeAi<T>(
   input: Record<string, unknown>
 ): Promise<T> {
   const args = { ...input, model: platformModel(input.model) };
+  // timeoutMs 是 SDK 层仅有的超时控制，不应透传给宿主桥（宿主另有自身计时）。
+  delete (args as Record<string, unknown>).timeoutMs;
+  // 调用级超时覆盖：clamp 到 [1000, 180_000]，超出边界则收敛而非报错。
+  // SDK 与宿主各有一层超时计时，取先到者；调用级仅能缩短或保持默认上限，不能突破 180s。
+  const AI_TIMEOUT_MIN_MS = 1_000;
+  const AI_TIMEOUT_MAX_MS = 180_000;
+  let timeoutMs = AI_BRIDGE_TIMEOUT_MS;
+  if (typeof input.timeoutMs === 'number' && Number.isFinite(input.timeoutMs)) {
+    timeoutMs = Math.min(AI_TIMEOUT_MAX_MS, Math.max(AI_TIMEOUT_MIN_MS, Math.trunc(input.timeoutMs)));
+  }
   try {
-    return await invoke<T>(capability, args, AI_BRIDGE_TIMEOUT_MS);
+    return await invoke<T>(capability, args, timeoutMs);
   } catch (error) {
     const timedOut = error instanceof Error && error.message.startsWith('capability 调用超时:');
     const bridgeUnavailable =

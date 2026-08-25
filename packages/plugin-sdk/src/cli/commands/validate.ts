@@ -11,6 +11,7 @@ import { resolvePluginPath } from '../util/resolvePath.ts';
 export interface ValidateOptions {
   path?: string;
   json?: boolean;
+  quiet?: boolean;
 }
 
 export interface ValidateError {
@@ -48,7 +49,7 @@ export async function validateCommand(_argv: string[], opts?: ValidateOptions): 
       path: manifestPath,
       message: `manifest.json 不存在，期望路径: ${manifestPath}`,
     });
-    printResult(manifestPath, errors, opts?.json ?? false, []);
+    printResult(manifestPath, errors, opts?.json ?? false, opts?.quiet ?? false, []);
     return 1;
   }
 
@@ -62,7 +63,7 @@ export async function validateCommand(_argv: string[], opts?: ValidateOptions): 
       path: manifestPath,
       message: `无法读取 manifest.json: ${(e as Error).message}`,
     });
-    printResult(manifestPath, errors, opts?.json ?? false, []);
+    printResult(manifestPath, errors, opts?.json ?? false, opts?.quiet ?? false, []);
     return 1;
   }
 
@@ -75,7 +76,7 @@ export async function validateCommand(_argv: string[], opts?: ValidateOptions): 
       path: manifestPath,
       message: `manifest.json 不是合法的 JSON: ${(e as SyntaxError).message}`,
     });
-    printResult(manifestPath, errors, opts?.json ?? false, []);
+    printResult(manifestPath, errors, opts?.json ?? false, opts?.quiet ?? false, []);
     return 1;
   }
 
@@ -86,7 +87,7 @@ export async function validateCommand(_argv: string[], opts?: ValidateOptions): 
     for (const e of result.errors) {
       errors.push({ code: e.code, path: e.path, message: e.message });
     }
-    printResult(manifestPath, errors, opts?.json ?? false, []);
+    printResult(manifestPath, errors, opts?.json ?? false, opts?.quiet ?? false, []);
     return 1;
   }
 
@@ -105,7 +106,7 @@ export async function validateCommand(_argv: string[], opts?: ValidateOptions): 
   const readmeError = validateRootReadme(pluginPath);
   if (readmeError) errors.push(readmeError);
 
-  printResult(manifestPath, errors, opts?.json ?? false, warnings);
+  printResult(manifestPath, errors, opts?.json ?? false, opts?.quiet ?? false, warnings);
 
   return errors.length > 0 ? 1 : 0;
 }
@@ -188,6 +189,7 @@ function printResult(
   manifestPath: string,
   errors: ValidateError[],
   json: boolean,
+  quiet: boolean,
   warnings: ValidateError[] = []
 ): void {
   if (json) {
@@ -198,6 +200,14 @@ function printResult(
       warnings,
     };
     process.stdout.write(JSON.stringify(output, null, 2) + '\n');
+    return;
+  }
+
+  // LF-08 / J3：--quiet 模式仅逐行输出错误 code（脚本可解析），成功不输出。
+  if (quiet) {
+    for (const e of errors) {
+      process.stdout.write(e.code + '\n');
+    }
     return;
   }
 

@@ -14,11 +14,13 @@ export interface BuildOptions {
   path?: string; // 默认 process.cwd()
   out?: string; // 默认 <id>-<version>.lfplugin 在 cwd
   json?: boolean; // JSON 输出模式
+  quiet?: boolean; // LF-08：仅逐行输出错误 code
 }
 
 export interface BuildError {
   code: string;
   message: string;
+  path: string; // LF-08：对齐 validate 的 ValidateError shape
 }
 
 export interface BuildResult {
@@ -45,11 +47,14 @@ export async function buildCommand(argv: string[], opts?: BuildOptions): Promise
 
   // 2. 读取 manifest.json
   const manifestPath = path.join(pluginPath, 'manifest.json');
+  const quiet = opts?.quiet ?? false;
   if (!existsSync(manifestPath)) {
     return printError(
       'manifest_not_found',
       `manifest.json 不存在，期望路径: ${manifestPath}`,
-      opts?.json ?? false
+      manifestPath,
+      opts?.json ?? false,
+      quiet
     );
   }
 
@@ -60,7 +65,9 @@ export async function buildCommand(argv: string[], opts?: BuildOptions): Promise
     return printError(
       'manifest_read_error',
       `无法读取 manifest.json: ${(e as Error).message}`,
-      opts?.json ?? false
+      manifestPath,
+      opts?.json ?? false,
+      quiet
     );
   }
 
@@ -71,7 +78,9 @@ export async function buildCommand(argv: string[], opts?: BuildOptions): Promise
     return printError(
       'manifest_invalid_json',
       `manifest.json 不是合法的 JSON: ${(e as SyntaxError).message}`,
-      opts?.json ?? false
+      manifestPath,
+      opts?.json ?? false,
+      quiet
     );
   }
 
@@ -82,7 +91,9 @@ export async function buildCommand(argv: string[], opts?: BuildOptions): Promise
     return printError(
       'manifest_validation_failed',
       `manifest 校验失败:\n${lines.join('\n')}`,
-      opts?.json ?? false
+      manifestPath,
+      opts?.json ?? false,
+      quiet
     );
   }
 
@@ -94,19 +105,28 @@ export async function buildCommand(argv: string[], opts?: BuildOptions): Promise
     return printError(
       'entry_not_found',
       `入口文件不存在: ${manifest.entry}（完整路径: ${entryPath}）`,
-      opts?.json ?? false
+      entryPath,
+      opts?.json ?? false,
+      quiet
     );
   }
 
   const readmeError = validateRootReadme(pluginPath);
-  if (readmeError) return printError(readmeError.code, readmeError.message, opts?.json ?? false);
+  if (readmeError)
+    return printError(readmeError.code, readmeError.message, '', opts?.json ?? false, quiet);
 
   // 5. 打包
   let packResult;
   try {
     packResult = await packWorkspace({ workspaceDir: pluginPath, manifest });
   } catch (e) {
-    return printError('pack_failed', `打包失败: ${(e as Error).message}`, opts?.json ?? false);
+    return printError(
+      'pack_failed',
+      `打包失败: ${(e as Error).message}`,
+      '',
+      opts?.json ?? false,
+      quiet
+    );
   }
 
   // 6. 确定输出路径
@@ -122,7 +142,9 @@ export async function buildCommand(argv: string[], opts?: BuildOptions): Promise
     return printError(
       'write_failed',
       `写入输出文件失败: ${(e as Error).message}`,
-      opts?.json ?? false
+      outputPath,
+      opts?.json ?? false,
+      quiet
     );
   }
 
@@ -138,6 +160,8 @@ export async function buildCommand(argv: string[], opts?: BuildOptions): Promise
       errors: [],
     };
     process.stdout.write(JSON.stringify(result, null, 2) + '\n');
+  } else if (quiet) {
+    // LF-08：--quiet 成功不输出（退出码 0 即成功）。
   } else {
     log.success(`已打包：${outputPath}`);
     log.raw(`  大小：${packResult.buffer.length} 字节`);
@@ -151,7 +175,13 @@ export async function buildCommand(argv: string[], opts?: BuildOptions): Promise
 
 // ── 错误输出 ──────────────────────────────────────────────────────────
 
-function printError(code: string, message: string, json: boolean): number {
+function printError(
+  code: string,
+  message: string,
+  errPath: string,
+  json: boolean,
+  quiet: boolean
+): number {
   if (json) {
     const result: BuildResult = {
       ok: false,
@@ -159,9 +189,11 @@ function printError(code: string, message: string, json: boolean): number {
       sizeBytes: 0,
       fileCount: 0,
       sha256Prefix: '',
-      errors: [{ code, message }],
+      errors: [{ code, message, path: errPath }],
     };
     process.stdout.write(JSON.stringify(result, null, 2) + '\n');
+  } else if (quiet) {
+    process.stdout.write(code + '\n');
   } else {
     log.error(`${code}: ${message}`);
   }

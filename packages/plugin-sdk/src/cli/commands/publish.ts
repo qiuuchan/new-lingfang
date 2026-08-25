@@ -36,6 +36,8 @@ export interface PublishOptions {
   build?: boolean;
   /** 传递给 build 命令的输出路径 */
   out?: string;
+  /** LF-08：仅逐行输出错误 code（传递给内部 build；发布自身错误不输出） */
+  quiet?: boolean;
 }
 
 export interface PublishResult {
@@ -92,7 +94,11 @@ function base64urlEncode(text: string): string {
  * @param out           可选自定义输出路径（透传给 build）
  * @returns             生成的 .lfplugin 绝对路径；失败返回 null
  */
-async function runBuild(workspacePath: string, out?: string): Promise<string | null> {
+async function runBuild(
+  workspacePath: string,
+  out?: string,
+  quiet?: boolean
+): Promise<string | null> {
   let explicitOut = out;
 
   // 若调用方未指定 out，则按 archive.ts 的命名规则推导并写到临时目录。
@@ -107,7 +113,11 @@ async function runBuild(workspacePath: string, out?: string): Promise<string | n
 
   try {
     const { buildCommand } = await import('./build.ts');
-    const code = await buildCommand([workspacePath], { out: explicitOut, json: true });
+    const code = await buildCommand([workspacePath], {
+      out: explicitOut,
+      json: true,
+      quiet: quiet ?? false,
+    });
     if (code !== 0) {
       log.error('构建失败，无法继续发布');
       return null;
@@ -159,6 +169,21 @@ async function deriveSuggestedFilename(workspacePath: string): Promise<string | 
  * @returns     退出码（0 = 成功，1 = 失败）
  */
 export async function publishCommand(argv: string[], opts?: PublishOptions): Promise<number> {
+  // LF-08 / J3：--quiet 抑制所有人类可读日志，仅最终失败打印单个 code 行。
+  const quiet = opts?.quiet ?? false;
+  const q = {
+    error: (m: string) => {
+      if (quiet) process.stdout.write('publish_failed\n');
+      else log.error(m);
+    },
+    info: (m: string) => {
+      if (!quiet) log.info(m);
+    },
+    success: (m: string) => {
+      if (!quiet) log.success(m);
+    },
+  };
+
   // ── 1. 解析配置 ──────────────────────────────────────────────────
   const resolvedPath = opts?.path ?? (argv.length > 0 ? argv[0] : process.cwd());
   // LF-05 / g2-sdk-friction #2：路径归一化防二次拼接（cwd 固定为 packages/plugin-sdk 的场景）。
@@ -170,7 +195,7 @@ export async function publishCommand(argv: string[], opts?: PublishOptions): Pro
     token = resolveToken(opts);
     base = resolveBase(opts);
   } catch (e) {
-    log.error((e as Error).message);
+    q.error((e as Error).message);
     return 1;
   }
 
@@ -183,18 +208,18 @@ export async function publishCommand(argv: string[], opts?: PublishOptions): Pro
   // 情况 A：路径以 .lfplugin 结尾且文件存在 → 直接使用
   if (targetPath.endsWith('.lfplugin') && (await pathExists(targetPath))) {
     artifactPath = targetPath;
-    log.info(`使用已有制品：${artifactPath}`);
+    q.info(`使用已有制品：${artifactPath}`);
   }
   // 情况 B：工作区目录 → 构建（除非显式跳过）
   else if (await isWorkspace(targetPath)) {
     if (opts?.build === false) {
-      log.error(
+      q.error(
         '当前为工作区目录，未找到 .lfplugin 制品。请先运行 lingfang-plugin build，或去掉 --no-build 选项让 publish 自动构建。'
       );
       return 1;
     }
 
-    const built = await runBuild(targetPath, opts?.out);
+    const built = await runBuild(targetPath, opts?.out, opts?.quiet);
     if (!built) return 1;
     artifactPath = built;
   }
@@ -202,14 +227,14 @@ export async function publishCommand(argv: string[], opts?: PublishOptions): Pro
   else {
     if (await pathExists(targetPath)) {
       if ((await stat(targetPath)).isDirectory()) {
-        log.error(
+        q.error(
           `目录 "${targetPath}" 不像插件工作区（缺少 manifest.json），请确认路径是否正确。`
         );
       } else {
-        log.error(`文件 "${targetPath}" 不是 .lfplugin 插件制品。`);
+        q.error(`文件 "${targetPath}" 不是 .lfplugin 插件制品。`);
       }
     } else {
-      log.error(`路径 "${targetPath}" 不存在。`);
+      q.error(`路径 "${targetPath}" 不存在。`);
     }
     return 1;
   }
@@ -219,11 +244,11 @@ export async function publishCommand(argv: string[], opts?: PublishOptions): Pro
   try {
     fileBuffer = await readFile(artifactPath);
     if (fileBuffer.length === 0) {
-      log.error('制品文件为空，无法发布。');
+      q.error('制品文件为空，无法发布。');
       return 1;
     }
   } catch (e) {
-    log.error(`无法读取制品文件：${(e as Error).message}`);
+    q.error(`无法读取制品文件：${(e as Error).message}`);
     return 1;
   }
 
@@ -261,9 +286,9 @@ export async function publishCommand(argv: string[], opts?: PublishOptions): Pro
     });
   } catch (e) {
     const err = e as Error;
-    log.error(`网络请求失败：${err.message ?? String(err)}`);
-    log.info(`请确认 API 地址可访问：${baseUrl}`);
-    log.info(`提示：如果使用 localhost，桌面壳需要允许 localhost 网络访问。`);
+    q.error(`网络请求失败：${err.message ?? String(err)}`);
+    q.info(`请确认 API 地址可访问：${baseUrl}`);
+    q.info(`提示：如果使用 localhost，桌面壳需要允许 localhost 网络访问。`);
     return 1;
   }
 
@@ -274,14 +299,14 @@ export async function publishCommand(argv: string[], opts?: PublishOptions): Pro
     try {
       body = (await response.json()) as Record<string, unknown>;
     } catch {
-      log.error('服务器返回了无法识别的响应格式。');
+      q.error('服务器返回了无法识别的响应格式。');
       return 1;
     }
 
     const pkg = body?.['package'] as Record<string, unknown> | undefined;
     const release = body?.['release'] as Record<string, unknown> | undefined;
 
-    log.success('发布成功');
+    q.success('发布成功');
     if (pkg?.['id']) {
       log.raw(`  包 ID：${String(pkg['id'])}`);
     }
@@ -306,19 +331,19 @@ export async function publishCommand(argv: string[], opts?: PublishOptions): Pro
     // JSON 解析失败 → 使用默认错误消息
   }
 
-  log.error(errorMsg);
+  q.error(errorMsg);
 
   // 针对常见错误码给出额外提示（从 research/publish-endpoint.md 第 167-182 行）
   if (response.status === 401) {
-    log.info('提示：token 可能已过期，请重新登录获取新 token。');
+    q.info('提示：token 可能已过期，请重新登录获取新 token。');
   } else if (response.status === 403) {
-    log.info(
+    q.info(
       '提示：当前团队没有上传插件的权限（需要 team.plugin.upload 或 team.plugin.edit_draft 权限）。'
     );
   } else if (response.status === 413) {
-    log.info('提示：插件制品过大（上限 300 MiB）。');
+    q.info('提示：插件制品过大（上限 300 MiB）。');
   } else if (response.status === 409) {
-    log.info('提示：版本冲突——该版本号已存在，或包已归档。');
+    q.info('提示：版本冲突——该版本号已存在，或包已归档。');
   }
 
   return 1;

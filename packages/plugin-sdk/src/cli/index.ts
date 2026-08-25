@@ -40,9 +40,11 @@ lingfang-plugin — 灵方插件开发工具
 
   validate [path]    校验插件合法性（默认当前目录）
      --json            输出 JSON 格式（用于程序消费）
+     --quiet           仅逐行输出错误 code（脚本可解析）
   build [path]       打包 .lfplugin 制品
      --out <file>     自定义输出文件名
      --json           输出 JSON 格式
+     --quiet          仅逐行输出错误 code
   publish [path]     发布到插件注册中心
      --base <url>     API 地址（或 env LINGFANG_API_BASE）
      --token <jwt>    认证 token（或 env LINGFANG_TOKEN）
@@ -51,8 +53,10 @@ lingfang-plugin — 灵方插件开发工具
      --source-label <text> 来源标签（自动 base64url）
      --client <kind>       客户端类型
      --no-build            跳过自动 build
+     --quiet          仅输出最终失败 code
 
   dev [path]         注册插件目录为 dev 安装（免打包直读，v1 仅 client）
+     --quiet          仅逐行输出错误 code
 
   --help             显示此帮助
   --version          显示版本号
@@ -99,6 +103,7 @@ async function main(): Promise<number> {
               ? args.flags['path']
               : undefined,
         json: args.flags['json'] === true,
+        quiet: args.flags['quiet'] === true,
       };
       return validateCommand(restArgs, opts);
     }
@@ -113,6 +118,7 @@ async function main(): Promise<number> {
               : undefined,
         out: typeof args.flags['out'] === 'string' ? args.flags['out'] : undefined,
         json: args.flags['json'] === true,
+        quiet: args.flags['quiet'] === true,
       };
       return buildCommand(restArgs, opts);
     }
@@ -135,6 +141,7 @@ async function main(): Promise<number> {
           typeof args.flags['source-label'] === 'string' ? args.flags['source-label'] : undefined,
         clientKind: typeof args.flags['client'] === 'string' ? args.flags['client'] : undefined,
         build: args.flags['no-build'] === true ? false : undefined,
+        quiet: args.flags['quiet'] === true,
       };
       return publishCommand(restArgs, opts);
     }

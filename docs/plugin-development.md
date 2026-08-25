@@ -118,6 +118,16 @@ CLI 的路径参数（`validate` / `build` / `publish` / `dev`）解析规则：
 相对路径先按当前工作目录、再按仓库（pnpm 工作区）根解析——两种相对写法都可用，
 不再有「传错相对基准导致路径翻倍」的坑。
 
+#### `--quiet` 机器可读输出（LF-08 / J3）
+
+`validate` / `build` / `publish` / `dev` 支持 `--quiet` 标志：人类可读的多行日志被抑制，
+**仅逐行输出错误 `code`**，便于脚本解析（如 `lingfang-plugin validate . --quiet | while read code; do ...`）。
+`--json` 保持不变（结构化输出优先）。`build` 的错误对象已与 `validate` 对齐，新增 `path` 字段
+（`{ code, path, message }`）。
+
+- 成功：`--quiet` 不输出任何内容，仅靠退出码（0）判断。
+- 失败：每个错误一行 `code`（如 `manifest_invalid_json`）。
+
 ### 零服务端模型要点（回顾）
 
 1. 没有后端服务；所有能力由桌面宿主在本地执行。
@@ -182,7 +192,26 @@ try {
 | action 桥（sdk.actions.call） | 24h + 30s（真实时限在宿主侧） |
 
 SDK 与宿主**各有一层超时计时，取先到者**——不要依赖单侧等待时间。AI 长文摘要
-（约 3 分钟档位）够用；若未来需要更长，请先在工单提出 manifest/调用级覆盖诉求。
+（约 3 分钟档位）够用；调用级覆盖见下。
+
+#### 调用级 timeoutMs 覆盖（LF-08）
+
+四个 AI 输入型（`llm.chat` / `image.generate` / `image.edit` / `video.generate`）
+支持可选的 `timeoutMs?: number`：
+
+```ts
+const summary = await sdk.llm.chat({
+  messages: [{ role: 'user', content: longDoc }],
+  timeoutMs: 90_000, // 该次调用 90s 上限（覆盖默认 180s）
+});
+```
+
+- **覆盖上限**：`timeoutMs` 会被 **clamp 到 [1000, 180_000]**，超出边界时收敛而非报错
+  （传入 999_999 → 取 180_000；传入 10 → 取 1000）。调用级只能**缩短**或保持默认上限，
+  **不能突破 180s**（安全护栏，防止插件挂死宿主桥）。
+- `timeoutMs` 仅作用于 SDK 侧计时器，**不会**透传给宿主；最终生效的是
+  SDK 计时与宿主计时**先到者**。
+- 不传 `timeoutMs` 时维持默认 180s。
 
 ### ui.view content 契约
 
