@@ -183,7 +183,7 @@ iframe 自动刷新且新内容生效；`cargo test --workspace` / `pnpm typeche
   contract 71 / cargo 240+30 全绿；typecheck 全干净。CLI 实操（`-C packages/plugin-sdk cli:dev` 下）：
   `validate` / `build` / `dev` 的仓库根相对路径 `packages/plugin-sdk/examples/clip-digest` 均正确解析
   （修复前双拼为 `.../packages/plugin-sdk/packages/plugin-sdk/...`）。流程合规：独立分支
-  `feat/lf-05-sdk-friction` 提交 `6fbcb2c`，未合并 main，待验收。
+  `feat/lf-05-sdk-friction` 提交 `6fbcb2c`；产品确认后已合入 main（`b854a9b`）。
 
 ---
 
