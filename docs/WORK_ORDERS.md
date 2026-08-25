@@ -206,6 +206,13 @@ grep 零残留；PR 含工单号。
 
 ## 验收记录
 
+- **LF-08 🔧 已提交待验收（2026-08-25）**：分支 `feat/lf-08-timeout-quiet-debounce` 提交 `d1c9b1a`，未合并 main。
+  J2：`invokeAi` 增 `timeoutMs` clamp `[1000,180_000]`（clamp 上下界 + 透传单测 5 项，不泄漏到宿主桥参数）；
+  J3：CLI validate/build/publish/dev 增 `--quiet`（逐行输出错误 code，`--json` 不变），`BuildError` 补 `path`
+  字段对齐 `ValidateError`（build 形状单测 2 项）；J4：`plugin_runner` client watch 分支 300ms 节流
+  （`should_emit_dev_reload`，防抖语义单测 1 项）。plugin-sdk vitest 150/150、cargo test `dev_reload_throttles`
+  通过、contract/plugin-sdk typecheck 全绿（desktop TS 既有失败与本次无关）。文档补调用级超时与 `--quiet` 说明。
+
 - **LF-01 ✅ 验收通过（2026-08-24）**：validate/build 干净、制品 v4 结构正确；`pnpm typecheck`/`pnpm test`（256）
   复跑全绿；桌面壳 CDP 实测（release 产物）：本地导入安装成功 → 运行 → sdk 注入 → storage.kv 真实落盘 →
   llm.chat 无凭据 `relay_not_configured` 优雅降级 → ui.view 调用成功 → 未声明能力拒绝。摩擦记录 7 条实证 ≥5 达标。
