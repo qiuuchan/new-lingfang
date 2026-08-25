@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { AdminUserSummary, createAdminPageSchema } from './admin-governance.ts';
+import { AdminUserSummary, createAdminPageSchema } from './admin-common.ts';
 import { PluginManifest, RuntimeType } from './plugin.ts';
 import { StrictSemVer } from './semver.ts';
 
