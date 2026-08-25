@@ -206,6 +206,10 @@ grep 零残留；PR 含工单号。
 
 ## 验收记录
 
+- **LF-07 🔧 已提交待验收（2026-08-25）**：分支 `feat/lf-07-storage-mgmt` 提交 `0a99f30`，未合并 main。
+  kv_apply 三 op（list prefix 过滤/delete/count）+ 落盘条件修正（set|delete）；sdk.storage
+  list/delete/count；Rust 12/12、plugin-sdk 139/139、typecheck 全绿（独立复验一致）。
+
 - **LF-01 ✅ 验收通过（2026-08-24）**：validate/build 干净、制品 v4 结构正确；`pnpm typecheck`/`pnpm test`（256）
   复跑全绿；桌面壳 CDP 实测（release 产物）：本地导入安装成功 → 运行 → sdk 注入 → storage.kv 真实落盘 →
   llm.chat 无凭据 `relay_not_configured` 优雅降级 → ui.view 调用成功 → 未声明能力拒绝。摩擦记录 7 条实证 ≥5 达标。
