@@ -1,0 +1,19 @@
+{
+  "name": "@lingfang/platform-contract",
+  "version": "0.0.1",
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@lingfang/contract": "workspace:*",
+    "zod": "^3"
+  },
+  "devDependencies": {
+    "typescript": "^5",
+    "vitest": "^4.1.8"
+  }
+}

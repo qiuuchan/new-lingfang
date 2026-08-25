@@ -1,8 +1,5 @@
 import { z } from 'zod';
-import { RuntimeType } from './plugin.ts';
-import { Sha256Hex } from './plugin-registry.ts';
-import { StrictSemVer } from './semver.ts';
-import { ActionId, ActionInvocationStatus, ActionSchema, ActionTarget } from './plugin-action.ts';
+import { RuntimeType, Sha256Hex, StrictSemVer, ActionId, ActionInvocationStatus, ActionSchema, ActionTarget } from '@lingfang/contract';
 
 export const MarketplaceCategory = z.enum([
   'AI',

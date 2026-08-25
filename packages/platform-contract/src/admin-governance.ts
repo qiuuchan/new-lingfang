@@ -1,33 +1,7 @@
 import { z } from 'zod';
+import { AdminPaginationMetadata, createAdminPageSchema, AdminUserSummary } from '@lingfang/contract';
 
-export const AdminPaginationMetadata = z
-  .object({
-    total: z.number().int().nonnegative(),
-    page: z.number().int().min(1),
-    pageSize: z.number().int().min(1).max(100),
-  })
-  .strict();
-export type AdminPaginationMetadata = z.infer<typeof AdminPaginationMetadata>;
-
-export function createAdminPageSchema<T extends z.ZodTypeAny>(itemSchema: T) {
-  return z
-    .object({
-      items: z.array(itemSchema),
-      ...AdminPaginationMetadata.shape,
-    })
-    .strict();
-}
-
-export type AdminPage<T> = AdminPaginationMetadata & { items: T[] };
-
-export const AdminUserSummary = z
-  .object({
-    id: z.string().uuid(),
-    email: z.string().email(),
-    displayName: z.string().min(1),
-  })
-  .strict();
-export type AdminUserSummary = z.infer<typeof AdminUserSummary>;
+export { AdminPaginationMetadata, createAdminPageSchema, AdminUserSummary } from '@lingfang/contract';
 
 export const TeamAdminApplicationStatus = z.enum(['PENDING', 'APPROVED', 'REJECTED']);
 export type TeamAdminApplicationStatus = z.infer<typeof TeamAdminApplicationStatus>;

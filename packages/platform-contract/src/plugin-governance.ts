@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { CapabilityKind, RuntimeType } from './plugin.ts';
-import { PluginReleaseSourceKind, Sha256Hex } from './plugin-registry.ts';
+import { CapabilityKind, RuntimeType } from '@lingfang/contract';
+import { PluginReleaseSourceKind, Sha256Hex } from '@lingfang/contract';
 
 export const PluginPolicyOperation = z.enum([
   'install',

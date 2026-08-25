@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { StrictSemVer } from './semver.ts';
+import { StrictSemVer } from '@lingfang/contract';
 
 export const CNY_CENTS_MAX = 2_147_483_647;
 export const MARKETPLACE_DEFAULT_PLATFORM_FEE_BPS = 2_000;

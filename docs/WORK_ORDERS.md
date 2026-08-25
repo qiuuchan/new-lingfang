@@ -233,6 +233,19 @@ grep 零残留；PR 含工单号。
   ⚠️ 流程教训：Agent 并发共享同一 checkout 导致跨工单 WIP 混入（LF-06 改动进 LF-08 提交、
   工作树互踩）。已用拆分手术修复；后续并发建议 per-agent worktree 或串行派发。
 
+- **LF-09 🔧 已提交待验收（2026-08-25）· 契约瘦身（H1）**：新建 `packages/platform-contract/`
+ （`@lingfang/platform-contract`，依赖 `workspace:@lingfang/contract`），迁入 7 个平台云专属模块
+  （marketplace-discovery / marketplace-commerce / plugin-governance / web-plugin-center /
+  admin-governance / rbac / billing）及其 6 个 `.test.mjs`；`@lingfang/contract/src/index.ts`
+  移除对应 7 条 re-export，仅留桌面闭环形状。
+  **依赖方向修正**：`plugin-registry.ts`（保留在 contract）原依赖 `admin-governance` 的
+  `createAdminPageSchema`/`AdminUserSummary`/`AdminPaginationMetadata` —— 抽出为
+  `contract/src/admin-common.ts`（通用 admin 分页基元，非业务形状）供 contract 与 platform-contract
+  共用，避免 contract → platform-contract 反向依赖（保持 platform-contract → contract 单向）。
+  验证：`@lingfang/contract` 37/37、`@lingfang/platform-contract` 34/34、plugin-sdk 150/150 全绿；
+  apps/desktop typecheck 干净；grep 确认 7 模块零残留 import（仅 apps/desktop 内 "billing" 字符串标签）；
+  pnpm-lock 已更新链接新包。PR 待提（引用 LF-09）。
+
 - **LF-01 ✅ 验收通过（2026-08-24）**：validate/build 干净、制品 v4 结构正确；`pnpm typecheck`/`pnpm test`（256）
   复跑全绿；桌面壳 CDP 实测（release 产物）：本地导入安装成功 → 运行 → sdk 注入 → storage.kv 真实落盘 →
   llm.chat 无凭据 `relay_not_configured` 优雅降级 → ui.view 调用成功 → 未声明能力拒绝。摩擦记录 7 条实证 ≥5 达标。
