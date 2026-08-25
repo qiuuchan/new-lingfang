@@ -352,3 +352,40 @@ describe('plugin artifact SDK', () => {
     expect(JSON.parse(fetchMock.mock.calls[0][1].body)).not.toHaveProperty('token');
   });
 });
+
+describe('plugin storage SDK', () => {
+  it('routes list to storage.kv op with prefix and returns keys', async () => {
+    const bridge = vi.fn().mockResolvedValue({ keys: ['user:alice', 'user:bob'] });
+    (globalThis as TestGlobal).__lingfangInvoke = bridge;
+
+    const keys = await sdk.storage.list('user:');
+    expect(keys).toEqual(['user:alice', 'user:bob']);
+    expect(bridge).toHaveBeenCalledWith('storage.kv', { op: 'list', prefix: 'user:' });
+  });
+
+  it('omits prefix arg when not provided', async () => {
+    const bridge = vi.fn().mockResolvedValue({ keys: [] });
+    (globalThis as TestGlobal).__lingfangInvoke = bridge;
+
+    await sdk.storage.list();
+    expect(bridge).toHaveBeenCalledWith('storage.kv', { op: 'list' });
+  });
+
+  it('routes delete and returns deleted flag', async () => {
+    const bridge = vi.fn().mockResolvedValue({ deleted: true });
+    (globalThis as TestGlobal).__lingfangInvoke = bridge;
+
+    const res = await sdk.storage.delete('user:alice');
+    expect(res).toEqual({ deleted: true });
+    expect(bridge).toHaveBeenCalledWith('storage.kv', { op: 'delete', key: 'user:alice' });
+  });
+
+  it('routes count and returns the number', async () => {
+    const bridge = vi.fn().mockResolvedValue({ count: 3 });
+    (globalThis as TestGlobal).__lingfangInvoke = bridge;
+
+    const count = await sdk.storage.count();
+    expect(count).toBe(3);
+    expect(bridge).toHaveBeenCalledWith('storage.kv', { op: 'count' });
+  });
+});

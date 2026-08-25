@@ -214,6 +214,52 @@ await sdk.ui.render({ type: 'json', body: { ok: true, count: 3 } });
 超限时 `set` 会 reject 稳定码 `kv_value_too_large` / `kv_quota_exceeded`——**不要**静默
 降级到其他存储（如 localStorage）掩盖真实错误，应提示用户或实现淘汰策略。
 
+### storage.kv 管理 API（LF-07）
+
+除 `get` / `set` 外，宿主还提供三个管理 op（同样走 `storage.kv` 网关，受 `storage.kv`
+能力声明与 30s 超时约束）：
+
+| 方法 | 宿主 op | 入参 | 返回 | 说明 |
+| --- | --- | --- | --- | --- |
+| `sdk.storage.list(prefix?)` | `list` | `prefix?: string` | `string[]`（仅键名） | 按前缀过滤键名；不回传值（单值可达 256KB）。缺省返回全部键 |
+| `sdk.storage.delete(key)` | `delete` | `key: string` | `{ deleted: boolean }` | 键不存在返回 `{ deleted: false }`，不报错 |
+| `sdk.storage.count()` | `count` | — | `number` | 当前插件条目数 |
+
+```ts
+// 列出本插件所有 user: 前缀的键
+const keys = await sdk.storage.list('user:');
+// 删除一个键（不存在时 deleted=false，不抛错）
+const { deleted } = await sdk.storage.delete('user:alice');
+// 查询条目数（对照 kv_quota_exceeded 上限 1024）
+const n = await sdk.storage.count();
+```
+
+**持久化语义**：`set` 与 `delete` 都会同步落盘到 `kv.json`；应用重启后已删除的键**不复活**。
+`get` / `list` / `count` 为只读，不触发写盘。
+
+**淘汰范式（reaching quota）**：当 `count()` 逼近 1024 上限、`set` 开始 `kv_quota_exceeded`
+时，应在插件内实现淘汰而非静默降级。常见做法——以 `set` 时间戳作为值的一部分，淘汰时
+先 `list()` 再按时间戳 `delete()` 最旧条目：
+
+```ts
+type Stamped<T> = { v: T; ts: number };
+const KEY_LIMIT = 1024;
+async function setWithEviction(key: string, value: unknown) {
+  const n = await sdk.storage.count();
+  if (n >= KEY_LIMIT) {
+    const keys = await sdk.storage.list();
+    // 读取全部带时间戳的值，淘汰最旧者（真实场景可分批，避免一次性大读）。
+    let oldest: { key: string; ts: number } | null = null;
+    for (const k of keys) {
+      const item = (await sdk.storage.get(k)) as Stamped<unknown> | null;
+      if (item && (!oldest || item.ts < oldest.ts)) oldest = { key: k, ts: item.ts };
+    }
+    if (oldest) await sdk.storage.delete(oldest.key);
+  }
+  await sdk.storage.set(key, { v: value, ts: Date.now() } satisfies Stamped<unknown>);
+}
+```
+
 ---
 
 ## 6. 参考
