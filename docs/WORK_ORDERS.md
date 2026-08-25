@@ -106,6 +106,25 @@ AI 摘要经 `client_llm_chat` → relay 真实返回。
 
 ---
 
+## LF-05（2026-08-25 派发）· SDK 摩擦修复轮（g2-sdk-friction 驱动，Agent 自选）
+
+**目标**：以 `docs/g2-sdk-friction.md` 为唯一输入源，修复高价值低风险摩擦项：
+- **#1 错误码统一**：npm SDK `pluginAiError` 归一 `relay_not_configured` / `relay_error`
+  为稳定 `code`（含裸字符串 reject 形态）；导出 `PluginAiErrorCode` 常量。
+- **#5 前半**：Rust kv 配额错误码 `kv_value_too_large` / `kv_quota_exceeded`；
+  宿主 `normalizeCapabilityError` 增两码并置于泛化「超出」匹配之前（原会被
+  `capability_out_of_scope` 吞掉）。
+- **#2 CLI 路径防双拼**：`resolvePluginPath`（绝对原样 / cwd 优先 / 工作区根兜底），
+  validate / build / dev / publish 接入。
+- **#6 文档**：plugin-development.md 增错误处理与降级、ui.view content 契约、
+  超时语义、kv 限额、CLI 命令形态。
+- 狗粮插件 clip-digest 降级判定改 code-first（message 前缀兜底）。
+
+**验收标准**：plugin-sdk / desktop / contract vitest 全绿；`cargo test --workspace` 全绿；
+typecheck 干净；CLI 双路径形态（包内短路径 + 仓库根相对路径）实操通过。
+
+---
+
 ## 验收记录
 
 - **LF-01 ✅ 验收通过（2026-08-24）**：validate/build 干净、制品 v4 结构正确；`pnpm typecheck`/`pnpm test`（256）
@@ -159,6 +178,12 @@ iframe 自动刷新且新内容生效；`cargo test --workspace` / `pnpm typeche
   notes 内 `llm.chat` 返回**真实 DeepSeek 输出 "2"**（1+1 确定性验证 prompt，非 mock、非 relay_not_configured、
   非 relay_error）。Rust 侧 `is_allowed_api_base` 环回 http 例外（F5 受控放宽，3 单测）。凭据零落地。
   ⚠️ 注意：API key 曾在对话中出现过，若该 key 非一次性测试用途，建议轮换。
+- **LF-05 ✅ 验收通过（2026-08-25）**：plugin-sdk vitest 135（+9：code-first 降级 ×2、relay 归一 ×2、
+  resolvePath ×5、findWorkspaceRoot ×2）/ desktop vitest 65（+3：kv 两码 + out_of_scope 不越权）/
+  contract 71 / cargo 240+30 全绿；typecheck 全干净。CLI 实操（`-C packages/plugin-sdk cli:dev` 下）：
+  `validate` / `build` / `dev` 的仓库根相对路径 `packages/plugin-sdk/examples/clip-digest` 均正确解析
+  （修复前双拼为 `.../packages/plugin-sdk/packages/plugin-sdk/...`）。流程合规：独立分支
+  `feat/lf-05-sdk-friction` 提交 `6fbcb2c`，未合并 main，待验收。
 
 ---
 
