@@ -206,6 +206,18 @@ grep 零残留；PR 含工单号。
 
 ## 验收记录
 
+- **LF-08 🔧 已提交待验收（2026-08-25）**：分支 `feat/lf-08-timeout-quiet-debounce` 提交
+  `d1c9b1a` + `3ce4468`，未合并 main。J2 timeoutMs（clamp [1000,180_000]，不泄漏桥参）、
+  J3 CLI `--quiet`（四命令 + BuildError.path 对齐）、J4 dev 重载 300ms 节流
+  （should_emit_dev_reload）。
+  ⚠️ 独立复验口径：plugin-sdk **146/146**（交付报告 150 含 LF-07 未合 main 的 4 测，
+  基数差异非缺陷）、cargo `dev_reload_throttles` 1/1、contract + desktop typecheck 干净；
+  报告所称 App.tsx:214 typecheck 失败在复验时**不可复现**（当前树全绿，疑为 LF-06 WIP 中间态）。
+  ⚠️ 流程问题：Agent 并发共享同一 checkout——LF-06 的未提交 WIP（App.tsx/main.rs/
+  plugin_llm_bridge.rs/Cargo.toml + 4 未跟踪文件）混在 LF-08 分支工作树中。已责令 LF-06
+  立即提交到 `feat/lf-06-action-bridge`（防丢失），后续并发建议 per-agent worktree 或串行派发。
+  （注：LF-07 台账记录在其分支 `feat/lf-07-storage-mgmt` 上，待合入 main。）
+
 - **LF-08 🔧 已提交待验收（2026-08-25）**：分支 `feat/lf-08-timeout-quiet-debounce` 提交 `d1c9b1a`，未合并 main。
   J2：`invokeAi` 增 `timeoutMs` clamp `[1000,180_000]`（clamp 上下界 + 透传单测 5 项，不泄漏到宿主桥参数）；
   J3：CLI validate/build/publish/dev 增 `--quiet`（逐行输出错误 code，`--json` 不变），`BuildError` 补 `path`
