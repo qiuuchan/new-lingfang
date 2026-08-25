@@ -593,6 +593,16 @@ export const sdk = {
       assertSerializable(value, 'storage.set value');
       return invoke<void>('storage.kv', { op: 'set', key, value });
     },
+    // LF-07：管理 API。list 仅回传键名（值可达 256KB 不回传）；delete 不存在返回 {deleted:false}；
+    // count 返回条目数。三者均走 storage.kv 网关，受 capability 与 30s 超时约束。
+    list: (prefix?: string) =>
+      invoke<{ keys: string[] }>('storage.kv', {
+        op: 'list',
+        ...(prefix !== undefined ? { prefix } : {}),
+      }).then((r) => r.keys),
+    delete: (key: string) =>
+      invoke<{ deleted: boolean }>('storage.kv', { op: 'delete', key }),
+    count: () => invoke<{ count: number }>('storage.kv', { op: 'count' }).then((r) => r.count),
   },
   shared: {
     get: <T = unknown>(namespace: string, key: string) =>

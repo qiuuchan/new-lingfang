@@ -126,6 +126,27 @@ fn kv_apply(
             map.insert(key, value);
             Ok(json!({ "ok": true }))
         }
+        "delete" => {
+            let key = kv_key(args)?;
+            let deleted = map.remove(&key).is_some();
+            Ok(json!({ "deleted": deleted }))
+        }
+        "list" => {
+            // 仅回传键名：值可达 256KB 不回传；BTreeMap 已按 key 升序。
+            let prefix = args
+                .get("prefix")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            let keys: Vec<String> = map
+                .keys()
+                .filter(|k| k.starts_with(prefix))
+                .cloned()
+                .collect();
+            Ok(json!({ "keys": keys }))
+        }
+        "count" => {
+            Ok(json!({ "count": map.len() }))
+        }
         other => Err(err_kv(format!("不支持的 op: {other}"))),
     }
 }
@@ -153,7 +174,10 @@ pub fn client_storage_kv(
     let data_dir = resolve_data_dir(&manager, &plugin_id)?;
     let mut map = load_kv_map(&data_dir)?;
     let out = kv_apply(&mut map, &args)?;
-    if args.get("op").and_then(|v| v.as_str()) == Some("set") {
+    // 落盘条件：set 与 delete 都会改变持久状态（LF-07 修正——原仅 set 落盘，
+    // delete 后重启应用会复活已删条目）。get/list/count 为只读，不落盘。
+    let op = args.get("op").and_then(|v| v.as_str()).unwrap_or("");
+    if op == "set" || op == "delete" {
         save_kv_map(&data_dir, &map)?;
     }
     Ok(out)
@@ -307,5 +331,67 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         std::fs::write(dir.path().join("kv.json"), "{not-json").unwrap();
         assert!(load_kv_map(dir.path()).is_err());
+    }
+
+    // --- LF-07：管理 API op ---
+
+    #[test]
+    fn list_prefix_filter() {
+        let mut map = BTreeMap::new();
+        kv_apply(&mut map, &set_args("user:alice", json!(1))).unwrap();
+        kv_apply(&mut map, &set_args("user:bob", json!(2))).unwrap();
+        kv_apply(&mut map, &set_args("cache:x", json!(3))).unwrap();
+        let out = kv_apply(&mut map, &json!({ "op": "list", "prefix": "user:" })).unwrap();
+        let keys = out.get("keys").and_then(|v| v.as_array()).unwrap();
+        assert_eq!(keys.len(), 2);
+        assert!(keys.contains(&json!("user:alice")));
+        assert!(keys.contains(&json!("user:bob")));
+        // 无 prefix → 全量。
+        let all = kv_apply(&mut map, &json!({ "op": "list" })).unwrap();
+        assert_eq!(all.get("keys").and_then(|v| v.as_array()).unwrap().len(), 3);
+    }
+
+    #[test]
+    fn delete_missing_returns_false() {
+        let mut map = BTreeMap::new();
+        let out = kv_apply(&mut map, &json!({ "op": "delete", "key": "ghost" })).unwrap();
+        assert_eq!(out, json!({ "deleted": false }));
+    }
+
+    #[test]
+    fn delete_persists_across_reload() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut map = BTreeMap::new();
+        kv_apply(&mut map, &set_args("persist", json!("yes"))).unwrap();
+        save_kv_map(dir.path(), &map).unwrap();
+        // 重新加载（模拟重启）后删除并落盘。
+        let mut reloaded = load_kv_map(dir.path()).unwrap();
+        assert_eq!(reloaded.get("persist"), Some(&json!("yes")));
+        let out = kv_apply(&mut reloaded, &json!({ "op": "delete", "key": "persist" })).unwrap();
+        assert_eq!(out, json!({ "deleted": true }));
+        save_kv_map(dir.path(), &reloaded).unwrap();
+        // 再次加载（再次重启）应不再复活。
+        let after = load_kv_map(dir.path()).unwrap();
+        assert!(after.get("persist").is_none());
+    }
+
+    #[test]
+    fn count_reflects_inserts_and_deletes() {
+        let mut map = BTreeMap::new();
+        assert_eq!(
+            kv_apply(&mut map, &json!({ "op": "count" })).unwrap(),
+            json!({ "count": 0 })
+        );
+        kv_apply(&mut map, &set_args("a", json!(1))).unwrap();
+        kv_apply(&mut map, &set_args("b", json!(2))).unwrap();
+        assert_eq!(
+            kv_apply(&mut map, &json!({ "op": "count" })).unwrap(),
+            json!({ "count": 2 })
+        );
+        kv_apply(&mut map, &json!({ "op": "delete", "key": "a" })).unwrap();
+        assert_eq!(
+            kv_apply(&mut map, &json!({ "op": "count" })).unwrap(),
+            json!({ "count": 1 })
+        );
     }
 }
