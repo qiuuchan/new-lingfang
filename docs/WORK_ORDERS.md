@@ -1,4 +1,4 @@
-# 灵坊工作台 — 工单池
+﻿# 灵坊工作台 — 工单池
 
 > 派发人：产品（用户）｜验收人：AI 验收（opencode）
 > 依据 `IMPROVEMENT_PLAN.md` 阶段 G/H 未完成项。每张工单含验收标准，全部达成才算交付。
@@ -233,7 +233,7 @@ grep 零残留；PR 含工单号。
   ⚠️ 流程教训：Agent 并发共享同一 checkout 导致跨工单 WIP 混入（LF-06 改动进 LF-08 提交、
   工作树互踩）。已用拆分手术修复；后续并发建议 per-agent worktree 或串行派发。
 
-- **LF-09 🔧 已提交待验收（2026-08-25）· 契约瘦身（H1）**：新建 `packages/platform-contract/`
+- **LF-09 ✅ 验收通过（2026-08-25）· 契约瘦身（H1）**：新建 `packages/platform-contract/`
  （`@lingfang/platform-contract`，依赖 `workspace:@lingfang/contract`），迁入 7 个平台云专属模块
   （marketplace-discovery / marketplace-commerce / plugin-governance / web-plugin-center /
   admin-governance / rbac / billing）及其 6 个 `.test.mjs`；`@lingfang/contract/src/index.ts`
