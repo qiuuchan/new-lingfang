@@ -114,11 +114,13 @@ fn toggle_devtools(app: tauri::AppHandle) {
 async fn start_builtin_plugin(
     app: tauri::AppHandle,
     state: tauri::State<'_, AppState>,
+    manager: tauri::State<'_, plugin_package_manager::PluginPackageManager>,
     process_table: tauri::State<'_, plugin_runner::PluginProcessTable>,
     bridge: tauri::State<'_, plugin_llm_bridge::PluginLlmBridge>,
     plugin_id: String,
     api_base: Option<String>,
     auth_token: Option<String>,
+    action_invocation: Option<bool>,
 ) -> Result<plugin_runner::StartPluginResult, String> {
     let plugin = state
         .plugins
@@ -133,20 +135,40 @@ async fn start_builtin_plugin(
     let app_handle = app.clone();
     let process_table = process_table.inner().clone();
     let bridge = bridge.inner().clone();
+    let manager = manager.inner().clone();
     let plugin_id_for_runner = plugin_id.clone();
-    tauri::async_runtime::spawn_blocking(move || {
-        plugin_runner::start_plugin_from_dir(
-            &app_handle,
-            &process_table,
-            &bridge,
-            &plugin_id_for_runner,
-            plugin_dir,
-            api_base,
-            auth_token,
-        )
-    })
-    .await
-    .map_err(|join_error| format!("插件启动任务异常退出：{join_error}"))?
+    // LF-06：action_invocation=true 时，以「action invocation」会话启动内置进程插件，
+    // 武装 action_invocation_id + action_context（经 register_action_session），
+    // 使其能合法调用桥路由 /actions/call（验证 client-action 桥真机闭环）。
+    // 否则维持原有 start_plugin_from_dir（register_session，无 action 上下文）。
+    if action_invocation == Some(true) {
+        tauri::async_runtime::spawn_blocking(move || {
+            plugin_runner::start_builtin_action_invocation(
+                &app_handle,
+                &process_table,
+                &bridge,
+                &manager,
+                &plugin_id_for_runner,
+                plugin_dir,
+            )
+        })
+        .await
+        .map_err(|join_error| format!("插件启动任务异常退出：{join_error}"))?
+    } else {
+        tauri::async_runtime::spawn_blocking(move || {
+            plugin_runner::start_plugin_from_dir(
+                &app_handle,
+                &process_table,
+                &bridge,
+                &plugin_id_for_runner,
+                plugin_dir,
+                api_base,
+                auth_token,
+            )
+        })
+        .await
+        .map_err(|join_error| format!("插件启动任务异常退出：{join_error}"))?
+    }
 }
 
 /// 命令：插件网络请求（R5 net.fetch capability）。

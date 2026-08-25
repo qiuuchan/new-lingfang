@@ -1619,6 +1619,426 @@ pub async fn start_plugin(
     .map_err(|join_error| format!("插件启动任务异常退出：{join_error}"))?
 }
 
+/// 用已解析的 bridge 会话（含可选 action 上下文）spawn 入口进程并登记进程表。
+/// 供 `start_builtin_action_invocation`（action invocation 启动）复用；普通
+/// `start_plugin_from_dir` 维持自身既有内联 spawn 尾不动，避免扩大改动面。
+#[allow(clippy::too_many_arguments)]
+fn spawn_plugin_tail(
+    app: &tauri::AppHandle,
+    process_table: &PluginProcessTable,
+    bridge: &PluginLlmBridge,
+    plugin_id: &str,
+    plugin_dir: &PathBuf,
+    binary: PathBuf,
+    args: Vec<String>,
+    launch_diagnostics: String,
+    stream_ctx: StreamCtx,
+    bridge_env: Option<crate::plugin_llm_bridge::PluginBridgeEnv>,
+) -> Result<StartPluginResult, String> {
+    use tauri::Emitter;
+    let plugin_id = plugin_id.to_string();
+    let log_launch = |msg: String| append_launch_log(plugin_dir, &msg);
+    // env_clear + 白名单：避免泄漏宿主 token/密钥到插件进程（与 plugin_script.rs 同语义）。
+    // 计费/中转：插件进程只拿 localhost 桥地址 + 进程会话 token，不直接接触 JWT/API Key。
+    let mut env = RuntimeResolver::resolve(app)
+        .map(|runtime| runtime.env(minimal_env()))
+        .unwrap_or_else(|_| minimal_env());
+    let bridge_token = bridge_env.as_ref().map(|env| env.token.clone());
+    if let Some(bridge_env) = bridge_env {
+        env.push((
+            OsString::from("LINGFANG_PLUGIN_BRIDGE_URL"),
+            OsString::from(bridge_env.url),
+        ));
+        env.push((
+            OsString::from("LINGFANG_PLUGIN_BRIDGE_TOKEN"),
+            OsString::from(bridge_env.token),
+        ));
+    }
+    // Python: 强制 UTF-8 输出（Windows 中文系统默认 GBK，不设逐行读会乱码）。
+    env.push((OsString::from("PYTHONIOENCODING"), OsString::from("utf-8")));
+
+    // crash_context：在 env move 前捕获完整命令/cwd/env 快照，供崩溃转储 .crash.log 用。
+    let cwd_str = strip_verbatim_prefix(&plugin_dir.to_string_lossy());
+    let cmdline_str = format!(
+        "{} {}",
+        strip_verbatim_prefix(&binary.to_string_lossy()),
+        if args.is_empty() {
+            String::new()
+        } else {
+            args.iter()
+                .map(|a| {
+                    if a.contains(' ') || a.is_empty() {
+                        format!("\"{a}\"")
+                    } else {
+                        a.clone()
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join(" ")
+        }
+    );
+    // env 快照（脱敏：隐藏桥 token 值，只保留 key=存在标记）。
+    let env_dump: Vec<String> = env
+        .iter()
+        .map(|(k, v)| {
+            let key = k.to_string_lossy();
+            if key.contains("TOKEN") || key.contains("SECRET") || key.contains("KEY") {
+                format!("{key}=<hidden>")
+            } else {
+                format!("{key}={}", v.to_string_lossy())
+            }
+        })
+        .collect();
+    log_launch(format!("spawn：{cmdline_str}"));
+
+    // 直接 spawn 入口进程（跨平台）：stdout+stderr 都 piped，逐行 emit plugin:output 到前端日志面板。
+    let mut command = std::process::Command::new(&binary);
+    command
+        .current_dir(plugin_dir)
+        .args(&args)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .env_clear()
+        .envs(env);
+    // Unix：setsid 做进程组分离（stop kill 用）。Windows：CREATE_NEW_PROCESS_GROUP 同理。
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        unsafe {
+            command.pre_exec(|| {
+                libc_setsid();
+                Ok(())
+            });
+        }
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        // CREATE_NEW_PROCESS_GROUP（0x0200）：进程组隔离，便于 stop_plugin kill 整组。
+        command.creation_flags(0x0000_0200);
+    }
+    let mut child = command.spawn().map_err(|e| {
+        log_launch(format!("spawn 失败：{e}"));
+        if let Some(token) = bridge_token.as_deref() {
+            bridge.revoke_token(token);
+        }
+        format!("启动插件进程失败：{e}")
+    })?;
+
+    // OS 级沙箱（Windows Job Object）：进程树围栏 + 关闭即杀。
+    let sandbox = SandboxHandle::create().unwrap_or_else(|e| {
+        log_launch(format!("沙箱创建失败（降级为无沙箱）：{e}"));
+        SandboxHandle::default()
+    });
+    if let Err(e) = sandbox.assign_process(&child) {
+        log_launch(format!("沙箱分配进程失败（降级为无沙箱）：{e}"));
+    }
+    log_launch("OS 级沙箱已就绪".to_string());
+
+    // 取出 stdout/stderr pipe，开两个 reader 线程逐行 emit plugin:output。
+    let on_line = stream_ctx.make_line_callback();
+    let on_line = std::sync::Arc::new(std::sync::Mutex::new(on_line));
+    let stderr_buf = std::sync::Arc::new(std::sync::Mutex::new(String::new()));
+
+    if let Some(stdout) = child.stdout.take() {
+        let on_line = std::sync::Arc::clone(&on_line);
+        std::thread::spawn(move || {
+            use std::io::BufRead;
+            for line in std::io::BufReader::new(stdout).lines() {
+                match line {
+                    Ok(text) => {
+                        if let Ok(mut cb) = on_line.lock() {
+                            cb(&text, false);
+                        }
+                    }
+                    Err(_) => break,
+                }
+            }
+        });
+    }
+    if let Some(stderr) = child.stderr.take() {
+        let on_line = std::sync::Arc::clone(&on_line);
+        let buf = std::sync::Arc::clone(&stderr_buf);
+        std::thread::spawn(move || {
+            use std::io::BufRead;
+            for line in std::io::BufReader::new(stderr).lines() {
+                match line {
+                    Ok(text) => {
+                        if let Ok(mut cb) = on_line.lock() {
+                            cb(&text, true);
+                        }
+                        if let Ok(mut b) = buf.lock() {
+                            b.push_str(&text);
+                            b.push('\n');
+                        }
+                    }
+                    Err(_) => break,
+                }
+            }
+        });
+    }
+
+    // 800ms 秒退判定：只 try_wait 判进程是否退出。
+    let deadline = std::time::Instant::now() + Duration::from_millis(800);
+    let mut crashed_status: Option<std::process::ExitStatus> = None;
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) => {
+                crashed_status = Some(status);
+                break;
+            }
+            Ok(None) => {
+                if std::time::Instant::now() >= deadline {
+                    break;
+                }
+                std::thread::sleep(Duration::from_millis(50));
+            }
+            Err(_) => break,
+        }
+    }
+    if let Some(status) = crashed_status {
+        std::thread::sleep(Duration::from_millis(150));
+        let stderr_text = stderr_buf.lock().map(|b| b.clone()).unwrap_or_default();
+        let truncated = truncate_stderr(&stderr_text, 2000);
+        let detail = if truncated.trim().is_empty() {
+            format!("(进程未输出 stderr)\n\n{launch_diagnostics}")
+        } else {
+            format!("{truncated}\n\n{launch_diagnostics}")
+        };
+        let crash_err = format!("plugin_crashed:插件启动后立即退出（{status}）\n{detail}");
+        let crash_path = crash_log_path(plugin_dir);
+        write_crash_dump(
+            plugin_dir,
+            &cmdline_str,
+            &cwd_str,
+            &env_dump,
+            &crash_err,
+            &stderr_text,
+        );
+        log_launch(format!("进程秒退（800ms 内退出）：{crash_err}"));
+        log_launch(format!("崩溃转储已写入：{}", crash_path.display()));
+        if let Some(token) = bridge_token.as_deref() {
+            bridge.revoke_token(token);
+        }
+        let crash_path_str = strip_verbatim_prefix(&crash_path.to_string_lossy());
+        return Err(format!(
+            "{crash_err}\n\n\
+             ── 手动复现 ──\n\
+             在终端中执行（cwd 设为插件目录）：\n\
+             {cmdline_str}\n\
+             （cwd = {cwd_str}）\n\n\
+             完整崩溃转储（含环境变量、输出）已写入：\n\
+             {crash_path_str}"
+        ));
+    }
+    // 存活：登记进程表 + 退出监视线程。
+    log_launch(format!("启动成功：pid 注册"));
+    let started_at = now_iso();
+    bridge.revoke_plugin_except(&plugin_id, bridge_token.as_deref());
+    let (pid, child_arc) =
+        process_table.register_with_handle(&plugin_id, child, sandbox, started_at.clone());
+    log_launch(format!("启动成功：pid={pid}"));
+    spawn_exit_watcher(
+        app.clone(),
+        &plugin_id,
+        child_arc,
+        std::sync::Arc::clone(&stderr_buf),
+        bridge.clone(),
+        bridge_token,
+    );
+    Ok(StartPluginResult { pid, started_at })
+}
+
+/// 启动前的共有准备：manifest 解析 + 能力注册 + 运行时解析 + 依赖准备 + 入口命令构造。
+/// 抽出来供 `start_builtin_action_invocation` 复用（普通 `start_plugin_from_dir` 维持自身逻辑不动）。
+fn prepare_plugin_launch(
+    app: &tauri::AppHandle,
+    plugin_id: &str,
+    plugin_dir: &PathBuf,
+) -> Result<PreparedLaunch, String> {
+    use tauri::Emitter;
+    let plugin_id = plugin_id.to_string();
+    let emit_stage = |stage: &str, message: &str| {
+        let _ = app.emit(
+            "plugin:start-progress",
+            PluginStartProgress {
+                plugin_id: plugin_id.clone(),
+                stage: stage.to_string(),
+                message: message.to_string(),
+            },
+        );
+    };
+    let log_launch = |msg: String| append_launch_log(plugin_dir, &msg);
+    log_launch(format!(
+        "==== 启动插件 {plugin_id}（目录 {}）====",
+        plugin_dir.display()
+    ));
+
+    emit_stage("checking", "正在检查插件运行环境…");
+    let manifest = parse_manifest(plugin_dir).map_err(|e| {
+        log_launch(format!("manifest 解析失败：{e}"));
+        e
+    })?;
+    {
+        let registry = app.state::<AppState>();
+        registry
+            .registry
+            .register(&plugin_id, manifest.capabilities.clone());
+    }
+    log_launch(format!(
+        "manifest: runtime={:?} entry={}",
+        manifest.runtime, manifest.entry
+    ));
+    let runtime = RuntimeResolver::resolve(app).map_err(|e| {
+        log_launch(format!("运行时解析失败：{e}"));
+        e
+    })?;
+
+    let stream_ctx = StreamCtx {
+        app: app.clone(),
+        plugin_id: plugin_id.clone(),
+    };
+
+    let (binary, args) = match manifest.runtime {
+        PluginRuntimeKind::Python => {
+            if needs_python_venv(plugin_dir, &runtime) {
+                emit_stage(
+                    "deps_installing",
+                    "正在创建 Python 虚拟环境并安装依赖（首次较慢）…",
+                );
+            }
+            let py = ensure_python_venv(&runtime, plugin_dir, Some(&stream_ctx)).map_err(|e| {
+                log_launch(format!("venv/依赖准备失败：{e}"));
+                e
+            })?;
+            log_launch(format!("venv 就绪：{}", py.display()));
+            ensure_playwright_browsers(&runtime, plugin_dir, Some(&stream_ctx))?;
+            let entry_abs = plugin_dir.join(&manifest.entry);
+            if !entry_abs.is_file() {
+                let e = format!("Python 入口文件不存在：{}", entry_abs.display());
+                log_launch(e.clone());
+                return Err(e);
+            }
+            (py, vec!["-u".to_string(), entry_arg(&entry_abs)])
+        }
+        PluginRuntimeKind::Nodejs => {
+            if needs_node_install(plugin_dir) {
+                emit_stage(
+                    "deps_installing",
+                    "正在安装 Node 依赖（pnpm install，首次较慢）…",
+                );
+            }
+            ensure_node_dependencies(&runtime, plugin_dir, Some(&stream_ctx)).map_err(|e| {
+                log_launch(format!("Node 依赖准备失败：{e}"));
+                e
+            })?;
+            log_launch("Node 依赖就绪".to_string());
+            ensure_playwright_browsers(&runtime, plugin_dir, Some(&stream_ctx))?;
+            let entry_abs = plugin_dir.join(&manifest.entry);
+            if !entry_abs.is_file() {
+                let e = format!("Node 入口文件不存在：{}", entry_abs.display());
+                log_launch(e.clone());
+                return Err(e);
+            }
+            if node_has_start_script(plugin_dir)? {
+                if let Some(runner) = runtime.pnpm().or_else(|| runtime.npm()) {
+                    (runner, vec!["start".to_string()])
+                } else {
+                    let node = runtime.require_runtime_command("node")?;
+                    (node, vec![entry_arg(&entry_abs)])
+                }
+            } else {
+                let node = runtime.require_runtime_command("node")?;
+                (node, vec![entry_arg(&entry_abs)])
+            }
+        }
+    };
+    let launch_diagnostics = format!(
+        "启动诊断：\n- 运行时：{:?}\n- 插件目录：{}\n- 入口：{}\n- 命令：{}\n- 参数：{}",
+        manifest.runtime,
+        plugin_dir.display(),
+        manifest.entry,
+        binary.display(),
+        if args.is_empty() {
+            "(无)".to_string()
+        } else {
+            args.join(" ")
+        }
+    );
+    Ok(PreparedLaunch {
+        binary,
+        args,
+        launch_diagnostics,
+        stream_ctx,
+    })
+}
+
+/// 启动前的准备产物（供 `prepare_plugin_launch` 返回、`spawn_plugin_tail` 消费）。
+struct PreparedLaunch {
+    binary: PathBuf,
+    args: Vec<String>,
+    launch_diagnostics: String,
+    stream_ctx: StreamCtx,
+}
+
+/// LF-06：以「action invocation」会话启动内置进程插件，使其能合法调用桥路由 /actions/call。
+///
+/// 与普通启动的唯一区别：桥会话经 `register_action_session` 武装了 `action_invocation_id`
+/// + `action_context`（package_id/release_id/sha256 取自该内置插件的 active release），
+/// 从而通过 `route_action_call` 的 `ensure_platform_session` 校验。用于验证 action 桥
+/// （进程 → `/actions/call` → 前端执行 client handler → 回传）的真机闭环。
+pub(crate) fn start_builtin_action_invocation(
+    app: &tauri::AppHandle,
+    process_table: &PluginProcessTable,
+    bridge: &PluginLlmBridge,
+    manager: &crate::plugin_package_manager::PluginPackageManager,
+    plugin_id: &str,
+    plugin_dir: PathBuf,
+) -> Result<StartPluginResult, String> {
+    let prepared = prepare_plugin_launch(app, plugin_id, &plugin_dir)?;
+    // 该内置插件的 active release 身份：package_id = builtin:<manifest.id>（见 build.rs）。
+    let package_id = format!("builtin:{plugin_id}");
+    let installation = manager
+        .list_installations()
+        .into_iter()
+        .find(|item| item.package_id == package_id)
+        .ok_or_else(|| format!("内置插件安装账本缺失：{package_id}"))?;
+    let release = installation.active_release;
+    // action invocation 不需要真实 relay 凭据（路由不依赖其值，仅守卫判非空），
+    // 传入占位非空串绕过 register_action_session 的空值守卫。
+    let placeholder_base = "https://localhost/lf-action".to_string();
+    let placeholder_token = "lf-action-invocation".to_string();
+    let invocation_id = uuid::Uuid::new_v4().to_string();
+    let bridge_env = bridge
+        .register_action_session(
+            plugin_id,
+            placeholder_base,
+            placeholder_token,
+            invocation_id,
+            app.clone(),
+            manager.clone(),
+            package_id,
+            release.release_id,
+            release.sha256,
+            Duration::from_secs(24 * 60 * 60),
+        )
+        .map(Some)
+        .map_err(|e| format!("武装 action 会话失败：{e}"))?;
+    spawn_plugin_tail(
+        app,
+        process_table,
+        bridge,
+        plugin_id,
+        &plugin_dir,
+        prepared.binary,
+        prepared.args,
+        prepared.launch_diagnostics,
+        prepared.stream_ctx,
+        bridge_env,
+    )
+}
+
 pub(crate) fn start_plugin_from_dir(
     app: &tauri::AppHandle,
     process_table: &PluginProcessTable,

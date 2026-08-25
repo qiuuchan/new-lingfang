@@ -197,6 +197,39 @@ export default function App() {
     });
   }, []);
 
+  // LF-06（Defect #1 修复）：内置 client 插件的 action handler 此前只在「打开插件」
+  // （PluginRunner.tsx:110）或 pin/recent 水合时注册。全新机器 pin/recent 为空时，
+  // 内置 client action（如 action-demo 的 demo.hello）不会被注册，导致进程插件经桥
+  // 调它时回 action_dependency_unresolved。这里在 App 启动期对内置 client 插件
+  // 主动注册，保证内置 action 始终可被调用（与 LF-06 harness 先「打开 action-demo」双层保障）。
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const installations = await listInstallations();
+        const builtinIds = installations
+          .filter((item) => item.origin === 'builtin')
+          .map((item) => item.installationId);
+        const plugins = (
+          await Promise.all(
+            builtinIds.map((id) => loadInstalledPlugin(id).catch(() => null))
+          )
+        ).filter((plugin): plugin is LoadedPlugin => Boolean(plugin));
+        if (cancelled) return;
+        const clientPlugins = plugins.filter(
+          (plugin) =>
+            (plugin.manifest as { runtime_type?: string } | undefined)?.runtime_type === 'client'
+        );
+        await Promise.all(clientPlugins.map((plugin) => registerClientActionsForPlugin(plugin)));
+      } catch {
+        /* 启动期注册失败不阻断主流程 */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   // 小视口进入时自动收起一次
   useEffect(() => {
     if (typeof window === 'undefined' || !window.matchMedia) return;

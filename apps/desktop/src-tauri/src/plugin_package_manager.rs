@@ -719,7 +719,12 @@ impl PluginPackageManager {
 
     pub(crate) fn action_caller_descriptor(&self, package_id: &str, release_id: &str, sha256: &str) -> Result<Value, String> {
         let installation = self.read_installations().installations.into_iter().find(|item| item.package_id == package_id).ok_or_else(|| "Action 调用方插件未安装".to_string())?;
-        if installation.active_release.release_id != release_id || installation.active_release.sha256 != sha256 || installation.active_release.dependency_status != DependencyStatus::Ready { return Err("Action 调用方与本机 active release 不一致".to_string()); }
+        // 内置插件随包分发、自包含，不经市场依赖解析流水线，安装即就绪；其 dependency_status
+        // 恒视为 Ready（LF-06：action-caller 为内置插件，须可经 /actions/call 调 client action）。
+        // 其余来源仍要求显式 Ready（依赖解析/activate 后才放行）。
+        let deps_ready = installation.origin == InstallationOrigin::Builtin
+            || installation.active_release.dependency_status == DependencyStatus::Ready;
+        if installation.active_release.release_id != release_id || installation.active_release.sha256 != sha256 || !deps_ready { return Err("Action 调用方与本机 active release 不一致".to_string()); }
         let manifest: Value = read_json(&PathBuf::from(&installation.active_release.path).join("manifest.json")).ok_or_else(|| "Action 调用方 manifest 无法读取".to_string())?;
         Ok(serde_json::json!({
             "id": installation.installation_id,
@@ -1144,7 +1149,9 @@ impl PluginPackageManager {
             .position(|installation| installation.package_id == package_id);
         if let Some(index) = existing_index {
             let current = &ledger.installations[index];
-            if current.pending_release.is_some() {
+            // 内置插件随包分发、无「准备→激活」流水线：残留 pending 视为无效，直接丢弃，
+            // 改以新发行版替换 active（避免重启后新内置代码无法生效，见 LF-06 真机闭环）。
+            if current.pending_release.is_some() && input.origin != InstallationOrigin::Builtin {
                 return Err("已有待激活版本，请先完成启动验证或回滚后再更新".to_string());
             }
             if current.active_release.release_id == release_id
@@ -1227,16 +1234,33 @@ impl PluginPackageManager {
             }
         }
         let now = Utc::now().to_rfc3339();
+        // 内置插件随包分发、自包含，不经市场依赖解析流水线，安装即视为依赖就绪；
+        // 否则 action_caller_descriptor / resolve_action_binding 会因 Pending 拒绝调用
+        // （LF-06 真机闭环依赖此：action-caller 为内置插件，须 Ready 才能调 /actions/call）。
+        // 其余来源（marketplace/team/local）仍 Pending，待 prepare→activate 置 Ready。
+        let dependency_status = if input.origin == InstallationOrigin::Builtin {
+            DependencyStatus::Ready
+        } else {
+            DependencyStatus::Pending
+        };
         let release = InstalledRelease {
             release_id: release_id.clone(),
             version: version.to_string(),
             sha256: inspected.sha256,
             path: final_package.to_string_lossy().to_string(),
-            dependency_status: DependencyStatus::Pending,
+            dependency_status,
         };
         let previous_ledger = ledger.clone();
         if let Some(index) = existing_index {
-            ledger.installations[index].pending_release = Some(release);
+            if input.origin == InstallationOrigin::Builtin {
+                // 内置插件随包分发，无独立「准备→激活」流水线；新发行版直接置为 active，
+                // 否则重建后新制品只会成为 pending 而永不生效（LF-06 fixture 重建后仍跑旧代码）。
+                let old_active = ledger.installations[index].active_release.clone();
+                ledger.installations[index].previous_release = Some(old_active);
+                ledger.installations[index].active_release = release;
+            } else {
+                ledger.installations[index].pending_release = Some(release);
+            }
             ledger.installations[index].updated_at = now;
         } else {
             ledger.installations.push(LocalInstallation {

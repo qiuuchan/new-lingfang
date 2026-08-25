@@ -144,14 +144,24 @@ typecheck 干净；CLI 双路径形态（包内短路径 + 仓库根相对路径
    断言凭据零日志泄漏；回填 `docs/verify-a5-client-plugin-e2e.md`。
 
 **验收标准**：
-- [ ] 决策记录存在，含依据与解除条件
-- [ ] 真机闭环：caller `result.json` 含真实执行结果（非 `action_dependency_unresolved`）；反向对照稳定码
-- [ ] SettingsPanel 用户旅程真机跑通；凭据零日志泄漏；runbook 记录更新
-- [ ] `cargo test --workspace`、`pnpm typecheck`、`pnpm test` 全绿（新增测试计入）
+- [x] 决策记录存在，含依据与解除条件（`docs/decisions/action-caller-path.md`）
+- [x] 真机闭环：caller `result.json` 含真实执行结果（非 `action_dependency_unresolved`）；反向对照稳定码
+      —— `scripts/e2e-actions-verify.mjs` 真机跑通：`{"ok":true,"result":{"greeting":"hello lingfang"}}`
+- [x] SettingsPanel 用户旅程真机跑通；凭据零日志泄漏；runbook 记录更新（见 `docs/verify-a5-client-plugin-e2e.md` I1 记录）
+- [x] `cargo test --workspace`、`pnpm typecheck`、`pnpm test` 全绿（新增 2 条 bridge 单测计入）
 - [ ] PR 含工单号，说明验证过程
 
 **依赖**：本机 runtimes 物料 + WebView2 + cargo build（前几轮已具备）；实现第 1 步核对
 `plugin-action.ts` 的 action 依赖声明形状。
+
+> **执行记录（2026-08-25）**：第三轮阶段 I 全部达成。关键修复：
+> - `register_action_session` 死代码缺陷 → 新增 `start_builtin_action_invocation` 武装会话；
+> - client-action 沙箱执行：blob:/data: 动态 import 与 `new AsyncFunction`(eval) 均被 opaque-origin
+>   sandbox CSP（`script-src 'self' 'unsafe-inline'`，无 `unsafe-eval`）拦截 → 改为**内联 `<script type="module">`**
+>   写入经宿主预转换（剥离 export、收集 `__exports`）的 handler 源码，CSP 允许且无需 eval；
+> - 内置安装 `dependency_status` 标记 `Ready` + builtin 直接激活，解除 `action_dependency_denied`；
+> - 新增 `route_action_call_denied_without_action_invocation` / `_without_action_context` 两单测。
+> 分支 `feat/lf-06-action-bridge`，待提 PR 引用 LF-06。
 
 ---
 

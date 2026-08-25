@@ -3106,4 +3106,65 @@ mod tests {
         assert!(query_first("/video/stream", "task_id").is_none());
         assert!(query_first("/video/stream?other=y", "task_id").is_none());
     }
+
+    // LF-06：/actions/call 守卫测试。route_action_call 仅在 armed session
+    // （action_invocation_id = Some）下才放行；否则返回 action_dependency_denied。
+    fn action_session(invocation_id: Option<&str>) -> BridgeSession {
+        BridgeSession {
+            plugin_id: "builtin.action-caller".to_string(),
+            api_base: "http://127.0.0.1:0".to_string(),
+            auth_token: "jwt".to_string(),
+            allow_llm_chat: false,
+            allow_image_generate: false,
+            allow_image_edit: false,
+            allow_video_generate: false,
+            allow_audio_generate: false,
+            action_invocation_id: invocation_id.map(|value| value.to_string()),
+            action_context: None,
+            client_source: PluginBridgeClientSource::PluginRuntime,
+            expires_at: Instant::now() + Duration::from_secs(60),
+        }
+    }
+
+    #[test]
+    fn route_action_call_denied_without_action_invocation() {
+        // 普通 session（action_invocation_id = None）→ 403 action_dependency_denied。
+        // 这正是 LF-06 修复前所有真实启动路径的状态（register_session 硬置 None），
+        // 导致进程插件永远调不了 /actions/call。修复靠 register_action_session 武装会话。
+        let inner = Arc::new(BridgeState {
+            endpoint: Mutex::new(Some("http://127.0.0.1:0".to_string())),
+            sessions: Mutex::new(HashMap::new()),
+            action_requests: Mutex::new(HashMap::new()),
+        });
+        let session = action_session(None);
+        let error = route_action_call(
+            &inner,
+            &session,
+            serde_json::to_vec(&json!({ "dependency_id": "demo.hello", "input": { "name": "x" } }))
+                .unwrap(),
+        )
+        .expect_err("未武装的 session 应被守卫拒绝");
+        assert_eq!(error.status, 403);
+        assert_eq!(error.code, "action_dependency_denied");
+    }
+
+    #[test]
+    fn route_action_call_denied_without_action_context() {
+        // 会话已武装 invocation_id，但缺 action_context（包身份）→ 503 action_runtime_unavailable。
+        let inner = Arc::new(BridgeState {
+            endpoint: Mutex::new(Some("http://127.0.0.1:0".to_string())),
+            sessions: Mutex::new(HashMap::new()),
+            action_requests: Mutex::new(HashMap::new()),
+        });
+        let session = action_session(Some("invocation-1"));
+        let error = route_action_call(
+            &inner,
+            &session,
+            serde_json::to_vec(&json!({ "dependency_id": "demo.hello", "input": { "name": "x" } }))
+                .unwrap(),
+        )
+        .expect_err("缺 action_context 应命中 503 守卫");
+        assert_eq!(error.status, 503);
+        assert_eq!(error.code, "action_runtime_unavailable");
+    }
 }

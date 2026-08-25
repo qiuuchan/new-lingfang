@@ -167,3 +167,52 @@ LINGFANG_RELAY_TOKEN=<任意非空> \
 - 桌面壳要求 `api_base` 为 https 或环回 http——本地适配器走环回例外；若后续要远程 relay，必须是 https。
 - 首次运行 harness 若残留 `lingfang-desktop.exe` 进程（WebView2 目录锁），先 `taskkill /T /F` 清理再跑。
 
+---
+
+## I1 · action 桥真机闭环（LF-06，2026-08-25 实测 `scripts/e2e-actions-verify.mjs` exit 0）
+
+> 对应 LF-06 阶段 I1：把「进程插件经桥调 `/actions/call` → 前端执行 client-action handler → 回传真实结果」
+> 这条此前从未真机跑通过的链路，固化为可重复闭环断言。
+
+**链路**：打开内置 client 插件 `action-demo`（声明 `demo.hello`，注册其 client handler 进
+`clientActionBridge` registry）→ 以 action invocation 会话启动内置进程插件 `action-caller`
+（`start_builtin_plugin actionInvocation=true`，会话武装 `action_invocation_id`+`action_context`）
+→ caller 裸 fetch 直连桥 `/actions/call`（带 `X-LingFang-Plugin-Token`）→ Rust `route_action_call` emit
+`plugin-action-bridge-call` → 前端 `clientActionBridge` 取 handler → `plugin-action-client-adapter`
+在 sandbox iframe 内执行 handler → `respond_plugin_action_bridge` 回传 → caller 写 `result.json`。
+
+**运行**：
+```bash
+cd apps/desktop && E2E_SKIP_BUILD=1 node ../../scripts/e2e-actions-verify.mjs
+```
+断言全部通过：CDP 连接 → 插件中心渲染（含「Action Demo」）→ 打开 demo（注册 `demo.hello`）
+→ 启动 caller（一次性脚本秒退被 spawn 监视误报，已吞掉）→ 轮询 `result.json`：
+```
+{"ok":true,"result":{"greeting":"hello lingfang"}}
+```
+即真机拿到了 client handler 的**真实执行结果**（greeting 含输入名 `lingfang`），而非
+`action_dependency_unresolved` / `action_execution_failed` 占位。
+
+### client-action 沙箱执行的关键约束（曾三次踩坑）
+sandbox iframe（`sandbox="allow-scripts"`，opaque origin `'null'`）下：
+1. **动态 `import()` blob:/data: 模块**被 Chromium 拦截（`Failed to fetch dynamically imported module`）。
+2. **`new AsyncFunction` / eval** 被 CSP（`script-src 'self' 'unsafe-inline'`，无 `unsafe-eval`）拦截
+   （`Evaluating a string as JavaScript violates CSP`）。
+3. **反引号**模板串若以反引号外层模板字面量插值插进生成的 iframe 文档 → 提前终止 → `Invalid or unexpected token`。
+→ 最终方案：宿主侧 `transformClientActionModule` 预转换 handler 源码（剥离 `export`、默认/命名导出收集到
+`__exports`），以**真实内联 `<script type="module">` 代码**写入 iframe（被 `'unsafe-inline'` 允许，免 eval），
+再 `await handler(input)` 取结果 postMessage 回宿主。
+
+### 反向稳定对照
+`clientActionBridge.spec.ts` 已断言「handler 未注册 → `action_dependency_unresolved`」，锁定「无 armed
+session / 无 handler 即失败」的稳态；`plugin_llm_bridge.rs` 新增 `route_action_call_denied_without_action_invocation`
+（403 `action_dependency_denied`）与 `route_action_call_denied_without_action_context`
+（503 `action_runtime_unavailable`）两单测，锁定网关守卫。
+
+### 注意事项
+- `action-caller` 是「发请求→写 result.json→exit(0)」一次性脚本，瞬时退出被 spawn 监视误判为「秒退崩溃」
+  （`start_builtin_plugin` 可能回 `plugin_crashed`），但其 `result.json` 已落盘，harness 吞掉启动返回错误、
+  转而轮询 `result.json` 判定真机结果。
+- 内置安装须在 `install()` 标记 `dependency_status=Ready` 且 builtin 直接激活（否则 `action_caller_descriptor`
+  拦下 → `action_dependency_denied`）。
+

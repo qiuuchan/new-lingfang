@@ -91,52 +91,112 @@ function scriptJson(value: unknown): string {
   return JSON.stringify(value).replace(/</g, '\\u003c');
 }
 
+/**
+ * 把受信的 ESM handler 源码转写为普通函数体：
+ * - `export default <expr>` → `__exports.default = <expr>`
+ * - `export const|let|var|function|async function|class <name>` → 去 export 并收集到 `__exports.<name>`
+ * - `export { a, b as c }` → 收集（置空该行，单独补 __exports 赋值）
+ * 其余语句原样保留。返回的函数体内置 `input` 参数与 `__exports` 对象。
+ * 不依赖动态 import()，可在 opaque-origin sandbox iframe 中执行。
+ */
+function transformClientActionModule(source: string): string {
+  const lines = source.split('\n');
+  const out: string[] = [];
+  let body = '';
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (line.startsWith('export ')) {
+      // export { a, b as c }
+      const braceMatch = line.match(/^export\s*\{([^}]*)\}\s*;?\s*$/);
+      if (braceMatch) {
+        for (const spec of braceMatch[1].split(',')) {
+          const parts = spec.trim().split(/\s+as\s+/);
+          const local = parts[0].trim();
+          const exported = (parts[1] ?? parts[0]).trim();
+          if (local) out.push(`__exports[${JSON.stringify(exported)}] = ${local};`);
+        }
+        continue;
+      }
+      // export default <expr>
+      const defMatch = line.match(/^export\s+default\s+([\s\S]+)$/);
+      if (defMatch) {
+        out.push(`__exports.default = ${defMatch[1].replace(/;?\s*$/, '')};`);
+        continue;
+      }
+      // export <decl> <name>
+      const declMatch = line.match(
+        /^export\s+(?:async\s+)?(?:function|class|const|let|var)\s+([A-Za-z_$][\w$]*)/
+      );
+      if (declMatch) {
+        const name = declMatch[1];
+        const stripped = line.replace(/^export\s+/, '');
+        out.push(`${stripped.replace(/;?\s*$/, '')};`);
+        out.push(`__exports[${JSON.stringify(name)}] = ${name};`);
+        continue;
+      }
+      // 其它 export 形态（罕见）：直接去 export 关键字保留
+      out.push(line.replace(/^export\s+/, '').replace(/;?\s*$/, '') + ';');
+      continue;
+    }
+    out.push(rawLine);
+  }
+  body = out.join('\n');
+  return body;
+}
+
+
 function clientActionDocument(
   request: ClientActionAdapterRequest,
   sessionId: string,
-  nonce: string
+  nonce: string,
+  transformed: string
 ): string {
-  return `<!doctype html><meta charset="utf-8"><script type="module">
-const sessionId = ${scriptJson(sessionId)};
-const invocationId = ${scriptJson(request.invocationId)};
-const nonce = ${scriptJson(nonce)};
-const source = ${scriptJson(request.source)};
-const exportName = ${scriptJson(request.exportName)};
-const input = ${scriptJson(request.input)};
-let sequence = 0;
-const pending = new Map();
-addEventListener('message', (event) => {
-  if (event.source !== parent) return;
-  const message = event.data;
-  if (!message || message.__lf_client_action_reply !== true || message.session_id !== sessionId || message.invocation_id !== invocationId || message.nonce !== nonce) return;
-  const waiter = pending.get(message.request_id);
-  if (!waiter) return;
-  pending.delete(message.request_id);
-  if ('error' in message) waiter.reject(Object.assign(new Error(message.error?.message || '宿主能力调用失败'), message.error || {}));
-  else waiter.resolve(message.result);
-});
-globalThis.__lingfangInvoke = (kind, args) => new Promise((resolve, reject) => {
-  const requestId = String(++sequence);
-  pending.set(requestId, { resolve, reject });
-  parent.postMessage({ __lf_client_action_call: true, session_id: sessionId, invocation_id: invocationId, nonce, request_id: requestId, kind, args }, '*');
-});
-try {
-  const blob = new Blob([source], { type: 'text/javascript' });
-  const url = URL.createObjectURL(blob);
-  try {
-    const module = await import(url);
-    let handler = module;
-    for (const part of exportName.split('.')) handler = handler?.[part];
-    if (typeof handler !== 'function') throw new Error('Client Action handler export 不存在');
-    const result = await handler(input);
-    parent.postMessage({ __lf_client_action_result: true, session_id: sessionId, invocation_id: invocationId, nonce, result }, '*');
-  } finally {
-    URL.revokeObjectURL(url);
-  }
-} catch (error) {
-  parent.postMessage({ __lf_client_action_result: true, session_id: sessionId, invocation_id: invocationId, nonce, error: { name: error?.name || 'Error', message: error?.message || String(error), code: error?.code } }, '*');
-}
-<\/script>`;
+  // 关键约束：sandbox="allow-scripts" 的 opaque-origin(srcdoc) iframe 同时禁止两件事：
+  //   1) new Function / eval（CSP: script-src 'self' 'unsafe-inline'，无 unsafe-eval）
+  //   2) import() 动态加载 blob:/data: 模块（opaque origin 下被 Chromium 拦截）
+  // 但「内联 <script type="module">」是被 'unsafe-inline' 允许的。故把经宿主预转换的
+  // handler 源码（已剥离 export、收集到 __exports）作为【真实内联代码】写入 iframe，
+  // 而非字符串/函数体后 eval。这样既绕开 CSP，又能执行受信的自有 plugin 源码。
+  // 注意：transformed 由数组元素原样拼入（绝不进反引号模板字面量，反引号会提前终止）。
+  const safe = transformed.replace(/<\/(script)/gi, '<\\/$1');
+  const lines: string[] = [
+    '<!doctype html><meta charset="utf-8"><script type="module">',
+    'const sessionId = ' + scriptJson(sessionId) + ';',
+    'const invocationId = ' + scriptJson(request.invocationId) + ';',
+    'const nonce = ' + scriptJson(nonce) + ';',
+    'const exportName = ' + scriptJson(request.exportName) + ';',
+    'const input = ' + scriptJson(request.input) + ';',
+    'let sequence = 0;',
+    'const pending = new Map();',
+    'addEventListener("message", (event) => {',
+    '  if (event.source !== parent) return;',
+    '  const message = event.data;',
+    '  if (!message || message.__lf_client_action_reply !== true || message.session_id !== sessionId || message.invocation_id !== invocationId || message.nonce !== nonce) return;',
+    '  const waiter = pending.get(message.request_id);',
+    '  if (!waiter) return;',
+    '  pending.delete(message.request_id);',
+    "  if ('error' in message) waiter.reject(Object.assign(new Error(message.error?.message || '宿主能力调用失败'), message.error || {}));",
+    '  else waiter.resolve(message.result);',
+    '});',
+    'globalThis.__lingfangInvoke = (kind, args) => new Promise((resolve, reject) => {',
+    '  const requestId = String(++sequence);',
+    '  pending.set(requestId, { resolve, reject });',
+    '  parent.postMessage({ __lf_client_action_call: true, session_id: sessionId, invocation_id: invocationId, nonce, request_id: requestId, kind, args }, "*");',
+    '});',
+    'let __exports = {};',
+    safe,
+    'try {',
+    '  let handler = __exports;',
+    '  for (const part of exportName.split(".")) handler = handler?.[part];',
+    '  if (typeof handler !== "function") throw new Error("Client Action handler export 不存在");',
+    '  const result = await handler(input);',
+    '  parent.postMessage({ __lf_client_action_result: true, session_id: sessionId, invocation_id: invocationId, nonce, result }, "*");',
+    '} catch (error) {',
+    '  parent.postMessage({ __lf_client_action_result: true, session_id: sessionId, invocation_id: invocationId, nonce, error: { name: error?.name || "Error", message: error?.message || String(error), code: error?.code } }, "*");',
+    '}',
+    '<\/script>',
+  ];
+  return lines.join('\n');
 }
 
 export function executeClientActionAdapter(
@@ -157,7 +217,12 @@ export function executeClientActionAdapter(
   frame.setAttribute('sandbox', 'allow-scripts');
   frame.setAttribute('aria-hidden', 'true');
   frame.style.display = 'none';
-  frame.srcdoc = clientActionDocument(request, sessionId, nonce);
+  frame.srcdoc = clientActionDocument(
+    request,
+    sessionId,
+    nonce,
+    transformClientActionModule(request.source)
+  );
 
   return new Promise((resolve, reject) => {
     let settled = false;
