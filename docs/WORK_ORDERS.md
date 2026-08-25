@@ -125,6 +125,85 @@ typecheck 干净；CLI 双路径形态（包内短路径 + 仓库根相对路径
 
 ---
 
+## LF-06（建议派 Agent A）· action 桥真机闭环 + SettingsPanel 旅程补测（第三轮阶段 I）
+
+**依据**：`IMPROVEMENT_PLAN_3.md` 阶段 I（核实结论 #1–#5、#11）。
+
+**目标**：把最后一条「代码已交付但真机未证」的链路（client-action 桥）跑成真机闭环；补测 LF-04b
+绕过设置页的偏差。
+
+**范围**：
+1. `docs/decisions/action-caller-path.md`：v1 下 action 调用方仅限进程插件（内置/一方签名）；
+   client 经网关调 `actions.call` 保持 NotSupported 并记录理由与解除条件。
+2. 内置 fixture 对（build.rs 自动打包，零索引维护）：`builtin-plugins/action-demo/`（client，
+   声明 `demo.hello` action，client handler）+ `builtin-plugins/action-caller/`（nodejs，启动后
+   裸 fetch 直连桥调 `/actions/call`，结果写 `result.json` 供断言）。
+3. harness：`scripts/e2e-actions-verify.mjs`（复用 CDP 惯例），打开 demo → 启动 caller →
+   轮询 `result.json` 断言真实执行结果；反向对照 `action_dependency_unresolved`。
+4. SettingsPanel 旅程：CDP 驱动设置页录真实/适配器 relay 凭据 → notes `llm.chat` 真实返回；
+   断言凭据零日志泄漏；回填 `docs/verify-a5-client-plugin-e2e.md`。
+
+**验收标准**：
+- [ ] 决策记录存在，含依据与解除条件
+- [ ] 真机闭环：caller `result.json` 含真实执行结果（非 `action_dependency_unresolved`）；反向对照稳定码
+- [ ] SettingsPanel 用户旅程真机跑通；凭据零日志泄漏；runbook 记录更新
+- [ ] `cargo test --workspace`、`pnpm typecheck`、`pnpm test` 全绿（新增测试计入）
+- [ ] PR 含工单号，说明验证过程
+
+**依赖**：本机 runtimes 物料 + WebView2 + cargo build（前几轮已具备）；实现第 1 步核对
+`plugin-action.ts` 的 action 依赖声明形状。
+
+---
+
+## LF-07（建议派 Agent A 完成 LF-06 后接）· storage 管理 API（friction #5 后半）
+
+**依据**：`IMPROVEMENT_PLAN_3.md` 阶段 J1（核实 #6）。
+
+**范围**：
+1. `client_host_caps.rs` `kv_apply` 增 `list`（prefix 过滤，仅键名）/ `delete`（不存在返回
+   `{deleted:false}`）/ `count` 三 op；**持久化修正**：`delete` 纳入落盘条件（现仅 set）。
+2. `index.ts` `sdk.storage` 增 `list(prefix?)` / `delete(key)` / `count()`。
+3. 单测：Rust 每 op ≥1（含 delete 落盘往返）；plugin-sdk 路由 ≥3。
+4. 文档：`docs/plugin-development.md` storage.kv 节补管理 API 与淘汰范式。
+
+**验收标准**：三 op 全栈可用；`delete` 后重启应用不复活；文档更新；三基线全绿；PR 含工单号。
+
+**依赖**：无。
+
+---
+
+## LF-08（建议派 Agent B）· 小件打包：timeoutMs + CLI --quiet + dev 防抖（friction #4/#3 + LF-02-R 加固）
+
+**依据**：`IMPROVEMENT_PLAN_3.md` 阶段 J2/J3/J4（核实 #7/#8/#9）。
+
+**范围**：
+1. `index.ts`：AI 四输入型增 `timeoutMs?: number`；`invokeAi` clamp `[1000, 180_000]` 透传。
+2. CLI：validate/build/publish/dev 增 `--quiet`（每行一条 code）；build 错误 shape 与 validate 对齐。
+3. `plugin_runner.rs` watch client 分支加 300ms 节流（`Arc<Mutex<Option<Instant>>>`）。
+4. 单测：clamp 上下界/透传、`--quiet` 输出形状、防抖语义各 ≥1。
+5. 文档：plugin-development.md 超时节补调用级覆盖。
+
+**验收标准**：三处小件落地且单测覆盖；三基线全绿；PR 含工单号。
+
+**依赖**：无。
+
+---
+
+## LF-09（建议派 Agent B）· 契约瘦身（H1，本轮执行）
+
+**依据**：`IMPROVEMENT_PLAN_3.md` 阶段 K1（核实 #10）。
+
+**范围**：新建 `packages/platform-contract/`，移入 7 个平台云专属模块（marketplace-discovery /
+marketplace-commerce / plugin-governance / web-plugin-center / admin-governance / rbac / billing）；
+`@lingfang/contract` 移除对应 re-export；grep 确认桌面/plugin-sdk 零残留 import。
+
+**验收标准**：7 模块迁出且 `@lingfang/contract` 只留桌面闭环形状；三包 typecheck + vitest 全绿；
+grep 零残留；PR 含工单号。
+
+**依赖**：无。
+
+---
+
 ## 验收记录
 
 - **LF-01 ✅ 验收通过（2026-08-24）**：validate/build 干净、制品 v4 结构正确；`pnpm typecheck`/`pnpm test`（256）
