@@ -57,8 +57,8 @@ base64 = "0.22"
 zip = "2"
 semver = "1"
 uuid = { version = "1", features = ["v4"] }
-# 异步运行时（plugin_runner 用 tokio::time::sleep 做非阻塞等待）
-tokio = { version = "1", features = ["time"] }
+# 异步运行时（plugin_runner 用 tokio::time::sleep 做非阻塞等待；update.rs 单测用 rt 运行 reqwest）
+tokio = { version = "1", features = ["time", "rt", "rt-multi-thread"] }
 # 开发态插件目录文件监听（file-watch + 自动重载）：register_dev_dir 注册的开发目录变更时，
 # 触发 plugin:dev-reload 事件（client）或重启进程（nodejs/python）。notify v6 的 recommended_watcher
 # 在自有线程回调（普通 Fn），回调内通过 tauri::async_runtime::spawn 把进程重启交给 tokio 运行，

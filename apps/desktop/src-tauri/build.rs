@@ -19,7 +19,28 @@ fn main() {
     if let Err(error) = generate_builtin_bundle() {
         panic!("failed to build builtin plugin artifacts: {error}");
     }
+    emit_app_version();
     tauri_build::build()
+}
+
+/// 把 tauri.conf.json 的 `version` 注入为编译期常量 `LINGFANG_APP_VERSION`，
+/// 供 update.rs `get_app_version` / semver 比较使用（与 installer 侧 `LINGFANG_APP_VERSION`
+/// 同源，避免应用侧/安装器侧版本漂移）。
+fn emit_app_version() {
+    let manifest_dir = PathBuf::from(
+        std::env::var_os("CARGO_MANIFEST_DIR")
+            .expect("CARGO_MANIFEST_DIR is missing"),
+    );
+    let conf_path = manifest_dir.join("tauri.conf.json");
+    let raw = fs::read_to_string(&conf_path).expect("读取 tauri.conf.json 失败");
+    let value: serde_json::Value = serde_json::from_str(&raw).expect("解析 tauri.conf.json 失败");
+    let version = value
+        .get("version")
+        .and_then(|v| v.as_str())
+        .expect("tauri.conf.json 缺少 version")
+        .to_string();
+    println!("cargo:rustc-env=LINGFANG_APP_VERSION={version}");
+    println!("cargo:rerun-if-changed={}", conf_path.display());
 }
 
 fn generate_builtin_bundle() -> Result<(), String> {
