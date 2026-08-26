@@ -122,7 +122,7 @@ pub fn invoke(
 /// fs.read：列目录或读文件，强制路径在 manifest 白名单内。
 ///
 /// 修复 CAP-02（medium 边界）：此前无大小 / 数量上限，授权宽子树（如 $HOME/Documents、
-/// $HOME/Downloads，内置 file-explorer 默认授权）后对大文件 read_to_string 或 read_dir
+/// $HOME/Downloads）后对大文件 read_to_string 或 read_dir
 /// 全量收进 Vec 可致 OOM / 卡死整个桌面壳进程。修复：
 /// - 文件分支：先 metadata.len() 上限校验（MAX_FS_READ_BYTES = 1 MiB），超出拒绝。
 /// - 目录分支：entries 计数上限（MAX_FS_READ_ENTRIES = 4096），超出截断并在响应标记 truncated。
@@ -249,8 +249,8 @@ fn clipboard_op(args: &Value) -> Result<Value, CapError> {
 /// system.screenshot：截取主显示器一帧，返回 PNG data URL（base64）。
 /// 契约（SDK sdk.system.screenshot）：{} → {content: "data:image/png;base64,..."}。
 ///
-/// 隐私：截屏是敏感能力。TS invokeRuntime 在转发本网关前会先调 requestSystemPermission
-/// 取得用户授权（plugins-runtime.ts），未授权不调用本函数。
+/// 隐私：截屏是敏感能力。其授权由插件 manifest 声明 + capability 网关三重校验保证
+/// （声明即授权，桌面壳无运行时权限弹窗）；不存在独立的 requestSystemPermission 运行时门。
 fn system_screenshot() -> Result<Value, CapError> {
     use base64::{engine::general_purpose::STANDARD, Engine as _};
     use xcap::image::codecs::png::PngEncoder;

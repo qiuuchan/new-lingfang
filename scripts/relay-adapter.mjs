@@ -188,7 +188,90 @@ const server = http.createServer((req, res) => {
     return done(200, { models: [{ id: MODEL_FAST }, { id: MODEL_PREMIUM }] });
   }
 
-  done(404, jsonError(404, 'not_found', '本地适配器仅支持 /api/relay/v1/chat/completions 与 /api/relay/v1/models', requestId));
+  // ── 图像生成（LF-12 scope #3）：确定性伪响应，对齐 SDK { images: string[] } ──
+  if (req.method === 'POST' && req.url === '/api/relay/v1/images/generations') {
+    let raw = '';
+    req.on('data', (c) => { raw += c; });
+    req.on('end', () => {
+      let body;
+      try { body = JSON.parse(raw || '{}'); } catch {
+        return done(400, jsonError(400, 'bad_request', '请求体不是有效 JSON', requestId));
+      }
+      if (!body.prompt || String(body.prompt).trim() === '') {
+        return done(400, jsonError(400, 'bad_request', '缺少 prompt', requestId));
+      }
+      if (MOCK) {
+        // 确定性伪图（1x1 PNG 前缀），验证全链路用。
+        return done(200, { data: [{ url: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M8AAAMBAQDJ/pLvAAAAAElFTkSuQmCC' }] });
+      }
+      return done(501, jsonError(501, 'not_implemented', '本地适配器非 MOCK 模式不支持图像生成上游转发', requestId));
+    });
+    return;
+  }
+
+  // ── 图像编辑（LF-12 scope #3）：与生成同形，标记 EDITED ──
+  if (req.method === 'POST' && req.url === '/api/relay/v1/images/edits') {
+    let raw = '';
+    req.on('data', (c) => { raw += c; });
+    req.on('end', () => {
+      let body;
+      try { body = JSON.parse(raw || '{}'); } catch {
+        return done(400, jsonError(400, 'bad_request', '请求体不是有效 JSON', requestId));
+      }
+      if (!body.prompt || String(body.prompt).trim() === '') {
+        return done(400, jsonError(400, 'bad_request', '缺少 prompt', requestId));
+      }
+      if (MOCK) {
+        return done(200, { data: [{ url: 'data:image/png;base64,EDITED' }] });
+      }
+      return done(501, jsonError(501, 'not_implemented', '本地适配器非 MOCK 模式不支持图像编辑上游转发', requestId));
+    });
+    return;
+  }
+
+  // ── 视频生成（LF-12 scope #3）：确定性伪响应，对齐 SDK 透传 {
+  //    task_id, call_log_id, charged, credits } ──
+  if (req.method === 'POST' && req.url === '/api/relay/v1/videos/generations') {
+    let raw = '';
+    req.on('data', (c) => { raw += c; });
+    req.on('end', () => {
+      let body;
+      try { body = JSON.parse(raw || '{}'); } catch {
+        return done(400, jsonError(400, 'bad_request', '请求体不是有效 JSON', requestId));
+      }
+      if (!body.image || String(body.image).trim() === '') {
+        return done(400, jsonError(400, 'bad_request', '缺少 image(base64)', requestId));
+      }
+      if (MOCK) {
+        return done(200, { task_id: 'mock-task-' + requestId, call_log_id: 'mock-call-' + requestId, charged: true, credits: 1 });
+      }
+      return done(501, jsonError(501, 'not_implemented', '本地适配器非 MOCK 模式不支持视频生成上游转发', requestId));
+    });
+    return;
+  }
+
+  // ── 音频生成（LF-12 scope #3）：确定性伪响应，对齐 SDK { audio: string } ──
+  if (req.method === 'POST' && req.url === '/api/relay/v1/audio/generations') {
+    let raw = '';
+    req.on('data', (c) => { raw += c; });
+    req.on('end', () => {
+      let body;
+      try { body = JSON.parse(raw || '{}'); } catch {
+        return done(400, jsonError(400, 'bad_request', '请求体不是有效 JSON', requestId));
+      }
+      if (!body.prompt_text || String(body.prompt_text).trim() === '') {
+        return done(400, jsonError(400, 'bad_request', '缺少 prompt_text', requestId));
+      }
+      if (MOCK) {
+        // 确定性伪音频（最小合法 WAV 前缀），验证全链路用。
+        return done(200, { audio: 'data:audio/wav;base64,UklGRgAAAAAIAAAAAAA=' });
+      }
+      return done(501, jsonError(501, 'not_implemented', '本地适配器非 MOCK 模式不支持音频生成上游转发', requestId));
+    });
+    return;
+  }
+
+  done(404, jsonError(404, 'not_found', '本地适配器仅支持 /api/relay/v1/chat/completions、/api/relay/v1/models、/api/relay/v1/images/generations、/api/relay/v1/images/edits、/api/relay/v1/videos/generations、/api/relay/v1/audio/generations', requestId));
 });
 
 server.listen(PORT, HOST, () => {

@@ -438,6 +438,8 @@ fn audio_mime_for(filename: &str) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::is_allowed_api_base;
+    use crate::plugin_llm_bridge::{extract_image_urls, parse_model_tier};
+    use serde_json::json;
 
     #[test]
     fn https_any_host_allowed() {
@@ -459,5 +461,56 @@ mod tests {
         assert!(!is_allowed_api_base("http://relay.example.com"));
         assert!(!is_allowed_api_base("http://0.0.0.0:8787"));
         assert!(!is_allowed_api_base("ftp://127.0.0.1"));
+    }
+
+    // ── parse_model_tier：client_image_generate / client_image_edit / client_video_generate /
+    //    client_audio_generate 都依赖它决定 relay 请求体里的 model 字段（默认 fast）。 ──
+    #[test]
+    fn parse_model_tier_defaults_to_fast() {
+        assert_eq!(parse_model_tier(&json!({})).unwrap(), "fast");
+        assert_eq!(parse_model_tier(&json!({"model": "fast"})).unwrap(), "fast");
+    }
+
+    #[test]
+    fn parse_model_tier_premium_ok() {
+        assert_eq!(parse_model_tier(&json!({"model": "premium"})).unwrap(), "premium");
+    }
+
+    #[test]
+    fn parse_model_tier_rejects_unknown() {
+        assert!(parse_model_tier(&json!({"model": "gpt-4"})).is_err());
+        assert!(parse_model_tier(&json!({"model": 123})).is_err());
+    }
+
+    // ── extract_image_urls：client_image_generate / client_image_edit 把 relay 响应
+    //    映射成 SDK 期望的 { images: string[] }（url 原样 / b64_json 转 data: 前缀）。 ──
+    #[test]
+    fn extract_image_urls_from_url() {
+        let data = json!({ "data": [ { "url": "http://x/a.png" }, { "url": "http://x/b.png" } ] });
+        assert_eq!(
+            extract_image_urls(&data),
+            vec!["http://x/a.png".to_string(), "http://x/b.png".to_string()]
+        );
+    }
+
+    #[test]
+    fn extract_image_urls_from_b64_json() {
+        let data = json!({ "data": [ { "b64_json": "AAAA" } ] });
+        assert_eq!(extract_image_urls(&data), vec!["data:image/png;base64,AAAA".to_string()]);
+    }
+
+    #[test]
+    fn extract_image_urls_mixed_and_skips_empty() {
+        let data = json!({ "data": [ { "url": "u" }, {}, { "b64_json": "BB" } ] });
+        assert_eq!(
+            extract_image_urls(&data),
+            vec!["u".to_string(), "data:image/png;base64,BB".to_string()]
+        );
+    }
+
+    #[test]
+    fn extract_image_urls_empty_when_no_data() {
+        assert!(extract_image_urls(&json!({ "other": 1 })).is_empty());
+        assert!(extract_image_urls(&json!({ "data": [] })).is_empty());
     }
 }

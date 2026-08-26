@@ -228,7 +228,31 @@ async function run() {
     );
     log(`真实输出片段：${result.content.trim().slice(0, 80).replace(/\n/g, ' ')}…`);
 
-    log('真实闭环验证通过 ✅（notes AI 摘要经 client_llm_chat 真实返回）');
+    // 5. image.generate / video.generate 网关 gate 负向证明：notes 未声明这些 kind，
+    //    应被 capability 网关拒绝（capability_not_declared）。正向 4-kind 真机闭环
+    //    （需声明这些 kind 的插件 + 真实/适配器 relay）列入 LF-12 未验证项。
+    const gated = await inFrame(async () => {
+      const out = {};
+      for (const kind of ['image.generate', 'video.generate']) {
+        try {
+          await window.sdk.image.generate({ prompt: 'x' });
+          out[kind] = 'resolved';
+        } catch (e) {
+          out[kind] = e.code ?? `no-code:${e.message}`;
+        }
+      }
+      return out;
+    });
+    assert(
+      gated['image.generate'] === 'capability_not_declared',
+      `未声明的 image.generate 拒绝 capability_not_declared（网关 gate 生效）`,
+    );
+    assert(
+      gated['video.generate'] === 'capability_not_declared',
+      `未声明的 video.generate 拒绝 capability_not_declared（网关 gate 生效）`,
+    );
+
+    log('真实闭环验证通过 ✅（notes AI 摘要经 client_llm_chat 真实返回；image/video 网关 gate 负向证明）');
     process.exit(0);
   } finally {
     clearTimeout(timer);
