@@ -198,6 +198,113 @@ storage.kv 按插件隔离，单值上限约 256KB，单插件约 1024 条目。
 
 ---
 
+## 11. 第二轮摩擦记录（LF-13 · 第二狗粮插件「网页剪藏 / web-clip」实证）
+
+> 工单：**LF-13**（建议派 Agent A）
+> 新增插件：`packages/plugin-sdk/examples/web-clip/`（client 运行时，覆盖 `clipboard.read` + `net.fetch` + `llm.chat` + `storage.kv` + `ui.view` 五个 kind）
+> 验证环境：同第一轮（Windows 11 / pnpm 9 / Node 20 / 无 WebView2 与 `cargo` 桌面闭环）
+> 记录人：本会话（执行 LF-13）
+> 目的：用第二个真实插件逼出此前未证明 kind 的手感问题，并回收 clip-digest 自修的摩擦。
+> 本轮**已修复项闭环**：第一条插件（clip-digest）的 g2-sdk-friction #5.3「kv `set` 失败静默兜底 localStorage 掩盖配额错误」已在本轮自修（见 §11.3）。
+
+### 11.1 `clipboard.read` 的「取首个 URL token」需要插件侧约定 ⚠️ 观察
+
+**现象**
+`clipboard.readText()` 返回的是**整段剪贴板文本**（与 clip-digest 拿到整段文本一致）。web-clip 需要从剪贴板里挑出 URL，SDK 不提供「读剪贴板里的链接」这类语义化入口，只能插件自己 `split(/\s+/)[0]` 再 `looksLikeUrl` 过滤。
+
+**复现**
+```ts
+const text = await sdk.clipboard.readText();      // '看这个 https://a.com 和 https://b.com'
+const url = text.trim().split(/\s+/)[0];           // 仅取首个 token，非首个 URL
+// 多链接场景会误取文本片段；需插件自行正则抽取第一个 http(s)
+```
+
+**影响**：URL 抽取是插件自定逻辑，没有 SDK 契约保证。多链接/带前后缀文本场景下行为靠插件自己写对。
+
+**建议**
+1. 文档明示 `clipboard.readText()` 返回**原始整段文本**，语义化抽取（首个 URL / 全部 URL）由插件负责；给出推荐正则范式。
+2. （可选）SDK 增加 `sdk.clipboard.readUrls()` 返回 `string[]` 的便捷封装，降低重复实现差异。
+
+### 11.2 `net.fetch` 返回形态是 `{status, headers, body}`，与 `window.fetch` 的 `Response` 不同 ⚠️ 中优先
+
+**现象**
+`net.fetch`（`packages/plugin-sdk/src/index.ts:600` → 宿主 `plugin_net_fetch`）返回的是**结构化对象** `{ status, headers, body }`，**不是**浏览器 `fetch` 的 `Response`——没有 `.ok` / `.json()` / `.text()`。插件必须直接读 `resp.status` 与 `resp.body`（字符串或已解析对象）。
+
+**复现**
+```ts
+const resp = await sdk.net.fetch(url, { method: 'GET' });
+if (resp.status < 200 || resp.status >= 300) throw new Error('HTTP ' + resp.status);
+const html = typeof resp.body === 'string' ? resp.body : JSON.stringify(resp.body);
+// 不能写 resp.ok / await resp.json() —— 形态不同，会 TypeError
+```
+
+**影响**：从 Web 前端迁移的开发者会本能用 `Response` API，第一个 `await resp.json()` 就崩。第一轮摩擦未触及 `net.fetch`（clip-digest 没用），本轮首次踩到。
+
+**建议**
+1. `docs/plugin-development.md` 明确 `net.fetch` 返回 `{ status:number, headers:Record<string,string>, body:string|unknown }`，并给「判状态码 + 取 body」的最小范式。
+2. （可选）SDK 在 `net.fetch` 返回对象上补 `.ok` 与 `text()`/`json()` 适配方法，抹平与 `window.fetch` 的形状差异，降低心智负担。
+
+### 11.3 `storage.kv` 配额错误的归一化：npm SDK 形态与宿主形态是否一致 ⚠️ 观察（本轮自修已落实，记录待核对）
+
+**现象**
+clip-digest 第一轮用 `storeValue` 的 catch 静默兜底 `localStorage`（g2-sdk-friction #5.3 明示的隐患）。本轮自修改为：用 LF-07 的 `storage.list`/`delete`/`count` 实现 LRU 淘汰，配额错误如实提示用户。但**配额错误在 npm SDK 形态下如何归一**仍待真机核对——宿主 `capability.rs` 的 kv 错误码（`kv_value_too_large` / `kv_quota_exceeded`）经宿主 `plugins-runtime.ts` 归一；npm SDK 的 `invoke` 对 storage 类错误**不做 `PluginAiError` 包装**（仅 AI 类走 `pluginAiError`），故插件在 npm/单测形态下拿到的是宿主透传的字符串或 `{code}`。
+
+**复现（本轮单测复刻的判定）**
+```ts
+function isQuotaError(err) {
+  const e = err || {};
+  return e.code === 'kv_quota_exceeded' || e.code === 'kv_value_too_large' ||
+    /kv_quota_exceeded|kv_value_too_large|超出|quota/.test(e.message || '');
+}
+```
+单测已覆盖三条分支：配额错误→LRU 淘汰重试成功；单值超 256KB→如实抛「256KB 上限」；非配额错误→原样抛出（**不再静默兜底**）。
+
+**影响**：判定同时兼容 `code` 与 `message` 前缀，正是为对抗「npm SDK 与宿主归一化不一致」——与第一轮 #1 同一类风险，只是作用在 storage 命名空间。
+
+**建议**
+1. 真机（WebView2 桌面闭环）核对：配额错误的 `err.code` 在 client iframe 形态下是否稳定为 `kv_quota_exceeded` / `kv_value_too_large`；若宿主已归一，则插件判定可收敛为纯 `code` 比较。
+2. `sdk.storage` 增加 `QuotaError` 类型 / `PluginStorageErrorCode` 常量，与 `PluginAiErrorCode` 对齐，消灭字符串魔法值。
+3. 单测已写入 `src/clip-digest.spec.ts` 与 `src/web-clip.spec.ts` 的 LRU describe 块，`pnpm -C packages/plugin-sdk test` 全绿。
+
+### 11.4 `net.fetch` SSRF 守卫会拦截「看似合法」的内网/保留地址 ⚠️ 观察（非缺陷，但需文档）
+
+**现象**
+宿主 `plugin_net_fetch`（SSRF 守卫，禁止内网/保留地址，见 `main.rs:178-268`）对任何指向 `127.0.0.1` / `169.254.169.254` / `10.x` / `192.168.x` 的请求返回 `net.fetch 禁止访问内网/保留地址（SSRF 防护）`。这对安全是**正确**的，但意味着「开发者想抓自己本机起的 `http://localhost:3000` 预览页」会被直接拦死。
+
+**复现**
+```ts
+await sdk.net.fetch('http://localhost:3000/preview'); // → reject 'net.fetch 禁止访问内网/保留地址（SSRF 防护）'
+```
+在 npm SDK 形态下该拒绝是**裸字符串**（不走 `PluginAiError` 包装，理由同 §11.3），宿主侧 `plugins-runtime.ts:53` 会再归一为 `code: net_fetch_ssrf_blocked`。
+
+**影响**：本地开发联调（抓本机预览）会被误伤；插件需明确告知用户「只能抓公网 URL」。
+
+**建议**
+1. 文档明示 `net.fetch` 的 SSRF 边界：**仅公网 http(s)**，本地/内网地址一律拦截，并给出归一后的 `code: net_fetch_ssrf_blocked`（client 形态）供插件 catch 提示。
+2. （可选）为「一方/内置插件」提供白名单逃生口（如 `localhost` 调试态），但第三方 `client` 插件应维持严格拦截。
+
+### 11.5 `dev` 热循环：纯静态 HTML 插件改一行也要走 tsx 冷启动 ⚠️ 低优先（与第一轮 #7 一致，本轮再确认）
+
+**现象**
+web-clip 是纯 `ui/index.html`（client 静态插件）。每次 `cli:dev -- build examples/web-clip` 仍冷启动 tsx 解析整个 CLI（≈1-2s），即便没动任何 TS。第一轮 #7 已记录，本轮构建两个插件时重复体验，确认该摩擦在真实迭代中持续存在。
+
+**复现**
+连续两次 `pnpm -C packages/plugin-sdk cli:dev -- build examples/web-clip` 各自有可感知 tsx 启动开销。
+
+**建议**：同第一轮 #7——为纯静态插件提供 `node` 直跑入口或预编译 CLI，或加 `lingfang-plugin dev` 监听 `manifest.json`/`entry` 自动 rebuild。优先级仍低（不阻塞）。
+
+### 11.6 无问题项（第二轮显式确认）
+
+| 项 | 结论 |
+|---|---|
+| `clipboard.readText()` 在 client 插件可用 | ✅ 无问题（静态核对 + 单测路由 `clipboard` + `op:read` 通过；真机读取待 WebView2 闭环） |
+| `llm.chat` 在 web-clip 的降级链路 | ✅ 无问题，与 clip-digest 同构，`relay_not_configured` 优雅降级逻辑复用 |
+| `storage.list`/`delete`/`count` LRU 淘汰逻辑 | ✅ 单测覆盖（web-clip + clip-digest 双份 describe），配额/超值/非配额三分支全绿 |
+| `ui.view` 的 `{type:'markdown', body}` 契约 | ✅ 无问题，与 clip-digest 一致沿用，宿主按 Markdown 渲染不注入 HTML |
+| 新插件 `validate`/`build` 首次即通过 | ✅ 无问题，`com.lingfang.web-clip-0.1.0.lfplugin`（8059 字节，v4）产出正常 |
+
+---
+
 ## 10. 摩擦条目速查（≥5 条实证）
 
 | # | 摩擦 | 优先级 | 现象要点 | 建议要点 |
@@ -209,3 +316,8 @@ storage.kv 按插件隔离，单值上限约 256KB，单插件约 1024 条目。
 | 5 | kv 256KB/1024 限额 + 无管理 API | 观察 | 本插件够用；无 list/delete/count；超限错误码缺 | 补配额错误码 + 增存储管理能力 |
 | 6 | SDK 文档缺口 | 中 | 缺降级范式、ui.view content 契约、双形态差异、错误码表 | 补齐四块文档 |
 | 7 | dev 循环 tsx 冷启动 | 低 | 每次 build 走 tsx | 静态插件免 tsx / 加 watch |
+| 8 | `clipboard.readText` 返回整段文本无语义抽取 | 观察 | web-clip 需自取首个 URL token | 文档给范式 / 增 `readUrls()` |
+| 9 | `net.fetch` 返回 `{status,headers,body}` 非 `Response` | 中 | 无 `.ok`/`.json()`，迁移开发者易崩 | 文档明示形态 + 最小范式 / 补适配方法 |
+| 10 | storage 配额错误 npm 与宿主归一化待真机核对 | 观察 | `invoke` 不对 storage 错误做 `PluginAiError` 包装 | 真机核对 `code` + 增 `PluginStorageErrorCode` |
+| 11 | `net.fetch` SSRF 守卫拦截本地/内网（含 localhost 调试） | 观察 | 安全正确但误伤本机预览 | 文档明示边界 + `net_fetch_ssrf_blocked` 码 |
+| 12 | clip-digest 静默 localStorage 兜底（#5.3） | 高→已修 | LF-13 自修为 LRU 淘汰 + 配额如实提示 | 单测覆盖，已落地 |
