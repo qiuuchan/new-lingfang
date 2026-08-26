@@ -97,6 +97,64 @@ function killTree(pid) {
   spawnSync('taskkill', ['/PID', String(pid), '/T', '/F'], { shell: true, stdio: 'ignore' });
 }
 
+// 检测当前进程是否 elevated（管理员令牌）。CI runner 以 admin 运行且无 UAC 过滤，
+// WebView2 在 elevated 进程中会禁用 --remote-debugging-port（Chromium 安全限制），
+// 必须降权到 Basic User 令牌启动桌面壳才能拿到 CDP 端口。
+function isElevated() {
+  try {
+    const out = spawnSync(
+      'powershell',
+      [
+        '-NoProfile',
+        '-Command',
+        '$id=[System.Security.Principal.WindowsIdentity]::GetCurrent();' +
+          '$p=New-Object System.Security.Principal.WindowsPrincipal($id);' +
+          '$p.IsInRole([System.Security.Principal.WindowsBuiltInRole]::Administrator)',
+      ],
+      { stdio: ['ignore', 'pipe', 'ignore'], encoding: 'utf8' },
+    );
+    return out.stdout.trim() === 'True';
+  } catch {
+    return false;
+  }
+}
+
+// runas /trustlevel:0x20000 启动 app（Basic User 令牌）。runas 不传 PID，
+// 需按可执行文件名反查实际进程。
+async function spawnElevated(exe, env) {
+  log('检测到 elevated 上下文，降权（Basic User 令牌）启动桌面壳…');
+  const quoted = `"${exe}"`;
+  spawnSync('runas', ['/env', '/trustlevel:0x20000', quoted], {
+    env,
+    stdio: 'ignore',
+  });
+  const deadline = Date.now() + 60_000;
+  while (Date.now() < deadline) {
+    try {
+      const out = spawnSync(
+        'powershell',
+        [
+          '-NoProfile',
+          '-Command',
+          `Get-CimInstance Win32_Process -Filter "Name='${path.basename(exe)}'" | ` +
+            'Where-Object { $_.CommandLine -like "*lingfang*" } | ' +
+            'Sort-Object CreationDate -Descending | Select-Object -First 1 -ExpandProperty ProcessId',
+        ],
+        { stdio: ['ignore', 'pipe', 'ignore'], encoding: 'utf8' },
+      );
+      const pid = parseInt(out.stdout.trim(), 10);
+      if (pid > 0) {
+        log(`桌面壳已启动（PID=${pid}，降权模式）`);
+        return { pid, env, child: null };
+      }
+    } catch {
+      /* 继续轮询 */
+    }
+    await new Promise((r) => setTimeout(r, 500));
+  }
+  throw new Error('runas 降权启动后未找到 lingfang-desktop 进程');
+}
+
 function assert(cond, label) {
   if (!cond) throw new Error(`断言失败：${label}`);
   log(`✔ ${label}`);
@@ -114,23 +172,41 @@ async function run() {
 
   const port = await freePort();
   log(`启动桌面壳，CDP 端口 ${port} …`);
-  const child = spawn(exe, [], {
-    cwd: path.dirname(exe),
-    env: {
-      ...process.env,
-      WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${port}`,
-      WEBVIEW2_USER_DATA_FOLDER: path.join(path.dirname(exe), '..', '..', '.e2e-webview2-data'),
-    },
-    stdio: ['ignore', 'pipe', 'pipe'],
-    detached: true, // 独立进程组，避免被本脚本信号牵连；退出时 taskkill /T 清树
-  });
+  const webviewDataDir = path.join(
+    repoRoot,
+    `.e2e-webview2-data-${process.pid}-${Date.now()}`,
+  );
+  const appEnv = {
+    ...process.env,
+    WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${port}`,
+    WEBVIEW2_USER_DATA_FOLDER: webviewDataDir,
+  };
+
+  let child;
+  if (isElevated()) {
+    child = await spawnElevated(exe, appEnv);
+  } else {
+    child = spawn(exe, [], {
+      cwd: path.dirname(exe),
+      env: appEnv,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      detached: true, // 独立进程组，避免被本脚本信号牵连；退出时 taskkill /T 清树
+    });
+  }
 
   const childOutput = [];
-  child.stdout?.on('data', (d) => childOutput.push(d.toString()));
-  child.stderr?.on('data', (d) => childOutput.push(d.toString()));
+  if (child.child) {
+    child.child.stdout?.on('data', (d) => childOutput.push(d.toString()));
+    child.child.stderr?.on('data', (d) => childOutput.push(d.toString()));
+  }
+
+  const cleanup = () => {
+    killTree(child.pid);
+    spawnSync('rmdir', ['/s', '/q', webviewDataDir], { shell: true, stdio: 'ignore' });
+  };
 
   const timer = setTimeout(() => {
-    killTree(child.pid);
+    cleanup();
     console.error(`[e2e-smoke] 总超时（${OVERALL_TIMEOUT_MS / 1000}s），已强制退出`);
     process.exit(1);
   }, OVERALL_TIMEOUT_MS);
@@ -289,7 +365,7 @@ async function run() {
     log('全部断言通过 ✅');
   } finally {
     clearTimeout(timer);
-    killTree(child.pid);
+    cleanup();
   }
 }
 
