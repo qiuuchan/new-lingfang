@@ -93,3 +93,37 @@ git lfs pull --include="apps/desktop/runtime-parts/**"
 | push 时对象未上传 / pre-push hook 未触发 | 重跑 `git lfs install`，确认 `.git/hooks/pre-push` 存在 |
 | 历史里已混入原始大字节 | `git lfs migrate import --everything`（重写历史，全团队协调后慎用） |
 | clone 卡在 Downloading LFS objects | 先 SKIP_SMUDGE 克隆，再按第四节按需拉取 |
+
+## 七、新克隆 → 跑通桌面构建（LF-11）
+
+> 工单 `docs/WORK_ORDERS.md` LF-11（阶段 L2+L3）配套。目标：新克隆开发者**一条命令灌好 runtimes**，
+> 并用一个脚本实证「干净环境 → 启动 → 插件可用」最后一公里。
+
+```bash
+pnpm install
+pnpm -C apps/desktop runtime:populate   # 一键灌 runtimes（本地优先 / 远程回退，可重跑+备份式重灌）
+pnpm -C apps/desktop runtime:verify     # 校验 keyFiles sha256 + Playwright 漂移
+pnpm dev:desktop                        # 启动插件中心 → 运行内置「Markdown 笔记」
+```
+
+`runtime:populate` 的源选择顺序（详见 `scripts/populate-local-runtimes.mjs`）：
+1. `LINGFANG_RUNTIME_BUNDLE` 指向本地 `runtimes-bundle.zip` → 用之；
+2. 本地 `apps/desktop/runtimes/` 已通过 `runtime:verify` → 幂等跳过（加 `--force` 强制重灌）；
+3. 远程回退：从 GitHub Release 下载 `runtimes-bundle.zip` + `.minisig`（需 `LINGFANG_RUNTIME_PUBKEY`
+   验签信任根，与 `plugin_security.rs` 同一 Org secret）。本环境无 Release / 密钥时明确提示并打印
+   `ci.yml` 的 populate 手工步骤，**不假阳性**。
+
+### 干净机器安装实证
+
+```bash
+node scripts/e2e-install-verify.mjs            # 模拟全新目标目录 + CDP 闭环断言
+E2E_SKIP_BUILD=1 node scripts/e2e-install-verify.mjs   # 复用 target/debug
+E2E_INSTALLER_SKIP=1 node scripts/e2e-install-verify.mjs  # 跳过安装器自动探测，强制用调试壳断言（降级复核）
+```
+
+脚本行为：
+- **有 SFX 安装器**（`LINGFANG_SETUP_EXE` 或 `target/release/LingFang-Setup-*.exe`）→ 跑
+  `--silent --target <全新目录>`，启动安装实例，CDP 断言：插件中心加载 / 内置 notes 打开 /
+  `storage.kv` 真落盘 / 四 runtime keyFiles 在位（对齐 `verify-bundled-runtimes.mjs` 口径）。
+- **无安装器（本环境默认）** → 明确「跳过 --silent 安装」，降级用 `target/debug` 调试壳做启动闭环断言，
+  安装器闭环标记为**「待本机（具备 Release 的机器）复核」**。其余 CDP 断言全跑。

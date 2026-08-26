@@ -14,10 +14,14 @@ Tauri v2 桌面**插件平台**：在本地桌面壳中运行第三方插件。�
 
 ```bash
 pnpm install
+pnpm -C apps/desktop runtime:populate   # 新克隆一键灌装 runtimes（首次必跑；本地优先 / 远程回退）
 pnpm dev:desktop        # tauri dev，打开插件中心 → 运行内置「Markdown 笔记」
 pnpm typecheck && pnpm test        # JS 侧全量验证（vitest：contract / plugin-sdk / desktop）
 cargo test --workspace             # Rust 侧验证（desktop 壳 + installer）
 ```
+
+> 干净机器安装实证（「Release 产物 → 安装 → 启动 → 插件可用」最后一公里）：
+> `node scripts/e2e-install-verify.mjs`（详见 [`docs/lfs-setup.md` 第七节](./docs/lfs-setup.md)）。
 
 插件开发（client / nodejs / python 模板 → `.lfplugin` v4 制品）：
 
