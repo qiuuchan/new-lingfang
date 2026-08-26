@@ -354,22 +354,42 @@ async function run() {
 
     // 4b. storage.kv 管理 API 真机往返（LF-07 落地）：list / delete / count
     const mgmt = await inFrame(async () => {
+      const toCount = (c) => (typeof c === 'number') ? c : (c && c.count);
+      // 形状兜底：宿主 shim 已解包为数组；npm SDK 旧形态回传 {keys}。
+      // 注意必须先判 Array.isArray——数组自带 .keys() 方法，直接读 .keys 会拿到函数。
+      const asKeys = (v) => (Array.isArray(v) ? v : (v && Array.isArray(v.keys) ? v.keys : []));
+      // 先清场：kv 跨运行持久化（应用数据目录共享，非 WebView2 数据目录），上次运行可能留有 lf12_b。
+      await window.sdk.storage.delete('lf12_a');
+      await window.sdk.storage.delete('lf12_b');
+      const countBefore = toCount(await window.sdk.storage.count());
       await window.sdk.storage.set('lf12_a', '1');
       await window.sdk.storage.set('lf12_b', '2');
       const listed = await window.sdk.storage.list();
-      const keys = (listed && listed.keys) ? listed.keys : listed;
-      const hasBoth = Array.isArray(keys) && keys.includes('lf12_a') && keys.includes('lf12_b');
+      const keys = asKeys(listed);
+      const hasBoth = keys.includes('lf12_a') && keys.includes('lf12_b');
       await window.sdk.storage.delete('lf12_a');
-      const afterDelete = await window.sdk.storage.list();
-      const keysAfter = (afterDelete && afterDelete.keys) ? afterDelete.keys : afterDelete;
-      const removed = Array.isArray(keysAfter) && !keysAfter.includes('lf12_a') && keysAfter.includes('lf12_b');
+      const keysAfter = asKeys(await window.sdk.storage.list());
+      const removed = !keysAfter.includes('lf12_a') && keysAfter.includes('lf12_b');
       const cnt = await window.sdk.storage.count();
-      const countVal = (typeof cnt === 'number') ? cnt : (cnt && cnt.count);
-      return { hasBoth, removed, countVal };
+      const countVal = toCount(cnt);
+      // 诊断：断言失败时把原始返回形状带进错误消息（list/count 的宿主 unwrap 是否符合 npm SDK 门面）。
+      return {
+        hasBoth, removed, countVal, countBefore,
+        rawListed: JSON.stringify(listed)?.slice(0, 200),
+        rawCount: JSON.stringify(cnt)?.slice(0, 80),
+      };
     });
-    assert(mgmt.hasBoth, 'storage.kv list 含 lf12_a / lf12_b');
+    assert(mgmt.hasBoth, `storage.kv list 含 lf12_a / lf12_b（raw=${mgmt.rawListed}）`);
     assert(mgmt.removed, 'storage.kv delete 移除 lf12_a 后保留 lf12_b');
-    assert(mgmt.countVal === 1, `storage.kv count 返回 1（实际 ${mgmt.countVal}）`);
+    // count 用相对断言（前置步骤已写入 e2e_smoke key，且 kv 跨运行持久化）：+2 -1 → before+1。
+    assert(
+      mgmt.countVal === mgmt.countBefore + 1,
+      `storage.kv count = 前置数+1（before=${mgmt.countBefore} actual=${mgmt.countVal} raw=${mgmt.rawCount}）`,
+    );
+    // 收尾清理：lf12_b 不留在用户存储里（kv 跨运行持久化）。
+    await inFrame(async () => {
+      await window.sdk.storage.delete('lf12_b');
+    });
 
     // 5. 未声明 kind → capability_not_declared
     assert(
