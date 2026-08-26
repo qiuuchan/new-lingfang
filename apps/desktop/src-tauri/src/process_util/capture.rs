@@ -56,33 +56,6 @@ pub(crate) fn run_capture_with_env(
     run_captured_inner(binary, args, workspace_dir, timeout_ms, Some(&env))
 }
 
-pub(crate) fn run_capture_with_env_and_cancel(
-    binary: &PathBuf,
-    args: Vec<String>,
-    workspace_dir: Option<&str>,
-    timeout_ms: u64,
-    env: Vec<(OsString, OsString)>,
-    cancel: &AtomicBool,
-) -> Result<CapturedOutput, String> {
-    let mut command = build_spawn_command(binary, &args);
-    command
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-    if let Some(workspace_dir) = workspace_dir {
-        command.current_dir(workspace_dir);
-    }
-    command
-        .env_clear()
-        .envs(env.iter().map(|(key, value)| (key.clone(), value.clone())));
-    prepare_process_group(&mut command);
-    wait_for_capture(
-        command.spawn().map_err(|error| error.to_string())?,
-        timeout_ms,
-        Some(cancel),
-    )
-}
-
 /// 流式运行子进程：stdout/stderr 逐行回调 + 主线程轮询等退出 + 超时 kill。
 ///
 /// 与 `run_capture_with_env` 的区别：spawn 后开两个后台线程逐行读 stdout/stderr，每行调
