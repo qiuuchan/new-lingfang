@@ -428,6 +428,37 @@ grep 零残留；PR 含工单号。
   ⚠️ 待补项：SFX 安装器 `--silent` 真闭环（`LINGFANG_SETUP_EXE=... pnpm test:install`）+
   远程回退重灌路径，需具备 Release 与 `LINGFANG_RUNTIME_PUBKEY` 的本机执行。
 
+- **LF-12 ✅ 验收通过（2026-08-26，含真机证据）**：能力面真机证据补齐。分支
+  `feat/lf-12-cap-evidence`（交付 `37c9ae6` + 验收人修复 `fda55ae`，共 11 文件）。
+  1) main.rs SSRF 守卫单测 9 个 `#[test]`（extract_host/is_blocked_ip/is_blocked_host，
+  环回/私网/公网 v4+v6、畸形 URL）；client_ai_proxy parse_model_tier/extract_image_urls 7 例；
+  2) relay-adapter.mjs 四路由（images/generations、images/edits、videos/generations、
+  audio/generations）协议级确定性伪响应；
+  3) e2e-relay-verify 增 image/video 网关 gate 负向断言（缺凭据 exit 2 语义不变）；
+  4) e2e-desktop-smoke 重构 spawnShell/openNotes + storage 管理往返 + 重启不复活 + 网关负向；
+  5) capability.rs 虚假注释删除 + plugin-development.md「声明即授权，无运行时权限门」明示。
+  **工单文本冲突处置（验收认可，备案）**：原文「net.fetch 对环回 adapter 断言 200」与 SSRF 守卫
+  矛盾（环回必被 is_blocked_host 拦截）——改为单测证拦截 + 真机证网关 gate，公网 200 列未验证项。
+  **验收人真机复跑**（2026-08-26，本环境 WebView2 CDP 闭环可用——近期 e2e 诊断修复链已生效，
+  与第四轮核实「本环境不可跑」结论不同）：`e2e-desktop-smoke` 全断言绿 exit 0，含
+  storage list/delete/count 真机往返、delete 后重启不复活（LF-07 落盘修正真机证明）、
+  clipboard/net.fetch 未声明网关负向。
+  **验收人修复（`fda55ae`）**：
+  ① **LF-07 遗留宿主缺陷**——PluginRunner 注入 iframe 的 CLIENT_SDK_BOOTSTRAP 漏同步
+  storage list/delete/count（iframe 内 `window.sdk.storage.list` 不存在，npm SDK 与单测全绿、
+  真机 TypeError；LF-13 clip-digest/web-clip 的 LRU 路径真机必踩）。补齐三方法并对齐 npm 门面
+  （list 解包 keys / count 解包 count / delete 原样 {deleted}）；引导脚本抽至
+  `lib/clientSdkBootstrap.ts` + 4 条回归单测（mock window/parent 真实执行），防 shim 再漂移；
+  ② smoke 脚本 `Array.prototype.keys` 函数陷阱（`(listed && listed.keys)` 对数组拿到的是
+  方法而非数据，hasBoth 永假）；③ count 绝对断言不可重跑（kv 跨运行持久化，应用数据目录共享），
+  改前置清场 + 相对断言（before+1）+ 收尾清理。
+  基线：cargo 263+30 全绿、pnpm typecheck 干净、vitest plugin-sdk 160 / desktop 69（+4）/
+  contract 37 / platform-contract 34 全绿。
+  ⚠️ 仍未验证（需更多前提，列观察项）：clipboard 正向 writeText→readText 往返（需声明
+  clipboard 的插件——LF-13 web-clip 合入后可闭环）；net.fetch 公网 200；relay image/video/audio
+  四 kind 正向（audio SDK 尚未接线）；is_blocked_host 真实域名 DNS fail-closed；
+  与 LF-10 合并后的全树回归。
+
 - **LF-01 ✅ 验收通过（2026-08-24）**：validate/build 干净、制品 v4 结构正确；`pnpm typecheck`/`pnpm test`（256）
   复跑全绿；桌面壳 CDP 实测（release 产物）：本地导入安装成功 → 运行 → sdk 注入 → storage.kv 真实落盘 →
   llm.chat 无凭据 `relay_not_configured` 优雅降级 → ui.view 调用成功 → 未声明能力拒绝。摩擦记录 7 条实证 ≥5 达标。
