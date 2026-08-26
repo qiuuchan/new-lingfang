@@ -161,6 +161,18 @@ async function run() {
           return `msedgewebview2 检查失败: ${e2.message}`;
         }
       })();
+      const webviewCmdline = (() => {
+        try {
+          const out = spawnSync('powershell', [
+            '-NoProfile',
+            '-Command',
+            "Get-CimInstance Win32_Process -Filter \"Name='msedgewebview2.exe'\" | Select-Object -ExpandProperty CommandLine | Select-String -Pattern 'remote-debugging' | ForEach-Object { $_.Line }",
+          ], { stdio: ['ignore', 'pipe', 'ignore'] }).stdout.toString();
+          return `WebView2 带 remote-debugging 参数的行数=${(out.match(/remote-debugging/g) ?? []).length}`;
+        } catch (e2) {
+          return `webview cmdline 检查失败: ${e2.message}`;
+        }
+      })();
       const portState = (() => {
         try {
           const out = spawnSync('netstat', ['-ano', '-p', 'tcp'], {
@@ -173,7 +185,7 @@ async function run() {
         }
       })();
       const diag = [
-        `等待 CDP(${port}) 超时；app 进程存活=${exeAlive}；${webviewProcs}`,
+        `等待 CDP(${port}) 超时；app 进程存活=${exeAlive}；${webviewProcs}；${webviewCmdline}`,
         `--- app stdout/stderr（tail 80）---`,
         ...childOutput.slice(-80),
         `--- ${portState} ---`,
@@ -184,6 +196,7 @@ async function run() {
     const context = browser.contexts()[0];
     const page = context.pages().find((p) => /tauri/i.test(p.url())) ?? context.pages()[0];
     assert(page, 'CDP 连接成功并找到桌面壳页面');
+    log(`页面 URL: ${page.url()}`);
 
     // 1. 插件中心加载：已安装列表出现内置 notes
     await page.waitForSelector(`text=${NOTES_NAME}`, { timeout: 30_000 });
