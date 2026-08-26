@@ -124,10 +124,12 @@ function isElevated() {
 async function spawnElevated(exe, env) {
   log('检测到 elevated 上下文，降权（Basic User 令牌）启动桌面壳…');
   const quoted = `"${exe}"`;
-  spawnSync('runas', ['/env', '/trustlevel:0x20000', quoted], {
+  const runasRes = spawnSync('runas', ['/env', '/trustlevel:0x20000', quoted], {
     env,
-    stdio: 'ignore',
+    stdio: ['ignore', 'pipe', 'pipe'],
+    encoding: 'utf8',
   });
+  log(`runas 返回：exit=${runasRes.status} stdout=${(runasRes.stdout ?? '').trim()} stderr=${(runasRes.stderr ?? '').trim()}`);
   const deadline = Date.now() + 60_000;
   while (Date.now() < deadline) {
     try {
