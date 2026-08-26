@@ -21,7 +21,7 @@ pub(crate) use binary::find_binaries_in_path;
 #[cfg(all(windows, test))]
 pub(crate) use binary::resolve_npm_shim;
 pub(crate) use capture::{
-    run_capture_with_env, run_capture_with_env_and_cancel, run_streamed_with_env, CapturedOutput,
+    run_capture_with_env, run_streamed_with_env, CapturedOutput,
 };
 pub(crate) use sandbox::SandboxHandle;
 pub(crate) use tree::kill_child_tree;

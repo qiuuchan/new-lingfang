@@ -1662,7 +1662,6 @@ fn spawn_plugin_tail(
     stream_ctx: StreamCtx,
     bridge_env: Option<crate::plugin_llm_bridge::PluginBridgeEnv>,
 ) -> Result<StartPluginResult, String> {
-    use tauri::Emitter;
     let plugin_id = plugin_id.to_string();
     let log_launch = |msg: String| append_launch_log(plugin_dir, &msg);
     // env_clear + 白名单：避免泄漏宿主 token/密钥到插件进程（与 plugin_script.rs 同语义）。
