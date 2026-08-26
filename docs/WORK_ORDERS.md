@@ -407,6 +407,27 @@ grep 零残留；PR 含工单号。
   ⚠️ 待补项：真机 e2e（L1 第 4 点：update-feed 环回适配器挂两版本，双向断言成功闭环 + 篡改拒绝）
   本环境不可跑，需用户本机执行；发版流水线「上传 latest.json + 安装包签名」亦待落地（ADR 已记）。
 
+- **LF-11 🟡 代码级验收通过（2026-08-26），安装器真闭环待本机**：干净机器安装 e2e + 一键灌装。
+  分支 `feat/lf-11-install-e2e`（`18e59cd`，5 文件，diff 纯净仅本工单）。
+  1) `scripts/populate-local-runtimes.mjs`：本地优先（LINGFANG_RUNTIME_BUNDLE > 已校验幂等跳过）
+  + gh 远程回退（minisign 验签，LINGFANG_RUNTIME_PUBKEY 同信任根）+ --force 备份式重灌与失败回滚
+  + 无密钥/Release 时打印 ci.yml 手工步骤 exit 1 不假阳性；
+  2) `scripts/e2e-install-verify.mjs`：全新目标目录 + 隔离 WebView2 用户数据；有 SFX 安装器跑
+  `--silent --target` 闭环，无则明确降级 target/debug 调试壳并把安装器闭环标「待本机复核」；
+  3) `apps/desktop/package.json` + `runtime:populate`/`test:install`；4) `docs/lfs-setup.md` 第七节 +
+  README quickstart。
+  验收人复跑（本机，2026-08-26）：populate 幂等路径 exit 0；e2e 降级路径
+  （`E2E_SKIP_BUILD=1 E2E_INSTALLER_SKIP=1`）全断言绿 exit 0（插件中心 / notes iframe /
+  storage.kv 落盘 / keyFiles 6/6 / requiredFiles 10/10）；cargo 263+30、pnpm typecheck、
+  pnpm test 全绿。
+  验收人修复（含在 `18e59cd`）：远程回退默认仓库 `lingfang/desktop` → `qiuuchan/new-lingfang`；
+  `gh release download latest` 字面量会被当成 tag 名，改为不传 tag 取最新 Release。
+  ⚠️ 交付报告称「cargo 预存失败 `main.rs:566 extract_host_keeps_ipv6_brackets`（LF-10 半成品）」
+  **复验不复现**：该测试属 LF-12 提交 `37c9ae6`（非 LF-10），当前树单测 4/4 通过、全量
+  263+30 全绿——疑似交付 agent 跑在 LF-12 未完成的中间态。
+  ⚠️ 待补项：SFX 安装器 `--silent` 真闭环（`LINGFANG_SETUP_EXE=... pnpm test:install`）+
+  远程回退重灌路径，需具备 Release 与 `LINGFANG_RUNTIME_PUBKEY` 的本机执行。
+
 - **LF-01 ✅ 验收通过（2026-08-24）**：validate/build 干净、制品 v4 结构正确；`pnpm typecheck`/`pnpm test`（256）
   复跑全绿；桌面壳 CDP 实测（release 产物）：本地导入安装成功 → 运行 → sdk 注入 → storage.kv 真实落盘 →
   llm.chat 无凭据 `relay_not_configured` 优雅降级 → ui.view 调用成功 → 未声明能力拒绝。摩擦记录 7 条实证 ≥5 达标。
