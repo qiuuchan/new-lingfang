@@ -1,4 +1,4 @@
-﻿# 灵坊工作台 — 工单池
+# 灵坊工作台 — 工单池
 
 > 派发人：产品（用户）｜验收人：AI 验收（opencode）
 > 依据 `IMPROVEMENT_PLAN.md` 阶段 G/H 未完成项。每张工单含验收标准，全部达成才算交付。
@@ -214,6 +214,118 @@ grep 零残留；PR 含工单号。
 
 ---
 
+## 第四轮工单（2026-08-25 登记）
+
+> 依据 `IMPROVEMENT_PLAN_4.md`（阶段 L–O，核实结论 #1–#14）。派发由产品本人执行；
+> 纪律不变：独立分支 + 验收后合 main，PR 描述引用工单号。
+
+## LF-10 · 应用侧更新触发链路（阶段 L1，最大件）
+
+**目标**：补齐「检测 → 下载 → 验签 → 拉起 `updater.exe`」的应用侧链路——installer 的 `run_update`
+（等退出→覆盖→重启→自删）早已实现，但没有任何代码拉起它，每个 Release 都是「死版」。
+
+**范围**：
+1. `docs/decisions/update-feed-source.md`：feed = **GitHub Releases**（✅ 产品已拍板 2026-08-25）；
+   验签复用 `plugin_security.rs` `verify_minisign`（与 runtime 制品同一 Org secret 信任根）；
+   备选「relay 托管 latest.json」记录解除条件。
+2. Rust 新模块（如 `update.rs`）三命令：`check_update`（查 feed latest + semver 比较）、
+   `download_update`（流式下载 → sha256/minisign 硬校验，失败即删临时文件并拒绝）、
+   `apply_update`（拉起同目录 `updater.exe` update 模式：`--target/--setup/--wait-pid/--restart`）。
+3. `SettingsPanel` 增「检查更新」入口与状态展示；v1 手动触发，不做后台静默下载。
+4. 真机 e2e：本地 update-feed 环回适配器（复用 `relay-adapter.mjs` 零依赖模式）挂两个版本 →
+   双向断言——成功闭环（旧版检测→下载→验签→覆盖→重启→新版自报版本号）+
+   篡改对照（包改一字节 → 验签拒绝、不覆盖）。
+5. 单测：semver 比较 / 验签失败拒绝 / apply 参数构造各 ≥1。
+
+**验收标准**：ADR + 三命令 + UI 入口落地；真机 e2e 双向记录进 `docs/verify-a5-client-plugin-e2e.md` 新增节；
+`cargo test --workspace`、`pnpm typecheck`、`pnpm test` 全绿；PR 含工单号 LF-10。
+
+**依赖**：无。注意 `updater.exe` update 模式首次真机运行，预期暴露集成缺陷（暴露即修，回写单测/runbook）。
+
+---
+
+## LF-11 · 干净机器安装 e2e + 新克隆一键灌装（阶段 L2+L3）
+
+**目标**：实证「Release 产物 → 干净环境安装 → 启动 → 插件可用」最后一公里；让新克隆开发者一条命令灌好 runtimes。
+
+**范围**：
+1. 新 `scripts/e2e-install-verify.mjs`（复用 CDP 与杀进程树惯例）：全新目标目录（无 runtimes 缓存 +
+   隔离用户数据目录）跑 `LingFang-Setup-*.exe --silent --target` → 启动安装实例 → CDP 断言插件中心加载、
+   内置 notes 打开、`storage.kv` 真落盘；四 runtime keyFiles 在位（对齐 `verify-bundled-runtimes.mjs` 口径）。
+2. 新 `scripts/populate-local-runtimes.mjs`：从最新 Release 下载 `runtimes-bundle.zip` + `.minisig` 验签后
+   解压到 `apps/desktop/runtimes/`；失败回退打印 ci.yml populate 手工步骤指引。
+   `apps/desktop/package.json` 增 `runtime:populate`。
+3. 文档：`docs/lfs-setup.md` 补「新克隆 → 跑通桌面构建」完整顺序；README quickstart 校准。
+
+**验收标准**：干净目标闭环与「runtimes 移走 → 重灌 → `runtime:verify` 通过」均实证记录
+（操作前先备份现有 runtimes）；三基线全绿；PR 含工单号 LF-11。
+
+**依赖**：无（可用 `v0.0.1-test` Release 产物或本机打包）。
+
+---
+
+## LF-12 · 能力面真机证据补齐（阶段 M）
+
+**目标**：把核实 #6–#10 中「仅单测 / 无证据」的 kind 补成真机实证或稳定单测；不新增任何能力 kind。
+
+**范围**：
+1. `e2e-desktop-smoke.mjs` 增断言：`clipboard` writeText→readText 真机往返（clipboard.read 首次真机实证）；
+   `storage.kv` list/delete/count 真机往返 + **delete 后重启不复活**（LF-07 落盘修正的真机证明）；
+   `net.fetch` 对环回 adapter 真实 HTTP 请求断言 200 与响应体。
+2. 单测补齐：`main.rs` `extract_host`/`is_blocked_host` SSRF 守卫（环回/内网段/合法域名/畸形 URL）；
+   `client_image_generate`/`client_audio_generate` 等无专属单测的 `client_*` 命令补 mock relay 单测。
+3. `scripts/relay-adapter.mjs` 扩展 image/video/audio 四路由协议级模拟（确定性伪响应）；
+   `e2e-relay-verify.mjs` 增四 kind 断言（无凭据 exit 2 语义不变）。
+4. 注释收口：删 `capability.rs` 的 `requestSystemPermission` 虚假注释与 file-explorer 过时引用；
+   `docs/plugin-development.md` 明示「声明即授权，桌面壳无运行时权限门」。
+
+**验收标准**：新增 e2e 断言真机全绿；新增单测计入基线；三基线全绿；PR 含工单号 LF-12。
+
+**依赖**：无。不做：image/video/audio 真实 provider 证明（依赖平台 relay 就绪，列观察项）；
+`fs.pick` 原生对话框交互维持人工确认。
+
+---
+
+## LF-13 · 生态第二狗粮波（阶段 N）
+
+**目标**：第二个真实插件逼出未证明 kind 的手感问题；clip-digest 吃上 LF-07 新 API。
+
+**范围**：
+1. `packages/plugin-sdk/examples/` 新增第二个狗粮插件（client 运行时），题材实施第 1 步二选一：
+   「网页剪藏」（`clipboard.read` + `net.fetch` + `llm.chat` + `storage.kv` + `ui.view`）或
+   「截图笔记」（`system.screenshot` + `storage.kv` + `ui.view`）。
+   走完整流程 create → validate → build → `dev` 热循环 → 本地导入真机跑通。
+2. 续写 `docs/g2-sdk-friction.md` 第二轮：新增 ≥3 条实证（新 kind SDK 手感、dev watch 防抖表现、
+   net.fetch SSRF 是否误伤合法场景）。
+3. clip-digest 自修：kv `set` 失败不再静默兜底 localStorage——改用 `list`/`delete`/`count` 做 LRU 淘汰 +
+   配额错误提示用户（含单测），成为 storage 管理 API 第一个真实消费者。
+
+**验收标准**：新插件真机跑通（CDP 证据）；摩擦记录 ≥3 条新实证；clip-digest 修复有单测且真机复验；
+三基线全绿；PR 含工单号 LF-13。
+
+**依赖**：无硬依赖（LF-12 的 e2e 断言模式可复用）。
+
+---
+
+## LF-14 · 文档债与治理（阶段 O，小件打包）
+
+**范围**：
+1. CODEBUDDY.md 五处过时修正（核实 #12：runtime-lock 路径、runtimes 空目录说、installer 未入 workspace 说、
+   内置插件清单漏 action-demo/action-caller、contract 模块名单停留 LF-09 前）；
+   README 包表补 `platform-contract`、「计划与状态」接到第三轮并指向 `IMPROVEMENT_PLAN_4.md`。
+2. C2 ADR 回填：`docs/decisions/C2-relay-credential-source.md` 决策表回填「已采纳 C-on-A
+   （2026-08-22 拍板，LF-04b 真机验证）」，状态 OPEN → 已采纳。
+3. 警告清零：cargo `unused import` 警告归零（不动 future-compat 类）；
+   `plugin_script.rs` group B「未落地」过时注释修正（实际已复用 `ensure_python_venv`/`ensure_node_dependencies`）。
+4. 分支清理（**需用户确认后执行**）：删除本地与远端 `lf-03-doc-debt`（已全量并入 main）。
+
+**验收标准**：grep 复核五处过时消除；C2 ADR 状态与事实一致；`cargo build` 无 unused-import 警告；
+纯文档/清理 diff，三基线不受影响；PR 含工单号 LF-14。
+
+**依赖**：无。
+
+---
+
 ## 验收记录
 
 - **LF-06 ✅ 验收通过（2026-08-25）**：action 桥真机闭环。分支 `feat/lf-06-action-bridge`
@@ -245,6 +357,55 @@ grep 零残留；PR 含工单号。
   验证：`@lingfang/contract` 37/37、`@lingfang/platform-contract` 34/34、plugin-sdk 150/150 全绿；
   apps/desktop typecheck 干净；grep 确认 7 模块零残留 import（仅 apps/desktop 内 "billing" 字符串标签）；
   pnpm-lock 已更新链接新包。PR 待提（引用 LF-09）。
+
+- **LF-13 🟡 代码级验收通过（2026-08-25），真机 e2e 待补**：生态第二狗粮波。
+  1) 新插件 `packages/plugin-sdk/examples/web-clip/`（网页剪藏，覆盖 clipboard.read + net.fetch +
+  llm.chat + storage.kv + ui.view 五个 kind），validate/build 通过，产物
+  `com.lingfang.web-clip-0.1.0.lfplugin`；含 SSRF 拦截提示与 relay_not_configured 降级。
+  2) clip-digest 自修：删除 kv set 静默兜底 localStorage，改用 LF-07 list/delete/count 做 LRU 淘汰 +
+  配额错误如实提示；`src/clip-digest.spec.ts` 新增 LRU describe 块。
+  3) `docs/g2-sdk-friction.md` §11 第二轮摩擦记录 6 条实证（≥3 达标），速查表补 #8–#12。
+  复验（本机）：plugin-sdk **163/163**、desktop 65/65 全绿，与交付报告一致。
+  2026-08-26 已提交分支 `feat/lf-13-web-clip`（`f17217a`，8 文件，diff 纯净仅本工单）。
+  ⚠️ 待补项：真机 e2e（WebView2 桌面壳导入两个 .lfplugin 的 CDP 证据）本环境不可跑，需用户本机复核；
+  clip-digest 修复的真机复验同。
+  （原「工作区并存 LF-10 半成品」警告已消解：LF-10 已提交 `feat/lf-10-update-trigger`，
+  SettingsPanel.tsx:177 不可达比较由验收人修复，见 LF-10 条目。）
+
+- **LF-14 ✅ 代码级验收通过（2026-08-26）**：文档债清理 + 警告收敛。分支 `chore/lf-14-doc-debt`
+  （未推远端）。逐项核验属实：
+  1) CODEBUDDY.md 五处过时修正全部与代码比对一致（runtime-lock 已提交于 `apps/desktop/runtime-lock.json`、
+  runtimes/ 为 gitignore+materialized、installer 已入 workspace、内置插件补 action-demo/action-caller、
+  contract 模块名单对齐 `src/index.ts` 实际导出）；
+  2) README 包表补 platform-contract、计划链第四轮；3) C2 ADR 状态 OPEN→已采纳（C-on-A）。
+  警告核验（cargo check：main 基线 32 条 → 分支 30 条）：plugin_runner.rs 孤立 `use tauri::Emitter`、
+  process_util 未用 re-export 两条 unused-import 确已消除；plugin_script.rs 过时注释修正属实。
+  ✅ 残余已闭环（2026-08-26 验收人补刀）：`f5cd6f1` 删除 `capture.rs` 死函数
+  `run_capture_with_env_and_cancel` 整体（原仅删 re-export 属半修）；`AtomicBool`/`Ordering`
+  仍被 `wait_for_capture` 使用，import 保留。删除后 cargo 复跑 255+30 全绿。
+  ⚠️ 分支纯度：分支另带一个未在交付清单内的提交 `f4d1728`（e2e-desktop-smoke 诊断增强：
+  WebView2 父子进程归属 + runtime 版本上报），非 LF-14 范围。**处置：保留在分支内，PR 描述注明**。
+  （原「LF-10 两处红」来自当时未提交的工作区文件，已随 LF-10 提交修复，不在本分支 diff 内。）
+
+- **LF-10 🟡 代码级验收通过（2026-08-26），真机 e2e 待补**：应用侧更新触发链路。分支
+  `feat/lf-10-update-trigger`（`60bd646`，6 文件，diff 纯净仅本工单）。
+  1) ADR `docs/decisions/update-feed-source.md`：feed = GitHub Releases `latest.json`，验签复用
+  `verify_minisign`，relay 托管备选记录解除条件；
+  2) `update.rs` 三命令 + `get_app_version`（build.rs 注入 `LINGFANG_APP_VERSION`，与 installer 同源），
+  main.rs 注册；
+  3) SettingsPanel 检查更新入口 + 版本展示 + 状态机。
+  执行 agent 卡点在两个下载单测（loopback 服务器 + reqwest 发不出请求），验收人选 B 路线直接修复：
+  - **根因 1**：测试服务器不读请求直接回响应再关 socket——接收缓冲有未读数据时 close 触发内核
+  RST（Windows 尤严），销毁在途响应。修法：回响应前循环读请求头至 `\r\n\r\n`（5s 超时兜底）；
+  - **根因 2**：两测试同用版本 "0.1.12" → 临时文件同名，并发时篡改用例的 remove_file 误删
+  成功用例文件。修法：篡改用例改 `0.1.12-tampered`；
+  - 另修：`SettingsPanel.tsx:177` 'ready' 分支内不可达 `disabled` 比较（dead code，修复 desktop
+  typecheck）；`DEFAULT_FEED_URL` 原指向不存在的 `lingfang/workbench-releases`，与 ADR「本仓库」
+  语义矛盾，改对齐 `qiuuchan/new-lingfang`。
+  复验（2026-08-26）：cargo **255/255 + installer 30/30**（含 8 个 update 测试）、pnpm typecheck
+  干净、plugin-sdk 163 / desktop 65 全绿。
+  ⚠️ 待补项：真机 e2e（L1 第 4 点：update-feed 环回适配器挂两版本，双向断言成功闭环 + 篡改拒绝）
+  本环境不可跑，需用户本机执行；发版流水线「上传 latest.json + 安装包签名」亦待落地（ADR 已记）。
 
 - **LF-01 ✅ 验收通过（2026-08-24）**：validate/build 干净、制品 v4 结构正确；`pnpm typecheck`/`pnpm test`（256）
   复跑全绿；桌面壳 CDP 实测（release 产物）：本地导入安装成功 → 运行 → sdk 注入 → storage.kv 真实落盘 →
