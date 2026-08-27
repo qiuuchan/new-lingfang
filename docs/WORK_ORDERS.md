@@ -397,6 +397,30 @@ feed = GitHub Releases，但发版 CI 目前不上传 latest.json、安装包未
 
 **依赖**：LF-15（update.rs 须在 main 上）。Org secret 配置需用户权限（用户行动项）。
 
+> **🔧 已交付，待验收（2026-08-27，分支 `feat/lf-16-release-feed`）**
+>
+> - **范围核实修正**：工单范围第 2 条「安装包 minisign 签名 + `.minisig` 随 Release 上传」
+>   经核实**已存在**（B3→C 轮的 publish-runtimes 打包段），本工单真实缺口为 latest.json、
+>   runbook 与解析契约证明——三者均已补齐。
+> - **实现**：
+>   1. `scripts/generate-latest-json.mjs`：feed 生成器。字段契约 = update.rs `Feed` 结构
+>      （ADR 对齐）；tag↔安装包文件名↔`apps/desktop/package.json` 三方一致性硬门槛；
+>      sha256/size 对最终签名后 exe 实测（minisign 为 detached 签名不改字节）。
+>      支持 `--emit-fixture` 自包含样本（不依赖文件字节，跨平台可逐字节复现）。
+>   2. ci.yml：publish-runtimes 在签名后生成 latest.json 并随 Release 资产上传；
+>      quality job 新增 fixture 漂移防护（同命令重产出 vs `scripts/fixtures/latest.json`
+>      逐字节 diff）——脚本改契约而 Rust fixture 测试未同步时 PR 先红。
+>   3. 解析证明：update.rs 新增 `parse_latest_json_fixture_maps_to_update_info`
+>      （fixture 按 Feed 契约解析 → UpdateInfo 映射断言 → 未知字段前向兼容 →
+>      fixture 版本被判高于当前应用版本）；cargo test 计数 271→272。
+>   4. runbook：`docs/release-runbook.md`（打 tag → CI → 五类资产核对 → latest.json 抽检 →
+>      发版后更新链路验证；known limitations 如 notes 为空串、latest 锚点语义）。
+> - **基线**：cargo **272 passed（1 ignored）+ installer 30** 全绿；vitest 37/34/163/69；
+>   typecheck 干净。
+> - **未完成项（需产品决策/授权）**：验收标准第 1 条「对测试 tag 实跑一次发版」未执行——
+>   创建公开 Release 消耗大额 CI 分钟数且属对外发布动作，留待授权后打测试 tag 验证
+>   （runbook 步骤已就绪）。
+
 ---
 
 ## LF-17 · 更新链路真机闭环 e2e（LF-10 遗留，L1 第 4 点）

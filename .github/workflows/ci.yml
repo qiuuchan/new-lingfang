@@ -38,6 +38,14 @@ jobs:
       - name: Test
         run: pnpm test
 
+      # LF-16：latest.json fixture 漂移防护——quality job 用与发版 job 完全相同的命令
+      # 重新产出样本并与 scripts/fixtures/latest.json 比对；脚本序列化变更而 Rust 侧
+      # fixture 测试未同步时，这里先红（契约漂移在 PR 级暴露，而非用户侧解析失败）。
+      - name: Guard latest.json fixture drift
+        run: |
+          node scripts/generate-latest-json.mjs --emit-fixture > /tmp/latest-fixture.json
+          diff -u scripts/fixtures/latest.json /tmp/latest-fixture.json
+
   # Rust 测试防线（IMPROVEMENT_PLAN E3）：desktop 218 + installer 30 个测试此前不在
   # 任何 PR 级防线内，2026-08-23 前从未被 CI 编译过，已出现测试代码腐坏（缺 derive、
   # 字面量缺字段等）。windows-latest 是硬要求——Tauri 壳绑 windows-sys 依赖。
@@ -318,9 +326,24 @@ jobs:
             -x "$($setup.FullName).minisig"
           if ($LASTEXITCODE -ne 0) { throw 'installer minisign self-verification failed' }
 
+      # ── LF-16：生成更新 feed latest.json（字段契约 = update.rs Feed 结构，
+      #    docs/decisions/update-feed-source.md）。签名不改动 exe 字节，sha256
+      #    即 Release 资产的真实哈希；URL 指向本 Release 的附件锚点。
+      - name: Generate latest.json (update feed)
+        shell: bash
+        run: |
+          setup="$(ls target/release/LingFang-Setup-*.exe | sort | tail -1)"
+          node scripts/generate-latest-json.mjs \
+            --tag "$GITHUB_REF_NAME" \
+            --setup "$setup" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --check-app-version \
+            --out latest.json
+
       - name: Upload installer release asset
         uses: softprops/action-gh-release@v2
         with:
           files: |
             target/release/LingFang-Setup-*.exe
             target/release/LingFang-Setup-*.exe.minisig
+            latest.json

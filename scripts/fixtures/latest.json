@@ -1,0 +1,11 @@
+{
+  "version": "99.0.0",
+  "notes": "",
+  "pub_date": "2026-01-01T00:00:00.000Z",
+  "setup": {
+    "url": "https://github.com/qiuuchan/new-lingfang/releases/download/v99.0.0/LingFang-Setup-99.0.0.exe",
+    "sha256": "6bdaad53383e1371366a08637087cb5b09b5ea9596873f5223c68e62fcd1bdc3",
+    "minisig_url": "https://github.com/qiuuchan/new-lingfang/releases/download/v99.0.0/LingFang-Setup-99.0.0.exe.minisig",
+    "size": 123456789
+  }
+}

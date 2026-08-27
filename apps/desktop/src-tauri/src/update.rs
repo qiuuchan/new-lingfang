@@ -380,6 +380,57 @@ mod tests {
         assert!(!verify_sha256_matches(&hex, "deadbeef"));
     }
 
+    /// LF-16：feed 解析契约的 fixture 证明。`scripts/fixtures/latest.json` 由
+    /// `node scripts/generate-latest-json.mjs --emit-fixture` 产出（quality job 同命令做
+    /// 漂移防护），本测试保证「流水线真正上传的 JSON 形态」与 `check_update` 的解析层
+    /// 永远对得上——契约漂移在 CI 就变红，而不是发版后用户侧「检查失败」。
+    #[test]
+    fn parse_latest_json_fixture_maps_to_update_info() {
+        let fixture_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../../scripts/fixtures/latest.json");
+        let raw = std::fs::read_to_string(&fixture_path).unwrap_or_else(|e| {
+            panic!(
+                "读取 latest.json fixture 失败：{e}（{}）",
+                fixture_path.display()
+            )
+        });
+        let feed: Feed = serde_json::from_str(&raw).expect("fixture 必须可按 Feed 契约解析");
+
+        // 字段映射与 check_update 组装 UpdateInfo 一致。
+        let info = UpdateInfo {
+            version: feed.version.clone(),
+            notes: feed.notes.clone(),
+            pub_date: feed.pub_date.clone(),
+            setup_url: feed.setup.url.clone(),
+            setup_sha256: feed.setup.sha256.clone(),
+            setup_minisig_url: feed.setup.minisig_url.clone(),
+            setup_size: feed.setup.size,
+        };
+        assert_eq!(info.version, "99.0.0");
+        assert_eq!(info.pub_date, "2026-01-01T00:00:00.000Z");
+        assert_eq!(info.setup_size, 123_456_789);
+        assert_eq!(info.setup_sha256.len(), 64);
+        assert!(info.setup_url.ends_with("/LingFang-Setup-99.0.0.exe"));
+        assert!(info.setup_minisig_url.ends_with(".exe.minisig"));
+
+        // 前向兼容：feed 未来追加未知字段（顶层或 setup 内）不得破坏旧客户端解析。
+        let mut value: serde_json::Value =
+            serde_json::from_str(&raw).expect("fixture 必须是合法 JSON");
+        value["future_top_level"] = serde_json::json!(1);
+        value["setup"]["future_nested"] = serde_json::json!(2);
+        let padded = serde_json::to_string(&value).expect("重新序列化失败");
+        let _parsed: Feed = serde_json::from_str(&padded).expect("未知字段必须被忽略");
+
+        // 更新检测语义：fixture 版本（99.0.0）必须被判为「有更新」。
+        let current = semver::Version::parse(env!("LINGFANG_APP_VERSION"))
+            .expect("编译期应用版本必须是合法 semver");
+        let latest = semver::Version::parse(&info.version).unwrap();
+        assert!(
+            latest > current,
+            "fixture 版本 {latest} 应高于当前应用版本 {current}"
+        );
+    }
+
     /// 起一个最小 HTTP/1.1 服务器，返回固定 body，用于真机演练 download_update 的
     /// 验签闸门（成功 + 篡改拒绝）。监听 127.0.0.1 随机端口，返回 addr；服务器就绪后
     /// 通过传入的 sender 发信号，避免「线程尚未 accept 就被 reqwest 连接」的竞态。
