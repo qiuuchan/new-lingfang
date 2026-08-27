@@ -350,6 +350,34 @@ smoke 真机绿；无遗留冲突标记；台账更新含合并记录。
 
 **依赖**：产品完成 6 个 PR 的网页端合并（或授权验收人本地合并后推送）。
 
+> **✅ 执行记录（2026-08-27，验收人本地合并路线）**
+>
+> 1. 第一节车厢以 `chore/round-5-ledger` 替代 `chore/round-4-ledger`——前者在后者基础上有且仅多
+>    第五轮工单登记（`e354a8d`），内容为超集。
+> 2. 合并结果（分支最终 commit → merge commit）：
+>    | # | 分支 | 分支 tip | merge commit |
+>    |---|---|---|---|
+>    | 1 | chore/round-5-ledger | `e354a8d` | `32f4cfa` |
+>    | 2 | chore/lf-14-doc-debt | `f5cd6f1` | `90374fc` |
+>    | 3 | feat/lf-10-update-trigger | `60bd646` | `b80062b` |
+>    | 4 | feat/lf-13-web-clip | `f17217a` | `78c71d1` |
+>    | 5 | feat/lf-11-install-e2e | `18e59cd` | `2ba4fe5` |
+>    | 6 | feat/lf-12-cap-evidence | `fda55ae` | `e410881` |
+> 3. 预告的 smoke 脚本冲突被 git 三方自动合并消解、**零手工冲突**；已按工单要求做语义核对：
+>    lf-12 的 `spawnShell`（:162）/`openNotes`（:181）重构与 lf-14 的 WebView2 进程父子诊断、
+>    runtime 版本输出在合并树上同时存活，`node --check` 通过。
+> 4. 全树回归全绿：`cargo test --workspace` **271 passed（1 ignored）+ installer 30**；
+>    vitest contract **37** / platform-contract **34** / plugin-sdk **163** / desktop **69**；
+>    四包 typecheck 干净。工作区唯一脏文件仍为已知的 `src-tauri/Cargo.toml` CRLF 行尾幻影
+>    （diff 0 行）。
+> 5. smoke 真机：debug 构建 + CDP **16 项断言全部通过**，含 LF-12 断言集
+>    （storage list/delete/count、delete 后重启不复活落盘修正、clipboard.readText /
+>    net.fetch 网关 gate）在同树复绿。
+> 6. 待用户确认项（未执行）：推送 main 至 origin；已合并六分支的本地/远端清理。
+>
+> **验收标准**：main 上 `cargo test --workspace` / `pnpm typecheck` / `pnpm test` 全绿；
+> smoke 真机绿；无遗留冲突标记；台账更新含合并记录。
+
 ---
 
 ## LF-16 · 发版流水线补强：latest.json 上传 + 安装包签名
