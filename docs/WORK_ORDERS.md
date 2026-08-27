@@ -326,6 +326,127 @@ grep 零残留；PR 含工单号。
 
 ---
 
+## 第五轮工单（2026-08-26 登记）
+
+> 来源：第四轮验收遗留的真机/本机复核项 + `IMPROVEMENT_PLAN_4.md` 观察项与发版流水线缺口 + 六分支合并列车。
+> 纪律不变：独立分支 + 验收后合 main，PR 描述引用工单号。
+> 总闸：**LF-15（合并列车）先于一切**——其余工单全部建立在六分支并入 main 后的全树基线之上。
+
+## LF-15 · 合并列车与全树回归（总闸）
+
+**目标**：把第四轮 6 个已验收分支按序并入 main，消解唯一已知冲突，交付一条全绿的新 main 基线。
+
+**范围**：
+1. 按序合并：`chore/round-4-ledger` → `chore/lf-14-doc-debt` → `feat/lf-10-update-trigger` →
+   `feat/lf-13-web-clip` → `feat/lf-11-install-e2e` → `feat/lf-12-cap-evidence`。
+2. 已知冲突：`lf-14` 的 `f4d1728`（e2e 诊断增强）与 `lf-12` 均改 `scripts/e2e-desktop-smoke.mjs`，
+   后合者解一次——以 lf-12 的重构（spawnShell/openNotes 复用）为主体，吸收 lf-14 的诊断输出增强。
+3. 合并后全树回归：三基线 + `e2e-desktop-smoke` 真机跑一次（LF-12 断言集在合并树上复绿，
+   特别注意 LF-10 `update.rs` 与 LF-07/LF-12 storage 断言同树）。
+4. 台账登记各分支最终 commit 与合并结果；已合并分支的本地/远端清理（**需用户确认后执行**）。
+
+**验收标准**：main 上 `cargo test --workspace` / `pnpm typecheck` / `pnpm test` 全绿；
+smoke 真机绿；无遗留冲突标记；台账更新含合并记录。
+
+**依赖**：产品完成 6 个 PR 的网页端合并（或授权验收人本地合并后推送）。
+
+---
+
+## LF-16 · 发版流水线补强：latest.json 上传 + 安装包签名
+
+**目标**：补上 LF-10 链路真正可用前的最后一环——ADR `docs/decisions/update-feed-source.md` 已拍板
+feed = GitHub Releases，但发版 CI 目前不上传 latest.json、安装包未签名，每个 Release 对更新链路仍是「死版」。
+
+**范围**：
+1. release workflow 生成并上传 `latest.json`（版本号 + 安装包下载 URL + sha256，
+   字段口径对齐 `apps/desktop/src-tauri/src/update.rs` `check_update` 的解析实现）。
+2. 安装包 minisign 签名：复用 runtime 制品同一 Org secret 信任根（`plugin_security.rs`
+   `verify_minisign` 已可验），`.minisig` 随 Release 上传。
+3. runbook：发版步骤文档（打 tag → CI → 产物清单核对 → latest.json 抽检）。
+
+**验收标准**：对测试 tag 实跑一次发版，latest.json + .minisig 出现在 Release assets；
+`check_update` 对该 feed 的解析有 fixture/单测证明；PR 含工单号 LF-16。
+
+**依赖**：LF-15（update.rs 须在 main 上）。Org secret 配置需用户权限（用户行动项）。
+
+---
+
+## LF-17 · 更新链路真机闭环 e2e（LF-10 遗留，L1 第 4 点）
+
+**目标**：兑现 LF-10 工单范围第 4 条——环回 update-feed 双向断言，这是更新链路唯一缺失的真机证据。
+
+**范围**：
+1. 环回 update-feed 适配器（复用 `relay-adapter.mjs` 零依赖模式）挂两个版本；
+   e2e 脚本驱动桌面壳走 check → download → apply 全链。
+2. 双向断言：成功闭环（旧版检测→下载→验签→覆盖→重启→新版自报版本号）+
+   篡改对照（包改一字节 → 验签拒绝、不覆盖、临时文件清理）。
+3. 执行记录进 `docs/verify-a5-client-plugin-e2e.md` 新增节；
+   暴露的集成缺陷即修并回写单测（updater.exe update 模式首次真机运行，预期有缺陷）。
+
+**验收标准**：双向断言真机绿且有记录；三基线全绿；PR 含工单号 LF-17。
+
+**依赖**：LF-15。apply 段需安装实例环境，建议与 LF-18 同机连做。
+
+---
+
+## LF-18 · 安装闭环本机复核（LF-11 遗留）
+
+**目标**：兑现 LF-11 工单范围第 1 条的真闭环——「Release 安装器 → 干净目录 → 启动 → 插件可用」端到端记录。
+
+**范围**：
+1. **先重建安装器**：`target/release` 现存陈旧 0.1.11 产物，复用必假阳性——
+   工单第一个动作是清理并用当前代码 `tauri build` 重新产出。
+2. `LINGFANG_SETUP_EXE=<新构建> pnpm test:install` 真闭环：全新目标目录 + 隔离用户数据，
+   CDP 断言插件中心加载 / notes iframe / storage.kv 落盘 / 4 个 runtime keyFiles sha256 命中。
+3. `runtime:populate` 远程回退路径实跑一次：备份并移走本地 runtimes → 从最新 Release
+   拉取 + minisign 验签 + 解压 → `runtime:verify` 通过。
+
+**验收标准**：安装器闭环 exit 0 且无降级标记；populate 远程回退有实证记录；
+三基线不受影响；PR 含工单号 LF-18。
+
+**依赖**：LF-15。执行环境 = 用户本机（脚本已就绪，开发机即可）。
+
+---
+
+## LF-19 · 双插件导入 + 能力面观察项闭环（LF-13/LF-12 遗留）
+
+**目标**：把第四轮留下的真机观察项一次性闭环或显式豁免，能力面证据不留「未验证」尾巴。
+
+**范围**：
+1. LF-13 遗留：clip-digest + web-clip 双 `.lfplugin` 桌面壳导入走通
+   （含 F3 来源徽标 origin=local 与未签名警示展示）。
+2. clipboard 正向往返：用 web-clip（已声明 clipboard）做 writeText→readText 真机闭环。
+3. net.fetch 对公网 URL 返回 200（环回 SSRF 拦截已有单测，本条补正向证据）。
+4. relay-adapter 四 kind 正向闭环（image/video/audio 经适配器；SDK 当前 audio 未接线，
+   缺口如实标注）。
+5. `is_blocked_host` 真实域名 DNS fail-closed：稳定化为单测（可控 resolver）或显式记录豁免理由。
+6. 与 LF-10 合并后含 update.rs 的全树回归——若 LF-15 已做，本条仅引用其结果不重复执行。
+
+**验收标准**：1–4 有 CDP/脚本证据；5 有单测或豁免记录；三基线全绿；PR 含工单号 LF-19。
+
+**依赖**：LF-15（插件与断言须在 main 上）。不被 LF-18 阻塞（可用 dev/debug 壳先行）。
+
+---
+
+## 观察项（延续第四轮，不派发）
+
+- **K3**：本轮 PR 首次真实触发 `rust-tests` job——记录冷/热时长；nightly `desktop-e2e`
+  连续 3 晚绿视为稳定，漂移即修。
+- **K4**：LF-04b 的 DeepSeek API key 轮换（用户行动项，第三次提醒）。
+- **真实 provider 的 image/video/audio 证明**：依赖平台 relay 实际就绪；
+  就绪前以 LF-19 的适配器正向闭环为证据上限。
+- **触发条件不动**：K2/F4（CSP 收紧，下次实质改 `PluginRunner.tsx` 渲染路径时触发）、
+  J5（静态插件免 tsx，记录不做）、`plugin_script.rs` 硬隔离 TODO（独立大任务，刻意推迟）。
+
+## 建议执行顺序
+
+1. **LF-15**（总闸，先行，其余全部依赖它）；
+2. **LF-16**（发版流水线）与 **LF-18**（本机复核）可并行；
+3. **LF-17**（更新闭环）与 LF-18 同机连做；
+4. **LF-19**（观察项收口）殿后。
+
+---
+
 ## 验收记录
 
 - **LF-06 ✅ 验收通过（2026-08-25）**：action 桥真机闭环。分支 `feat/lf-06-action-bridge`
