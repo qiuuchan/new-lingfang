@@ -225,6 +225,23 @@ async function run() {
       // 安装器落地 exe 同级 runtimes/（命中 runtime_resolver 的 exe 同级分支）
       const installedExe = findExe(targetDir, EXE_CANDIDATES);
       launchExe = installedExe ?? null;
+      if (!launchExe) {
+        // LF-18：静默安装 exit=0 但目录里没有主程序 = 「假成功」级安装链路缺陷
+        // （2026-08-27 实测形态：GNU tar 静默产出非 zip payload，安装器 zip 层在
+        // 垃圾数据上误解析为空归档 + 兜底复制自身为 updater.exe）。此处必须硬失败，
+        // 不允许退化成调试壳把断言跑绿——那正是工单警告的「复用必假阳性」。
+        console.error('[e2e-install] ❌ 硬失败：安装器 exit=0 但目标目录无主程序。');
+        console.error(`   目标目录（保留现场）：${targetDir}`);
+        try {
+          for (const e of readdirSync(targetDir)) {
+            const st = statSync(path.join(targetDir, e));
+            console.error(`   - ${e}${st.isDirectory() ? '/' : ''} (${st.size} bytes)`);
+          }
+        } catch {
+          /* 目录不可读时仅打印路径 */
+        }
+        process.exit(2);
+      }
     }
   } else {
     log('未验证：本环境无 SFX 安装器（或已显式 E2E_INSTALLER_SKIP=1 跳过探测）。');
@@ -281,6 +298,16 @@ async function run() {
     const page = context.pages().find((p) => /tauri/i.test(p.url())) ?? context.pages()[0];
     assert(page, 'CDP 连接成功并找到桌面壳页面');
     log(`页面 URL: ${page.url()}`);
+    // LF-18 诊断：release 产物若未经 tauri CLI 构建（custom-protocol 未启用），
+    // devUrl（localhost:1420）会被烘焙进二进制，安装实例启动即白屏指向 dev server。
+    if (/localhost:1420/.test(page.url())) {
+      console.error(
+        '[e2e-install] ❌ 硬失败：安装实例指向 dev server localhost:1420 ——' +
+          '桌面壳 release 构建未经 tauri CLI，前端资产未烘焙。' +
+          '请用 `tauri build --no-bundle` 构建（勿直接 cargo build）后重试。',
+      );
+      process.exit(3);
+    }
 
     // 1. 插件中心加载
     await page.waitForSelector(`text=${NOTES_NAME}`, { timeout: 30_000 });

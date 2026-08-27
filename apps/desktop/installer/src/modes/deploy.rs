@@ -27,6 +27,11 @@ pub fn deploy_to(install_dir: &Path) -> Result<usize> {
     // 1) 自解压 app 文件到安装目录。
     let count = sfx::extract_payload(&self_exe, install_dir).context("自解压 app 文件失败")?;
 
+    // 1.5) 落地硬门槛：主程序必须真实存在。LF-18 真机缺陷——畸形 payload（如
+    //      GNU tar 静默产出的 ustar 被 zip 层误解析为 0 条目）会走完全部流程、
+    //      仅留兜底复制的 updater.exe 且退出码 0。在源头上拒绝这种「假成功」。
+    ensure_main_exe(install_dir)?;
+
     // 2) 确保安装目录有 updater.exe。payload 内通常已含 updater.exe（= installer 副本）；
     //    若 payload 未含（防御），则复制本 exe 过去。但本 exe 含 payload 尾部，复制后体积偏大——
     //    优先信任 payload 内的纯净 updater.exe，仅在缺失时兜底复制自身。
@@ -37,6 +42,54 @@ pub fn deploy_to(install_dir: &Path) -> Result<usize> {
     }
 
     Ok(count)
+}
+
+/// 校验解压产物包含主程序（`paths::MAIN_EXE`）。缺失即返回显式错误。
+fn ensure_main_exe(install_dir: &Path) -> Result<()> {
+    let main = install_dir.join(paths::MAIN_EXE);
+    if main.is_file() {
+        return Ok(());
+    }
+    anyhow::bail!(
+        "自解压产物缺少主程序 {}（解压条目异常：疑似 payload 归档损坏或格式不是 zip）；\
+         已停止部署，请重新打开发版安装包",
+        paths::MAIN_EXE
+    );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ensure_main_exe_rejects_empty_dir() {
+        let dir = std::env::temp_dir().join("lingfang-deploy-empty-test");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let err = ensure_main_exe(&dir).unwrap_err();
+        assert!(err.to_string().contains(paths::MAIN_EXE));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn ensure_main_exe_accepts_present_main() {
+        let dir = std::env::temp_dir().join("lingfang-deploy-present-test");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join(paths::MAIN_EXE), b"fake").unwrap();
+        ensure_main_exe(&dir).unwrap();
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn ensure_main_exe_rejects_directory_named_main() {
+        // 名字撞上但不是文件（目录）也必须拒绝。
+        let dir = std::env::temp_dir().join("lingfang-deploy-dirnamed-test");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join(paths::MAIN_EXE)).unwrap();
+        assert!(ensure_main_exe(&dir).is_err());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }
 
 /// 估算安装目录大小（KB，注册表 EstimatedSize 用）。失败返回 0。

@@ -288,7 +288,11 @@ jobs:
         shell: bash
         run: |
           pnpm -C apps/desktop vite:build   # tauri generate_context! 需要 ../dist 在编译期存在
-          cargo build --release -p lingfang-desktop -p lingfang-installer
+          # 桌面壳必须经 tauri CLI 构建：CLI 注入 custom-protocol 并烘焙 dist 资产；
+          # 直接 cargo build --release 会把 devUrl（localhost:1420）写进 release 产物，
+          # 安装实例启动即白屏指向 dev server（LF-18 本机缺陷实录，2026-08-27）。
+          pnpm -C apps/desktop exec tauri build --no-bundle
+          cargo build --release -p lingfang-installer
 
       # 打包脚本自带 runtime-lock sha256 硬门槛（复用 verify-bundled-runtimes.mjs）
       - name: Build SFX installer (embeds verified runtimes)
