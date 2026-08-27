@@ -20,6 +20,7 @@ mod plugins;
 mod process_util;
 mod runtime_commands;
 mod runtime_resolver;
+mod update;
 
 use serde_json::{json, Value};
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
@@ -542,7 +543,11 @@ fn main() {
             plugin_package_manager::commands::sha256_lfplugin,
             plugin_package_manager::network::install_plugin_from_url,
             plugin_security::verify_plugin_signature_command,
-            plugin_security::check_plugin_recall_command
+            plugin_security::check_plugin_recall_command,
+            update::get_app_version,
+            update::check_update,
+            update::download_update,
+            update::apply_update
         ])
         .run(tauri::generate_context!())
         .expect("启动 LingFang 桌面壳失败");
