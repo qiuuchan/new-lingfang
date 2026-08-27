@@ -24,6 +24,7 @@
 import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import net from 'node:net';
+import os from 'node:os';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
@@ -119,17 +120,47 @@ function isElevated() {
   }
 }
 
-// runas /trustlevel:0x20000 启动 app（Basic User 令牌）。runas 不传 PID，
-// 需按可执行文件名反查实际进程。
+// elevated 上下文下降权启动 app。runas /trustlevel:0x20000 在 GitHub Actions 无交互
+// 桌面 runner 上直接 exit 1（实测 windows-latest，runas 命令本身失败，桌面壳压根没起），
+// 改用 Task Scheduler RunLevel=Limited——Chrome/Edge 安装器从 elevated 降权拉起浏览器的
+// 标准手法：注册一个以当前用户非提权令牌运行的一次性任务并立即 Start。进程以 medium IL
+// 跑，WebView2 才能开 --remote-debugging-port。env 经临时 .bat 启动器注入（Task action
+// 不继承当前进程环境，仅 WebView2_* 两项是降权进程真正需要的）。
 async function spawnElevated(exe, env) {
-  log('检测到 elevated 上下文，降权（Basic User 令牌）启动桌面壳…');
-  const quoted = `"${exe}"`;
-  const runasRes = spawnSync('runas', ['/env', '/trustlevel:0x20000', quoted], {
-    env,
-    stdio: ['ignore', 'pipe', 'pipe'],
+  log('检测到 elevated 上下文，降权（Task Scheduler RunLevel=Limited）启动桌面壳…');
+  const taskName = `LingFangE2E_${process.pid}_${Date.now()}`;
+  const launcherPath = path.join(os.tmpdir(), `${taskName}.bat`);
+  const wvArgs = env.WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS ?? '';
+  const wvData = env.WEBVIEW2_USER_DATA_FOLDER ?? '';
+  // .bat 用 latin1 写纯 ASCII（端口数字 + 路径），无双引号/特殊字符风险
+  const bat = [
+    '@echo off',
+    `set "WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=${wvArgs}"`,
+    `set "WEBVIEW2_USER_DATA_FOLDER=${wvData}"`,
+    `cd /d "${path.dirname(exe)}"`,
+    `start "" "${exe}"`,
+    '',
+  ].join('\r\n');
+  fs.writeFileSync(launcherPath, bat, 'latin1');
+  log(`launcher=${launcherPath}\ntask=${taskName}`);
+
+  const psCreate = [
+    '$ErrorActionPreference="Stop"',
+    `$tn="${taskName}"`,
+    `$lp="${launcherPath}"`,
+    `$act=New-ScheduledTaskAction -Execute "cmd.exe" -Argument ('/c "' + $lp + '"')`,
+    `$prin=New-ScheduledTaskPrincipal -UserId "$env:USERNAME" -LogonType Interactive -RunLevel Limited`,
+    `Register-ScheduledTask -TaskName $tn -Action $act -Principal $prin -Force | Out-Null`,
+    `Start-ScheduledTask -TaskName $tn`,
+    `$i=Get-ScheduledTaskInfo -TaskName $tn`,
+    `"LastTaskResult=0x{0:X} LastRunTime={1}" -f $i.LastTaskResult,$i.LastRunTime`,
+  ].join('; ');
+  const cr = spawnSync('powershell', ['-NoProfile', '-Command', psCreate], {
     encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
   });
-  log(`runas 返回：exit=${runasRes.status} stdout=${(runasRes.stdout ?? '').trim()} stderr=${(runasRes.stderr ?? '').trim()}`);
+  log(`Task Scheduler 注册/启动：exit=${cr.status} out=${(cr.stdout ?? '').trim()} err=${(cr.stderr ?? '').trim()}`);
+
   const deadline = Date.now() + 60_000;
   while (Date.now() < deadline) {
     try {
@@ -139,22 +170,34 @@ async function spawnElevated(exe, env) {
           '-NoProfile',
           '-Command',
           `Get-CimInstance Win32_Process -Filter "Name='${path.basename(exe)}'" | ` +
-            'Where-Object { $_.CommandLine -like "*lingfang*" } | ' +
             'Sort-Object CreationDate -Descending | Select-Object -First 1 -ExpandProperty ProcessId',
         ],
         { stdio: ['ignore', 'pipe', 'ignore'], encoding: 'utf8' },
       );
-      const pid = parseInt(out.stdout.trim(), 10);
+      const pid = parseInt((out.stdout ?? '').trim(), 10);
       if (pid > 0) {
-        log(`桌面壳已启动（PID=${pid}，降权模式）`);
-        return { pid, env, child: null };
+        log(`桌面壳已启动（PID=${pid}，Task Scheduler 降权模式）`);
+        return { pid, env, child: null, taskName, launcherPath };
       }
     } catch {
       /* 继续轮询 */
     }
     await new Promise((r) => setTimeout(r, 500));
   }
-  throw new Error('runas 降权启动后未找到 lingfang-desktop 进程');
+  // 超时诊断：拉任务状态 + 最近运行结果，定位是任务没起来还是起来了但 exe 退出
+  const diag = spawnSync(
+    'powershell',
+    [
+      '-NoProfile',
+      '-Command',
+      `Get-ScheduledTaskInfo -TaskName "${taskName}" | Format-List TaskName,LastRunTime,LastTaskResult,NumberOfMissedRuns; (Get-ScheduledTask -TaskName "${taskName}").State`,
+    ],
+    { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] },
+  );
+  throw new Error(
+    `Task Scheduler 降权启动后未找到 ${path.basename(exe)} 进程。\n` +
+      `--- 任务状态 ---\n${(diag.stdout ?? '').trim()}`,
+  );
 }
 
 // 启动桌面壳（按 elevated 与否选择降权或普通 spawn），返回 { pid, env, child }。
@@ -244,6 +287,20 @@ async function run() {
 
   const cleanup = () => {
     killTree(child.pid);
+    if (child.taskName) {
+      spawnSync(
+        'powershell',
+        ['-NoProfile', '-Command', `Unregister-ScheduledTask -TaskName "${child.taskName}" -Confirm:$false -ErrorAction SilentlyContinue`],
+        { shell: true, stdio: 'ignore' },
+      );
+    }
+    if (child.launcherPath) {
+      try {
+        fs.unlinkSync(child.launcherPath);
+      } catch {
+        /* 已删 */
+      }
+    }
     spawnSync('rmdir', ['/s', '/q', webviewDataDir], { shell: true, stdio: 'ignore' });
   };
 
@@ -477,6 +534,23 @@ async function run() {
     }, restartKey);
     log('已删除键，重启桌面壳以验证落盘修正（delete 后重启不复活）…');
     killTree(child.pid);
+    // 注销第一次的 Task + 删 launcher，避免任务残留（runas 路径无此对象，安全跳过）
+    if (child.taskName) {
+      spawnSync(
+        'powershell',
+        ['-NoProfile', '-Command', `Unregister-ScheduledTask -TaskName "${child.taskName}" -Confirm:$false -ErrorAction SilentlyContinue`],
+        { shell: true, stdio: 'ignore' },
+      );
+      child.taskName = null;
+    }
+    if (child.launcherPath) {
+      try {
+        fs.unlinkSync(child.launcherPath);
+      } catch {
+        /* 已删 */
+      }
+      child.launcherPath = null;
+    }
     await new Promise((r) => setTimeout(r, 1500));
     const child2 = spawnShell(exe, port, webviewDataDir);
     if (child2.child) {
@@ -484,6 +558,8 @@ async function run() {
       child2.child.stderr?.on('data', (d) => childOutput.push(d.toString()));
     }
     child.pid = child2.pid; // 让 cleanup 杀最新进程
+    child.taskName = child2.taskName ?? null; // 让 cleanup 清第二次的 task
+    child.launcherPath = child2.launcherPath ?? null;
     const inFrame2 = await connectWithDiagnostics();
     const resurrected = await inFrame2(async (k) => {
       const v = await window.sdk.storage.get(k);
