@@ -56,13 +56,13 @@ pnpm plugin:publish
 pnpm plugin:dev <dir>     # = pnpm -C packages/plugin-sdk exec lingfang-plugin dev <dir>  (注册 dev 安装，免打包直读，v1 仅 client)
 pnpm -C packages/plugin-sdk cli:dev     # run the CLI source directly (tsx)
 
-# Bundled runtimes (see "Runtimes" below). NOTE: `apps/desktop/runtimes/` is
-# currently empty and `runtime-lock.json` does not exist, so these error until
-# the lock file is generated/materialized.
+# Bundled runtimes (see "Runtimes" below). The lock file `apps/desktop/runtime-lock.json`
+# is committed; `apps/desktop/runtimes/` is gitignored and materialized at dev/build time.
+# On a fresh clone, run the populate step (or download the Release bundle) before these:
 pnpm -C apps/desktop runtime:prepare    # concat split parts -> runtimes/, verify sha256
 pnpm -C apps/desktop runtime:verify     # prepare + verify integrity + Playwright drift check
 
-# Installer (separate crate, NOT in the Cargo workspace)
+# Installer (separate crate, member of the Cargo workspace)
 cd apps/desktop/installer && cargo build
 ```
 
@@ -98,9 +98,10 @@ cd apps/desktop/installer && cargo build
     `plugin_package_manager::commands::*`, `plugin_security::*`.
 
 - **`packages/contract`** (`@lingfang/contract`) — the **single source of truth** for all host↔
-  plugin types. Zod schemas only; it contains **no host logic**. `src/index.ts` re-exports ~21
-  domain modules (`plugin`, `plugin-action`, `plugin-shared-state`, `plugin-registry`, `llm`,
-  `draft`, `rbac`, `billing`, `marketplace-*`, `local-scheduler`, …). Key shapes: `RuntimeType`
+  plugin types. Zod schemas only; it contains **no host logic**. `src/index.ts` re-exports the
+  domain modules (`identity`, `admin-common`, `plugin`, `plugin-action`, `plugin-workflow`,
+  `plugin-cloud-automation`, `plugin-registry`, `plugin-shared-state`, `draft`, `llm`,
+  `local-scheduler`, plus `semver`/util). Key shapes: `RuntimeType`
   (`client|cloud|nodejs|python|workflow`), `CapabilityKind` (17 kinds), `PluginManifest`
   (snake_case boundary), `PluginGrant` + `resolveGrant()` (deny-wins). **Contract drift is treated
   as a defect** — keep it authoritative and reuse its types everywhere.
@@ -154,13 +155,15 @@ cd apps/desktop/installer && cargo build
   (`generate_builtin_bundle`) zips each dir in `apps/desktop/builtin-plugins/` into a sha256-named
   `.lfplugin`, writes `index.json`, and emits `builtin_plugin_bundle.rs` embedded via
   `include_bytes!`. `main.rs` calls `register_builtins(INDEX_JSON, ARTIFACTS)`. Current built-ins:
-  `calculator` (python/PySide6), `game-2048` (nodejs), `notes` (client HTML).
+  `calculator` (python/PySide6), `game-2048` (nodejs), `notes` (client HTML), `action-demo`
+  (client, declares `demo.hello` action), `action-caller` (nodejs, drives the action bridge).
 
 ### Runtimes
 
 A **runtime** = app-bundled language runtimes for plugins: `node`, `python`, `ffmpeg`, `chromium`
-(Playwright). `apps/desktop/runtimes/` ships empty in source; it is populated at dev/build time from
-`apps/desktop/runtimes/runtime-lock.json` via the two scripts in `scripts/`:
+(Playwright). `apps/desktop/runtimes/` is gitignored and ships empty in source; it is materialized at
+dev/build time from the committed lock file `apps/desktop/runtime-lock.json` via the two scripts in
+`scripts/`:
 `materialize-bundled-runtimes.mjs` concatenates split `parts` into target files and verifies sha256;
 `verify-bundled-runtimes.mjs` checks `requiredFiles`/`keyFiles` and cross-checks Playwright
 revision/browserVersion drift. `RuntimeResolver` (`runtime_resolver.rs`) is the only entry point for

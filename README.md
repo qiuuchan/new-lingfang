@@ -37,11 +37,13 @@ pnpm plugin:create && pnpm plugin:validate && pnpm plugin:build
 | `apps/desktop` | Tauri 壳：React 18 前端（iframe 插件容器 + 能力网关调用）+ Rust 引擎（安装账本、能力网关、进程运行器、runtime 解析器、minisign 验签） |
 | `apps/desktop/installer` | SFX 安装器 crate（流式解压注入 ~1.7GB 内置 runtime） |
 | `packages/contract` | host↔插件类型的唯一权威来源（Zod schema；契约漂移视为缺陷） |
+| `packages/platform-contract` | 平台侧契约（治理 / 计费 / 市场等 Zod schema，与服务端对齐） |
 | `packages/plugin-sdk` | 插件作者 SDK + `lingfang-plugin` CLI（create/validate/build/publish） |
 | `packages/ui-tokens` | 设计 token（CSS 变量），宿主注入每个插件 iframe |
 
 计划与状态：第一轮 `IMPLEMENTATION_PLAN.md`（A–D 阶段，已全部完成）→ 第二轮
-`IMPROVEMENT_PLAN.md`（E–H 阶段：验证制度化 / 安全对齐 / 产品证明 / 还债）。
+`IMPROVEMENT_PLAN.md`（E–H 阶段）→ 第三轮 `IMPROVEMENT_PLAN_3.md`（I–K 阶段，LF-06~LF-09 验收通过）
+→ 第四轮 `IMPROVEMENT_PLAN_4.md`（L–O 阶段，LF-10~LF-14 工单派发中）。
 
 安全模型（三档边界，如实版）：client iframe 是真边界；nodejs/python 进程沙箱
 （Windows Job Object）是生命周期围栏而非安全边界，其真实防线是安装时信任（minisign 验签）

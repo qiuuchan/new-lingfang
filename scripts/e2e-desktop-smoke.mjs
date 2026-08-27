@@ -229,12 +229,36 @@ async function run() {
       const webviewProcs = (() => {
         try {
           const out = spawnSync(
-            'tasklist',
-            ['/FI', 'IMAGENAME eq msedgewebview2.exe', '/FO', 'CSV'],
-            { stdio: ['ignore', 'pipe', 'ignore'] },
+            'powershell',
+            [
+              '-NoProfile',
+              '-Command',
+              "Get-CimInstance Win32_Process -Filter \"Name='msedgewebview2.exe'\" | " +
+                'Select-Object ProcessId, ParentProcessId, CommandLine | ConvertTo-Json -Compress',
+            ],
+            { stdio: ['ignore', 'pipe', 'ignore'], encoding: 'utf8' },
           ).stdout.toString();
-          const n = (out.match(/msedgewebview2\.exe/gi) ?? []).length;
-          return `msedgewebview2.exe 进程数=${n}`;
+          const procs = JSON.parse(out || '[]');
+          const list = Array.isArray(procs) ? procs : [procs];
+          const childOfApp = list.filter(
+            (p) => p.ParentProcessId && String(p.ParentProcessId) === String(child.pid),
+          );
+          const allCmdline = list.map((p) => p.CommandLine ?? '').join(' ');
+          const hasDebug = /remote-debugging/.test(allCmdline);
+          const runtimeVer = (() => {
+            try {
+              const v = spawnSync('powershell', [
+                '-NoProfile',
+                '-Command',
+                "Get-ItemProperty 'HKLM:\\SOFTWARE\\WOW6432Node\\Microsoft\\EdgeUpdate\\Clients\\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}' -Name pv -ErrorAction SilentlyContinue | Select-Object -ExpandProperty pv",
+              ], { stdio: ['ignore', 'pipe', 'ignore'], encoding: 'utf8' }).stdout.trim();
+              return `WebView2 runtime=${v || '?'}`;
+            } catch {
+              return 'WebView2 runtime=?';
+            }
+          })();
+          return `msedgewebview2 总数=${list.length}（属 app 子进程=${childOfApp.length}）；` +
+            `带 remote-debugging=${hasDebug}；${runtimeVer}`;
         } catch (e2) {
           return `msedgewebview2 检查失败: ${e2.message}`;
         }
@@ -263,7 +287,7 @@ async function run() {
         }
       })();
       const diag = [
-        `等待 CDP(${port}) 超时；app 进程存活=${exeAlive}；${webviewProcs}；${webviewCmdline}`,
+        `等待 CDP(${port}) 超时；app 进程存活=${exeAlive}；${webviewProcs}`,
         `--- app stdout/stderr（tail 80）---`,
         ...childOutput.slice(-80),
         `--- ${portState} ---`,

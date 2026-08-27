@@ -475,8 +475,9 @@ pub fn run_plugin_script(
         }
     }
 
-    // 组D task 06-16：plugin_script 预览执行仍用临时 sandbox（group B 的 venv/pnpm 持久化运行尚未落地），
+    // 组D task 06-16：plugin_script 预览执行仍用临时 sandbox，
     // 故 plugin_id 传 None 走 workspace_dir 显式路径分支（不落 plugins_root，保持预览隔离）。
+    // 依赖安装复用 plugin_runner 的 ensure_python_venv / ensure_node_dependencies（见下方分支）。
     let workspace = resolve_workspace(
         Some(sandbox_canon.to_string_lossy().to_string()),
         None,
