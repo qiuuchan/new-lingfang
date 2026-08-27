@@ -217,3 +217,92 @@ describe('clip-digest: llm.chat timeout is wrapped as PluginAiError', () => {
     expect(error).toMatchObject({ name: 'PluginAiError', code: 'request_timeout', status: 408 });
   });
 });
+
+// LF-13 自修：复刻 examples/clip-digest/ui/index.html 的 persistRecord（LRU 淘汰，不再静默 localStorage）。
+const CD_PREFIX = 'clip-digest:';
+
+function cdIsQuotaError(err: unknown): boolean {
+  const e = (err as { code?: string; message?: string }) || {};
+  const msg = e.message || '';
+  const code = e.code || '';
+  return (
+    code === 'kv_quota_exceeded' ||
+    code === 'kv_value_too_large' ||
+    msg.includes('kv_quota_exceeded') ||
+    msg.includes('kv_value_too_large') ||
+    msg.includes('超出') ||
+    msg.includes('quota')
+  );
+}
+
+async function cdPersistRecord(record: unknown) {
+  try {
+    await sdk.storage.set(CD_PREFIX + Date.now().toString(36), record);
+    return;
+  } catch (err) {
+    if (!cdIsQuotaError(err)) throw err;
+  }
+  const keys = await sdk.storage.list(CD_PREFIX);
+  if (keys.length > 0) {
+    const oldest = keys.slice().sort()[0];
+    await sdk.storage.delete(oldest);
+    await sdk.storage.set(CD_PREFIX + Date.now().toString(36), record);
+    return;
+  }
+  throw new Error('单条剪藏超过 256KB 上限，无法存档（已为你生成摘要，但原文未保存）');
+}
+
+describe('clip-digest: LRU eviction replaces silent localStorage fallback (LF-13)', () => {
+  it('evicts the oldest entry then retries on kv_quota_exceeded', async () => {
+    const calls: Array<{ cap: string; op?: string }> = [];
+    const bridge = vi.fn().mockImplementation(async (cap: string, args: unknown) => {
+      const op = (args as { op?: string }).op;
+      calls.push({ cap, op });
+      if (cap === 'storage.kv' && op === 'set') {
+        const setCount = calls.filter((c) => c.cap === 'storage.kv' && c.op === 'set').length;
+        if (setCount === 1) {
+          throw Object.assign(new Error('storage 写入超出配额'), { code: 'kv_quota_exceeded' });
+        }
+      }
+      if (cap === 'storage.kv' && op === 'list') {
+        return { keys: ['clip-digest:aaa', 'clip-digest:bbb'] };
+      }
+      return undefined;
+    });
+    (globalThis as TestGlobal).__lingfangInvoke = bridge;
+
+    await expect(cdPersistRecord({ text: 'x', summary: null })).resolves.toBeUndefined();
+
+    const setCalls = calls.filter((c) => c.cap === 'storage.kv' && c.op === 'set');
+    const deleteCalls = calls.filter((c) => c.cap === 'storage.kv' && c.op === 'delete');
+    const listCalls = calls.filter((c) => c.cap === 'storage.kv' && c.op === 'list');
+    expect(listCalls).toHaveLength(1);
+    expect(deleteCalls).toEqual([{ cap: 'storage.kv', op: 'delete' }]);
+    expect(setCalls).toHaveLength(2); // 首次失败 + 淘汰后重试成功
+  });
+
+  it('does NOT silently swallow non-quota storage errors (no localStorage fallback)', async () => {
+    // LF-13 自修核心：原实现会在 storage.set 抛错时静默落到 localStorage；
+    // 新实现只对配额类错误做 LRU 淘汰，其它错误必须原样抛出，不得掩盖。
+    const bridge = vi.fn().mockRejectedValue(new Error('磁盘 IO 故障'));
+    (globalThis as TestGlobal).__lingfangInvoke = bridge;
+
+    await expect(cdPersistRecord({ text: 'x', summary: null })).rejects.toThrow('磁盘 IO 故障');
+  });
+
+  it('surfaces a clear error when a single value exceeds 256KB (no entries to evict)', async () => {
+    const bridge = vi.fn().mockImplementation(async (cap: string, args: unknown) => {
+      const op = (args as { op?: string }).op;
+      if (cap === 'storage.kv' && op === 'set') {
+        throw Object.assign(new Error('单值过大'), { code: 'kv_value_too_large' });
+      }
+      if (cap === 'storage.kv' && op === 'list') {
+        return { keys: [] };
+      }
+      return undefined;
+    });
+    (globalThis as TestGlobal).__lingfangInvoke = bridge;
+
+    await expect(cdPersistRecord({ text: 'x', summary: null })).rejects.toThrow(/256KB/);
+  });
+});

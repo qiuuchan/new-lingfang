@@ -1,0 +1,409 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>网页剪藏</title>
+    <style>
+      :root {
+        --bg: #f8f9fa;
+        --surface: #ffffff;
+        --text: #212529;
+        --text-secondary: #868e96;
+        --border: #dee2e6;
+        --accent: #3b82f6;
+        --accent-hover: #2563eb;
+        --danger: #ef4444;
+        --warning-bg: #fff7e6;
+        --warning-border: #ffd591;
+        --warning-text: #ad6800;
+        --shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+        --radius: 8px;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #0f1117;
+          --surface: #1a1b26;
+          --text: #c9d1d9;
+          --text-secondary: #8b949e;
+          --border: #30363d;
+          --accent: #58a6ff;
+          --accent-hover: #79c0ff;
+          --danger: #f87171;
+          --warning-bg: #2d2410;
+          --warning-border: #5c4a1a;
+          --warning-text: #e3b341;
+          --shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+        }
+      }
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans SC',
+          'PingFang SC', 'Microsoft YaHei', sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        font-size: 14px;
+        line-height: 1.5;
+        padding: 16px;
+      }
+      .card {
+        max-width: 560px;
+        margin: 0 auto;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow);
+        padding: 20px;
+      }
+      h1 { font-size: 18px; font-weight: 700; margin-bottom: 4px; }
+      .subtitle { font-size: 12px; color: var(--text-secondary); margin-bottom: 16px; }
+      .actions { display: flex; gap: 8px; margin-bottom: 16px; }
+      button {
+        padding: 8px 16px;
+        font-size: 13px;
+        font-weight: 600;
+        border-radius: var(--radius);
+        border: 1px solid var(--border);
+        background: var(--surface);
+        color: var(--text);
+        cursor: pointer;
+        transition: all 0.15s;
+        white-space: nowrap;
+      }
+      button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+      button.primary:hover { background: var(--accent-hover); }
+      button:disabled { opacity: 0.5; cursor: not-allowed; }
+      .section { border-top: 1px solid var(--border); padding-top: 12px; margin-top: 12px; }
+      .section-title { font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px; }
+      .field {
+        width: 100%;
+        padding: 8px;
+        font-size: 13px;
+        border-radius: 6px;
+        border: 1px solid var(--border);
+        background: var(--bg);
+        color: var(--text);
+        margin-bottom: 8px;
+      }
+      .clipped, .summary, .article {
+        font-size: 13px;
+        white-space: pre-wrap;
+        word-break: break-word;
+        max-height: 160px;
+        overflow-y: auto;
+        background: var(--bg);
+        border-radius: 6px;
+        padding: 8px;
+        color: var(--text);
+      }
+      .loading { display: flex; align-items: center; gap: 8px; color: var(--text-secondary); font-size: 13px; }
+      .spinner {
+        width: 14px; height: 14px;
+        border: 2px solid var(--border);
+        border-top-color: var(--accent);
+        border-radius: 50%;
+        animation: spin 0.6s linear infinite;
+      }
+      @keyframes spin { to { transform: rotate(360deg); } }
+      .error { color: var(--danger); font-size: 13px; }
+      .notice {
+        margin-top: 12px;
+        padding: 10px 12px;
+        font-size: 13px;
+        border-radius: 6px;
+        background: var(--warning-bg);
+        border: 1px solid var(--warning-border);
+        color: var(--warning-text);
+      }
+      .muted { color: var(--text-secondary); font-style: italic; font-size: 12px; }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h1>网页剪藏</h1>
+      <div class="subtitle">剪贴板取 URL → 抓取正文 → 灵坊平台 LLM 摘要 → 存档</div>
+
+      <div class="actions">
+        <button class="primary" id="btnClip">从剪贴板读取 URL</button>
+        <button id="btnManual">手动粘贴</button>
+      </div>
+
+      <input
+        id="urlInput"
+        class="field"
+        type="text"
+        placeholder="https://example.com/article"
+        style="display: none"
+      />
+
+      <div id="status" class="muted">点击「从剪贴板读取 URL」，或「手动粘贴」输入一个网页地址。</div>
+
+      <div class="section" id="urlSection" style="display: none">
+        <div class="section-title">目标 URL</div>
+        <div class="clipped" id="urlText"></div>
+      </div>
+
+      <div class="section" id="articleSection" style="display: none">
+        <div class="section-title">抓取正文（截断预览）</div>
+        <div class="article" id="articleText"></div>
+      </div>
+
+      <div class="section" id="summarySection" style="display: none">
+        <div class="section-title">AI 摘要（同时弹出宿主弹层）</div>
+        <div class="summary" id="summaryText"></div>
+      </div>
+    </div>
+
+    <script>
+      const sdk = window.sdk;
+
+      if (!sdk) {
+        document.getElementById('status').textContent = '当前运行环境未注入 SDK';
+        document.getElementById('btnClip').disabled = true;
+        document.getElementById('btnManual').disabled = true;
+      }
+
+      // 单插件 kv 容量策略（与宿主一致）：单值 <= 256KB，最多 1024 条。
+      // 超过即触发 quota 错误，这里用 list/delete/count 实现 LRU 淘汰，不再静默降级到 localStorage。
+      const MAX_ENTRIES = 1024;
+      const PREFIX = 'web-clip:';
+
+      async function persistRecord(record) {
+        // 1) 先尝试直接写入；配额充足即落盘完成。
+        try {
+          await sdk.storage.set(PREFIX + Date.now().toString(36), record);
+          return;
+        } catch (err) {
+          if (!isQuotaError(err)) throw err;
+        }
+        // 2) 配额耗尽：LRU 淘汰最旧的一条（按 key 字典序即时间序），再重试一次。
+        const keys = await sdk.storage.list(PREFIX);
+        if (keys.length > 0) {
+          const oldest = keys.slice().sort()[0];
+          await sdk.storage.delete(oldest);
+          await sdk.storage.set(PREFIX + Date.now().toString(36), record);
+          return;
+        }
+        // 3) 单值本身过大（256KB 硬限），无法写入：如实告知用户，不掩盖。
+        throw new Error('单条剪藏超过 256KB 上限，无法存档（已为你生成摘要，但原文未保存）');
+      }
+
+      function isQuotaError(err) {
+        const e = err || {};
+        const msg = e.message || '';
+        const code = e.code || '';
+        return (
+          code === 'kv_quota_exceeded' ||
+          code === 'kv_value_too_large' ||
+          msg.includes('kv_quota_exceeded') ||
+          msg.includes('kv_value_too_large') ||
+          msg.includes('超出') ||
+          msg.includes('quota')
+        );
+      }
+
+      function escapeHtml(text) {
+        if (text == null) return '';
+        return String(text)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#39;');
+      }
+
+      function truncate(text, n) {
+        if (!text) return '';
+        return text.length > n ? text.slice(0, n) + '…' : text;
+      }
+
+      function setStatus(html, isError) {
+        const el = document.getElementById('status');
+        el.innerHTML = isError ? '<span class="error">' + html + '</span>' : html;
+      }
+
+      function showNotice(message) {
+        const existing = document.getElementById('notice');
+        if (existing) existing.remove();
+        const div = document.createElement('div');
+        div.className = 'notice';
+        div.id = 'notice';
+        div.textContent = message;
+        document.querySelector('.card').appendChild(div);
+      }
+
+      // 从 net.fetch 返回的 HTML 中抽取可见正文（轻量正则剥离，非完整解析）。
+      function extractArticle(html) {
+        const withoutScripts = html
+          .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+          .replace(/<style[\s\S]*?<\/style>/gi, ' ');
+        const text = withoutScripts
+          .replace(/<[^>]+>/g, ' ')
+          .replace(/&nbsp;/g, ' ')
+          .replace(/&amp;/g, '&')
+          .replace(/&lt;/g, '<')
+          .replace(/&gt;/g, '>')
+          .replace(/\s+/g, ' ')
+          .trim();
+        return text;
+      }
+
+      function looksLikeUrl(s) {
+        return /^https?:\/\/\S+$/i.test(s.trim());
+      }
+
+      async function clipUrl() {
+        let text;
+        try {
+          text = await sdk.clipboard.readText();
+        } catch (err) {
+          setStatus('读取剪贴板失败：' + escapeHtml((err && err.message) || '未知错误'), true);
+          return null;
+        }
+        const url = (text || '').trim().split(/\s+/)[0];
+        if (!looksLikeUrl(url)) {
+          setStatus('剪贴板中没有可用的 http(s) URL。可「手动粘贴」。');
+          return null;
+        }
+        return url;
+      }
+
+      async function run(url, source) {
+        const btn = document.getElementById('btnClip');
+        const btnManual = document.getElementById('btnManual');
+        btn.disabled = true;
+        btnManual.disabled = true;
+
+        document.getElementById('urlSection').style.display = 'block';
+        document.getElementById('urlText').textContent = url;
+        setStatus('正在抓取 ' + escapeHtml(url) + ' …');
+
+        let htmlBody;
+        try {
+          const resp = await sdk.net.fetch(url, { method: 'GET' });
+          if (!resp || resp.status < 200 || resp.status >= 300) {
+            throw new Error('net.fetch 返回状态码 ' + (resp && resp.status));
+          }
+          htmlBody = typeof resp.body === 'string' ? resp.body : JSON.stringify(resp.body);
+        } catch (err) {
+          const msg = (err && err.message) || '未知错误';
+          // net.fetch 的内网/保留地址会被宿主 SSRF 守卫拦截，归一为 net_fetch_ssrf_blocked。
+          if ((err && err.code) === 'net_fetch_ssrf_blocked' || msg.includes('SSRF') || msg.includes('内网')) {
+            setStatus('该地址被 SSRF 防护拦截（内网/保留地址不可抓取）：' + escapeHtml(msg), true);
+          } else {
+            setStatus('抓取失败：' + escapeHtml(msg), true);
+          }
+          btn.disabled = false;
+          btnManual.disabled = false;
+          return;
+        }
+
+        const article = extractArticle(htmlBody);
+        document.getElementById('articleSection').style.display = 'block';
+        document.getElementById('articleText').textContent = truncate(article, 3000);
+
+        const summaryEl = document.getElementById('summaryText');
+        const summarySection = document.getElementById('summarySection');
+        summarySection.style.display = 'block';
+        summaryEl.innerHTML = '<div class="loading"><div class="spinner"></div>灵坊平台 LLM 正在总结…</div>';
+        setStatus('正文已抓取，正在生成摘要…');
+
+        const SYSTEM_PROMPT = '你是网页剪藏助手，用简洁中文总结要点，分条列出，控制在200字内。';
+        const record = {
+          url: url,
+          articleLength: article.length,
+          summary: null,
+          createdAt: new Date().toISOString(),
+          source: source,
+        };
+
+        try {
+          if (typeof sdk.llm?.chat !== 'function') {
+            throw new Error('relay_not_configured');
+          }
+          const summary = await sdk.llm.chat({
+            model: 'fast',
+            messages: [
+              { role: 'system', content: SYSTEM_PROMPT },
+              { role: 'user', content: article.slice(0, 12000) },
+            ],
+          });
+          const summaryBody = typeof summary === 'string' ? summary : summary.content || '';
+
+          record.summary = summaryBody;
+          summaryEl.textContent = summaryBody;
+          setStatus('摘要已生成，并通过宿主弹层展示。');
+
+          try {
+            await sdk.ui.render({ type: 'markdown', body: '## 网页剪藏摘要\n\n' + summaryBody + '\n\n' + url });
+          } catch (uiErr) {
+            setStatus('摘要已生成（本地展示成功，弹层调用失败：' + escapeHtml(uiErr.message || '未知错误') + '）。');
+          }
+
+          // 存档：LRU 淘汰，配额错误如实提示（不再静默降级 localStorage）。
+          try {
+            await persistRecord(record);
+          } catch (storeErr) {
+            showNotice((storeErr && storeErr.message) || '存档失败');
+          }
+        } catch (err) {
+          const code = (err && err.code) || '';
+          const msg = (err && err.message) || '';
+          if (code === 'relay_not_configured' || msg.includes('relay_not_configured')) {
+            record.summary = null;
+            summaryEl.textContent =
+              'AI 摘要暂不可用：未配置灵坊平台 LLM 凭据（relay_not_configured）。已为你抓取正文。';
+            showNotice('AI 摘要暂不可用：未配置灵坊平台 LLM 凭据。已为你抓取正文。');
+            setStatus('已抓取正文；AI 摘要因凭据缺失跳过。');
+            try {
+              await persistRecord(record);
+            } catch (storeErr) {
+              showNotice((storeErr && storeErr.message) || '存档失败');
+            }
+            try {
+              await sdk.ui.render({
+                type: 'markdown',
+                body: '## 网页剪藏（降级）\n\nAI 摘要暂不可用：未配置灵坊平台 LLM 凭据。\n\n已抓取：' + url,
+              });
+            } catch (uiErr) {
+              /* 降级弹层失败可忽略 */
+            }
+          } else {
+            summaryEl.textContent = '摘要生成失败。正文已抓取。';
+            setStatus('摘要生成失败：' + escapeHtml(msg) + '（正文已抓取）', true);
+          }
+        } finally {
+          btn.disabled = false;
+          btnManual.disabled = false;
+        }
+      }
+
+      if (sdk) {
+        document.getElementById('btnClip').addEventListener('click', async () => {
+          const url = await clipUrl();
+          if (url) await run(url, 'clipboard');
+        });
+        document.getElementById('btnManual').addEventListener('click', () => {
+          const input = document.getElementById('urlInput');
+          if (input.style.display === 'none') {
+            input.style.display = 'block';
+            input.focus();
+            return;
+          }
+          const url = input.value.trim();
+          if (!looksLikeUrl(url)) {
+            setStatus('请输入合法的 http(s) URL。', true);
+            return;
+          }
+          run(url, 'manual');
+        });
+        document.getElementById('urlInput').addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') {
+            const url = e.target.value.trim();
+            if (looksLikeUrl(url)) run(url, 'manual');
+          }
+        });
+      }
+    </script>
+  </body>
+</html>

@@ -229,29 +229,42 @@
         document.querySelector('.card').appendChild(div);
       }
 
-      // localStorage 安全网：仅在 sdk.storage 抛错时使用
-      function localFallbackGet(key) {
-        try {
-          return Promise.resolve(JSON.parse(localStorage.getItem(key)));
-        } catch {
-          return Promise.resolve(null);
-        }
-      }
-      function localFallbackSet(key, val) {
-        try {
-          localStorage.setItem(key, JSON.stringify(val));
-        } catch {
-          /* ignore quota */
-        }
-        return Promise.resolve();
+      // LF-13：不再静默降级到 localStorage。改用 LF-07 的 list/delete/count 做 LRU 淘汰，
+      // 配额错误如实提示用户，避免掩盖 kv 配额耗尽的真实语义（消除 g2-sdk-friction #5.3 隐患）。
+      const PREFIX = 'clip-digest:';
+
+      function isQuotaError(err) {
+        const e = err || {};
+        const msg = e.message || '';
+        const code = e.code || '';
+        return (
+          code === 'kv_quota_exceeded' ||
+          code === 'kv_value_too_large' ||
+          msg.includes('kv_quota_exceeded') ||
+          msg.includes('kv_value_too_large') ||
+          msg.includes('超出') ||
+          msg.includes('quota')
+        );
       }
 
-      async function storeValue(key, val) {
+      async function persistRecord(record) {
+        // 1) 先尝试直接写入；配额充足即落盘完成。
         try {
-          await sdk.storage.set(key, val);
-        } catch {
-          await localFallbackSet(key, val);
+          await sdk.storage.set(PREFIX + Date.now().toString(36), record);
+          return;
+        } catch (err) {
+          if (!isQuotaError(err)) throw err;
         }
+        // 2) 配额耗尽：LRU 淘汰最旧的一条（按 key 字典序即时间序），再重试一次。
+        const keys = await sdk.storage.list(PREFIX);
+        if (keys.length > 0) {
+          const oldest = keys.slice().sort()[0];
+          await sdk.storage.delete(oldest);
+          await sdk.storage.set(PREFIX + Date.now().toString(36), record);
+          return;
+        }
+        // 3) 单值本身过大（256KB 硬限），无法写入：如实告知用户，不掩盖。
+        throw new Error('单条剪藏超过 256KB 上限，无法存档（已为你生成摘要，但原文未保存）');
       }
 
       async function handleClip() {
@@ -273,15 +286,18 @@
           return;
         }
 
-        const key = 'clip-digest:' + Date.now().toString(36);
         const record = {
           text: text,
           summary: null,
           createdAt: new Date().toISOString(),
         };
 
-        // 持久化剪藏原文（storage.kv，单值 <= 256KB）
-        await storeValue(key, record);
+        // 持久化剪藏原文（storage.kv，单值 <= 256KB；配额耗尽走 LRU 淘汰，不实降级）
+        try {
+          await persistRecord(record);
+        } catch (storeErr) {
+          showNotice((storeErr && storeErr.message) || '剪藏原文存档失败');
+        }
 
         document.getElementById('clipSection').style.display = 'block';
         document.getElementById('clippedText').textContent = truncate(text, 2000);
@@ -311,7 +327,11 @@
 
           // 持久化摘要
           record.summary = summaryBody;
-          await storeValue(key, record);
+          try {
+            await persistRecord(record);
+          } catch (storeErr) {
+            showNotice((storeErr && storeErr.message) || '摘要存档失败');
+          }
 
           summaryEl.textContent = summaryBody;
           setStatus('摘要已生成，并通过宿主弹层展示。');
@@ -335,7 +355,11 @@
           if (code === 'relay_not_configured' || msg.includes('relay_not_configured')) {
             // 优雅降级：凭据缺失，原文已保存，不抛出
             record.summary = null;
-            await storeValue(key, record);
+            try {
+              await persistRecord(record);
+            } catch (storeErr) {
+              showNotice((storeErr && storeErr.message) || '降级存档失败');
+            }
 
             summaryEl.textContent =
               'AI 摘要暂不可用：未配置灵坊平台 LLM 凭据（relay_not_configured）。已为你保存原文剪藏。';
