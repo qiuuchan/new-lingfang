@@ -552,3 +552,97 @@ fn main() {
         .run(tauri::generate_context!())
         .expect("启动 LingFang 桌面壳失败");
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
+
+    // ── extract_host：纯字符串解析，按 "://" 切分，不看 scheme ──
+    #[test]
+    fn extract_host_strips_scheme_path_query() {
+        assert_eq!(extract_host("https://example.com/path?x=1"), Some("example.com".to_string()));
+        assert_eq!(extract_host("http://127.0.0.1:8787/x"), Some("127.0.0.1".to_string()));
+        assert_eq!(extract_host("ftp://127.0.0.1"), Some("127.0.0.1".to_string()));
+    }
+
+    #[test]
+    fn extract_host_keeps_ipv6_brackets() {
+        assert_eq!(extract_host("http://[2001:db8::1]:8080/foo"), Some("[2001:db8::1]".to_string()));
+    }
+
+    #[test]
+    fn extract_host_returns_none_without_scheme() {
+        assert_eq!(extract_host("no-scheme-host"), None);
+        assert_eq!(extract_host(""), None);
+    }
+
+    // ── is_blocked_ip：直接构造 IpAddr（确定性，无 DNS） ──
+    #[test]
+    fn is_blocked_ip_v4_reserved_ranges() {
+        let blocked = [
+            IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),  // loopback
+            IpAddr::V4(Ipv4Addr::new(10, 0, 0, 1)),   // private
+            IpAddr::V4(Ipv4Addr::new(192, 168, 1, 1)), // private
+            IpAddr::V4(Ipv4Addr::new(172, 16, 5, 5)),  // private (16-31)
+            IpAddr::V4(Ipv4Addr::new(169, 254, 1, 1)), // link-local (cloud metadata)
+            IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),     // unspecified
+        ];
+        for ip in blocked {
+            assert!(is_blocked_ip(ip), "{ip} 应被 SSRF 拦截");
+        }
+    }
+
+    #[test]
+    fn is_blocked_ip_v4_public_allowed() {
+        let allowed = [
+            IpAddr::V4(Ipv4Addr::new(8, 8, 8, 8)),
+            IpAddr::V4(Ipv4Addr::new(1, 1, 1, 1)),
+        ];
+        for ip in allowed {
+            assert!(!is_blocked_ip(ip), "{ip} 为公网地址，不应被拦截");
+        }
+    }
+
+    #[test]
+    fn is_blocked_ip_v6_reserved_ranges() {
+        let blocked = [
+            IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1)),        // loopback ::1
+            IpAddr::V6(Ipv6Addr::new(0xfd00, 0, 0, 0, 0, 0, 0, 1)),  // unique-local
+            IpAddr::V6(Ipv6Addr::new(0xfe80, 0, 0, 0, 0, 0, 0, 1)),  // link-local
+            IpAddr::V6(Ipv6Addr::UNSPECIFIED),                         // ::
+        ];
+        for ip in blocked {
+            assert!(is_blocked_ip(ip), "{ip} 应被 SSRF 拦截");
+        }
+    }
+
+    #[test]
+    fn is_blocked_ip_v6_public_allowed() {
+        let allowed = [IpAddr::V6(Ipv6Addr::new(0x2606, 0x4700, 0x4700, 0, 0, 0, 0, 0x1111))];
+        for ip in allowed {
+            assert!(!is_blocked_ip(ip), "{ip} 为公网地址，不应被拦截");
+        }
+    }
+
+    // ── is_blocked_host：确定性字面量（127.0.0.1 / ::1 / localhost / [::1]） ──
+    #[test]
+    fn is_blocked_host_loopback_and_private() {
+        for h in [
+            "localhost",
+            "127.0.0.1",
+            "::1",
+            "192.168.0.5",
+            "10.0.0.1",
+            "[::1]",
+        ] {
+            assert!(is_blocked_host(h), "{h} 应被 SSRF 拦截");
+        }
+    }
+
+    #[test]
+    fn is_blocked_host_public_domain_literal_allowed() {
+        // 字面公网地址确定性允许；真实域名解析走 fail-closed 由集成覆盖。
+        assert!(!is_blocked_host("8.8.8.8"));
+    }
+}

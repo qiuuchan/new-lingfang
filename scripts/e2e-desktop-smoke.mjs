@@ -157,6 +157,63 @@ async function spawnElevated(exe, env) {
   throw new Error('runas 降权启动后未找到 lingfang-desktop 进程');
 }
 
+// 启动桌面壳（按 elevated 与否选择降权或普通 spawn），返回 { pid, env, child }。
+// webviewDataDir 隔离用户数据，避免与真实安装互相污染。
+function spawnShell(exe, port, webviewDataDir) {
+  const appEnv = {
+    ...process.env,
+    WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${port}`,
+    WEBVIEW2_USER_DATA_FOLDER: webviewDataDir,
+  };
+  if (isElevated()) {
+    return spawnElevated(exe, appEnv);
+  }
+  const child = spawn(exe, [], {
+    cwd: path.dirname(exe),
+    env: appEnv,
+    stdio: ['ignore', 'pipe', 'pipe'],
+    detached: true, // 独立进程组，退出时 taskkill /T 清树
+  });
+  return { pid: child.pid, env: appEnv, child };
+}
+
+// 连接 CDP → 打开内置 notes → 返回在 notes iframe 内求值的 inFrame 函数。
+async function openNotes(port) {
+  await waitForCdp(port, 90_000);
+  const browser = await chromium.connectOverCDP(`http://127.0.0.1:${port}`);
+  const context = browser.contexts()[0];
+  const page = context.pages().find((p) => /tauri/i.test(p.url())) ?? context.pages()[0];
+  assert(page, 'CDP 连接成功并找到桌面壳页面');
+
+  await page.waitForSelector(`text=${NOTES_NAME}`, { timeout: 30_000 });
+  const row = page.locator('div.divide-y > div', { hasText: NOTES_NAME }).first();
+  await row.getByRole('button', { name: '运行', exact: true }).click();
+  const iframeLocator = page.locator('iframe[sandbox="allow-scripts"]', { hasTitle: NOTES_NAME });
+  await iframeLocator.waitFor({ state: 'visible', timeout: 30_000 });
+
+  const frame = () =>
+    page.frames().find((f) => f.parentFrame() !== null && f.url().includes('srcdoc')) ??
+    page.frames().find((f) => f.parentFrame() !== null);
+
+  async function inFrame(fn, arg) {
+    const deadline = Date.now() + 30_000;
+    let lastErr;
+    while (Date.now() < deadline) {
+      const f = frame();
+      if (f) {
+        try {
+          return await f.evaluate(fn, arg);
+        } catch (e) {
+          lastErr = e;
+        }
+      }
+      await new Promise((r) => setTimeout(r, 300));
+    }
+    throw lastErr ?? new Error('iframe 不可用');
+  }
+  return inFrame;
+}
+
 function assert(cond, label) {
   if (!cond) throw new Error(`断言失败：${label}`);
   log(`✔ ${label}`);
@@ -173,29 +230,12 @@ async function run() {
   log(`产物：${exe}`);
 
   const port = await freePort();
-  log(`启动桌面壳，CDP 端口 ${port} …`);
   const webviewDataDir = path.join(
     repoRoot,
     `.e2e-webview2-data-${process.pid}-${Date.now()}`,
   );
-  const appEnv = {
-    ...process.env,
-    WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${port}`,
-    WEBVIEW2_USER_DATA_FOLDER: webviewDataDir,
-  };
 
-  let child;
-  if (isElevated()) {
-    child = await spawnElevated(exe, appEnv);
-  } else {
-    child = spawn(exe, [], {
-      cwd: path.dirname(exe),
-      env: appEnv,
-      stdio: ['ignore', 'pipe', 'pipe'],
-      detached: true, // 独立进程组，避免被本脚本信号牵连；退出时 taskkill /T 清树
-    });
-  }
-
+  const child = spawnShell(exe, port, webviewDataDir);
   const childOutput = [];
   if (child.child) {
     child.child.stdout?.on('data', (d) => childOutput.push(d.toString()));
@@ -213,7 +253,8 @@ async function run() {
     process.exit(1);
   }, OVERALL_TIMEOUT_MS);
 
-  try {
+  // CDP 超时诊断（复用既有 rich diagnostics 逻辑）。
+  async function connectWithDiagnostics() {
     try {
       await waitForCdp(port, 90_000);
     } catch (e) {
@@ -294,46 +335,19 @@ async function run() {
       ].join('\n');
       throw new Error(`${e.message}\n${diag}`);
     }
-    const browser = await chromium.connectOverCDP(`http://127.0.0.1:${port}`);
-    const context = browser.contexts()[0];
-    const page = context.pages().find((p) => /tauri/i.test(p.url())) ?? context.pages()[0];
-    assert(page, 'CDP 连接成功并找到桌面壳页面');
-    log(`页面 URL: ${page.url()}`);
+    return openNotes(port);
+  }
+
+  try {
+    // ── 第一轮：连接 + 打开 notes ──
+    const inFrame = await connectWithDiagnostics();
+    log(`页面 URL: ${'(notes iframe 已打开)'}`);
 
     // 1. 插件中心加载：已安装列表出现内置 notes
-    await page.waitForSelector(`text=${NOTES_NAME}`, { timeout: 30_000 });
     assert(true, `插件中心渲染，已安装列表含「${NOTES_NAME}」`);
 
-    // 2. 打开 notes → PluginRunner 渲染 sandbox iframe
-    const row = page.locator('div.divide-y > div', { hasText: NOTES_NAME }).first();
-    await row.getByRole('button', { name: '运行', exact: true }).click();
-    const iframeLocator = page.locator('iframe[sandbox="allow-scripts"]', {
-      hasTitle: NOTES_NAME,
-    });
-    await iframeLocator.waitFor({ state: 'visible', timeout: 30_000 });
+    // 2. PluginRunner 渲染 sandbox iframe
     assert(true, 'PluginRunner 渲染 iframe（sandbox="allow-scripts"）');
-
-    // sandbox+srcdoc 的 frame 是 opaque origin，取 frame 对象直接求值
-    const frame = () =>
-      page.frames().find((f) => f.parentFrame() !== null && f.url().includes('srcdoc')) ??
-      page.frames().find((f) => f.parentFrame() !== null);
-
-    async function inFrame(fn, arg) {
-      const deadline = Date.now() + 30_000;
-      let lastErr;
-      while (Date.now() < deadline) {
-        const f = frame();
-        if (f) {
-          try {
-            return await f.evaluate(fn, arg);
-          } catch (e) {
-            lastErr = e;
-          }
-        }
-        await new Promise((r) => setTimeout(r, 300));
-      }
-      throw lastErr ?? new Error('iframe 不可用');
-    }
 
     // 3. sdk 注入 + ui-tokens
     assert(
@@ -362,6 +376,45 @@ async function run() {
       'storage.kv set/get 真实成功（经 client_storage_kv 落盘）',
     );
 
+    // 4b. storage.kv 管理 API 真机往返（LF-07 落地）：list / delete / count
+    const mgmt = await inFrame(async () => {
+      const toCount = (c) => (typeof c === 'number') ? c : (c && c.count);
+      // 形状兜底：宿主 shim 已解包为数组；npm SDK 旧形态回传 {keys}。
+      // 注意必须先判 Array.isArray——数组自带 .keys() 方法，直接读 .keys 会拿到函数。
+      const asKeys = (v) => (Array.isArray(v) ? v : (v && Array.isArray(v.keys) ? v.keys : []));
+      // 先清场：kv 跨运行持久化（应用数据目录共享，非 WebView2 数据目录），上次运行可能留有 lf12_b。
+      await window.sdk.storage.delete('lf12_a');
+      await window.sdk.storage.delete('lf12_b');
+      const countBefore = toCount(await window.sdk.storage.count());
+      await window.sdk.storage.set('lf12_a', '1');
+      await window.sdk.storage.set('lf12_b', '2');
+      const listed = await window.sdk.storage.list();
+      const keys = asKeys(listed);
+      const hasBoth = keys.includes('lf12_a') && keys.includes('lf12_b');
+      await window.sdk.storage.delete('lf12_a');
+      const keysAfter = asKeys(await window.sdk.storage.list());
+      const removed = !keysAfter.includes('lf12_a') && keysAfter.includes('lf12_b');
+      const cnt = await window.sdk.storage.count();
+      const countVal = toCount(cnt);
+      // 诊断：断言失败时把原始返回形状带进错误消息（list/count 的宿主 unwrap 是否符合 npm SDK 门面）。
+      return {
+        hasBoth, removed, countVal, countBefore,
+        rawListed: JSON.stringify(listed)?.slice(0, 200),
+        rawCount: JSON.stringify(cnt)?.slice(0, 80),
+      };
+    });
+    assert(mgmt.hasBoth, `storage.kv list 含 lf12_a / lf12_b（raw=${mgmt.rawListed}）`);
+    assert(mgmt.removed, 'storage.kv delete 移除 lf12_a 后保留 lf12_b');
+    // count 用相对断言（前置步骤已写入 e2e_smoke key，且 kv 跨运行持久化）：+2 -1 → before+1。
+    assert(
+      mgmt.countVal === mgmt.countBefore + 1,
+      `storage.kv count = 前置数+1（before=${mgmt.countBefore} actual=${mgmt.countVal} raw=${mgmt.rawCount}）`,
+    );
+    // 收尾清理：lf12_b 不留在用户存储里（kv 跨运行持久化）。
+    await inFrame(async () => {
+      await window.sdk.storage.delete('lf12_b');
+    });
+
     // 5. 未声明 kind → capability_not_declared
     assert(
       (await inFrame(async () => {
@@ -387,6 +440,56 @@ async function run() {
       })) === 'relay_not_configured',
       'llm.chat 未配置凭据拒绝 relay_not_configured',
     );
+
+    // 7. clipboard 网关 gate 负向证明：notes 未声明 clipboard，应被拒绝
+    //    （clipboard 正向往返 writeText→readText 需声明 clipboard 的插件，列入 LF-12 未验证项）
+    assert(
+      (await inFrame(async () => {
+        try {
+          await window.sdk.clipboard.readText();
+          return 'resolved';
+        } catch (e) {
+          return e.code ?? `no-code:${e.message}`;
+        }
+      })) === 'capability_not_declared',
+      '未声明的 clipboard.readText 拒绝 capability_not_declared（网关 gate 生效）',
+    );
+
+    // 8. net.fetch 网关 gate 负向证明：notes 未声明 net.fetch，应被拒绝
+    //    （net.fetch 对公网 URL 返回 200 需真实/适配器 relay，且环回地址被 SSRF 故意拦截，列入未验证项）
+    assert(
+      (await inFrame(async () => {
+        try {
+          await window.sdk.net.fetch('https://example.com');
+          return 'resolved';
+        } catch (e) {
+          return e.code ?? `no-code:${e.message}`;
+        }
+      })) === 'capability_not_declared',
+      '未声明的 net.fetch 拒绝 capability_not_declared（网关 gate 生效）',
+    );
+
+    // 9. 重启不复活证明（LF-07 落盘修正）：写入后 delete，重启应用，删除的键不应复活。
+    const restartKey = `lf12_restart_${Date.now()}`;
+    await inFrame(async (k) => {
+      await window.sdk.storage.set(k, 'v');
+      await window.sdk.storage.delete(k);
+    }, restartKey);
+    log('已删除键，重启桌面壳以验证落盘修正（delete 后重启不复活）…');
+    killTree(child.pid);
+    await new Promise((r) => setTimeout(r, 1500));
+    const child2 = spawnShell(exe, port, webviewDataDir);
+    if (child2.child) {
+      child2.child.stdout?.on('data', (d) => childOutput.push(d.toString()));
+      child2.child.stderr?.on('data', (d) => childOutput.push(d.toString()));
+    }
+    child.pid = child2.pid; // 让 cleanup 杀最新进程
+    const inFrame2 = await connectWithDiagnostics();
+    const resurrected = await inFrame2(async (k) => {
+      const v = await window.sdk.storage.get(k);
+      return v === null || v === undefined;
+    }, restartKey);
+    assert(resurrected, `storage.kv delete 后重启应用，键「${restartKey}」不复活（落盘修正生效）`);
 
     log('全部断言通过 ✅');
   } finally {

@@ -63,6 +63,13 @@
 宿主按 **deny-wins**（拒绝优先、用户 > 角色）解析授权。插件文档应解释每项能力的数据访问
 范围与隐私影响。
 
+**声明即授权，桌面壳无运行时权限门**：能力网关只做「插件是否声明了该 kind」的三重校验，
+**不在运行时弹出权限请求**（不存在 `requestSystemPermission` 之类的运行时授权弹窗）。换言之，
+只要插件 manifest 声明了某 `kind` 且通过安装信任校验，宿主就按该 kind 的契约执行——敏感能力
+（如 `system.screenshot`、`clipboard`）的「授权」来自用户的知情与显式声明，而非运行时的二次确认。
+因此，**插件作者必须如实声明每一项用到的能力**，未声明的 kind 调用会被网关直接拒绝
+（`capability_not_declared`）。
+
 进程隔离：插件进程运行于 Windows Job Object 沙箱中；`.lfplugin` 包通过 minisign 签名校验，
 并对照召回（recall）列表检查。
 
