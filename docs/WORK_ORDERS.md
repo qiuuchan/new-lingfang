@@ -655,7 +655,20 @@ feed = GitHub Releases，但发版 CI 目前不上传 latest.json、安装包未
 **范围**：第一个面向公众 GitHub Release；Release notes 含定位 + Demo GIF 链接 + 装机指引 +
 已知限制（v1 Windows-only / 无市场 / 无自动更新后台下载）；配套发布 D4 选题 1 架构博客（Discussions）。
 
-**验收标准**：v0.1.0 Release 上线；notes 完整；架构博客首发。
+**验收标准**：v0.1.11 Release 上线；notes 完整；架构博客首发。
+
+> **🔧 Release 已上线，博客待用户发布（2026-08-28，tag `v0.1.11`）**
+>
+> ✅ **v0.1.11 Release 已公开上线**（CI run 33179898616 全绿，约 18 分钟）：
+> assets 5 件齐全——`LingFang-Setup-0.1.11.exe`（633MB，minisign 签名）、`runtimes-bundle.zip`
+> （1.7GB，签名）、`latest.json`（version 无 v 前缀 / sha256 / minisig_url 口径全对）。
+> notes 完整：定位 + Demo GIF + 装机指引 + 已知限制 + 反馈通道（挂载自
+> `docs/release-notes-v0.1.11.md`）。**LF-16 遗留验收（打 tag 实跑发版）随本 Release 一并闭环**。
+> 密钥结论：v0.0.1-test 的 minisig KeyId（`3AAE104344CB8CA3`）与 B3 文档公钥一致——Org secret
+> 仍在，无需重配。
+> ⏳ **剩余（用户）**：GitHub 网页启用 Discussions（Settings → General）→ 将
+> `docs/blog/d4-01-zero-server-sandbox-tiers.md`（三档安全边界，代码引用已核实）粘贴为
+> Discussions 首发帖。
 
 **依赖**：P5 + LF-23 + LF-20。
 
