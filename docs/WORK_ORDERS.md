@@ -650,7 +650,7 @@ feed = GitHub Releases，但发版 CI 目前不上传 latest.json、安装包未
 
 **依赖**：LF-26。
 
-## LF-28 · 公开 Release v0.1.0（S3）
+## LF-28 · 公开 Release v0.1.11（S3，版本号 2026-08-28 拍板：沿用应用当前版本 0.1.11）
 
 **范围**：第一个面向公众 GitHub Release；Release notes 含定位 + Demo GIF 链接 + 装机指引 +
 已知限制（v1 Windows-only / 无市场 / 无自动更新后台下载）；配套发布 D4 选题 1 架构博客（Discussions）。
