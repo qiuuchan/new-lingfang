@@ -268,10 +268,11 @@ jobs:
           & $minisign -V -p bundle.pubkey -m runtimes-bundle.zip -x runtimes-bundle.zip.minisig
           if ($LASTEXITCODE -ne 0) { throw 'minisign self-verification failed' }
 
-      # ── 6. 上传 Release 附件（bundle + 签名）──────────────────────────
+      # ── 6. 上传 Release 附件（bundle + 签名 + Release notes）──────────
       - name: Upload release asset
         uses: softprops/action-gh-release@v2
         with:
+          body_path: docs/release-notes-v0.1.11.md
           files: |
             runtimes-bundle.zip
             runtimes-bundle.zip.minisig
