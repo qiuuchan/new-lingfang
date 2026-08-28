@@ -1,0 +1,64 @@
+name: 缺陷报告（Bug Report）
+description: 装不上、跑不动、行为不对——如实描述，我会每周复盘
+title: '[bug] '
+labels: ['bug']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        谢谢反馈！提交前可先看一眼 [快速开始](https://github.com/qiuuchan/new-lingfang/blob/main/docs/getting-started.md)
+        确认步骤没遗漏。尽量写全，能复现就能修。
+  - type: input
+    id: env
+    attributes:
+      label: 环境
+      description: Windows 版本（10/11）、WebView2 是否正常、Node/pnpm 版本（如用源码安装）
+      placeholder: 例如：Windows 11 / Node 20.12 / pnpm 9.3
+    validations:
+      required: true
+  - type: dropdown
+    id: stage
+    attributes:
+      label: 卡在哪个环节？
+      options:
+        - 装机（clone / install / populate / dev 启动）
+        - 启动桌面壳
+        - 运行插件（内置或知识库工作站）
+        - 知识库：导入
+        - 知识库：检索
+        - 知识库：问答（relay / LLM）
+        - 其他
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      description: 你做了什么操作？
+      placeholder: |
+        1. ...
+        2. ...
+        3. 出现了 ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期望行为
+      description: 你本来以为会发生什么？
+    validations:
+      required: false
+  - type: textarea
+    id: actual
+    attributes:
+      label: 实际行为
+      description: 实际发生了什么？有报错文案/截图请贴上来（截图可直接拖进输入框）
+    validations:
+      required: true
+  - type: checkboxes
+    id: confirm
+    attributes:
+      label: 确认
+      options:
+        - label: 我确认这不是已知问题（搜过 Issues）
+          required: true
