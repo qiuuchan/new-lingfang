@@ -67,7 +67,7 @@ function extractArticle(html: string): string {
 
 describe('web-clip: capability SDK routing', () => {
   it('sdk.clipboard.readText() routes to clipboard bridge with op=read', async () => {
-    const bridge = vi.fn().mockResolvedValue('https://example.com/article');
+    const bridge = vi.fn().mockResolvedValue({ content: 'https://example.com/article' });
     (globalThis as TestGlobal).__lingfangInvoke = bridge;
 
     await expect(sdk.clipboard.readText()).resolves.toBe('https://example.com/article');

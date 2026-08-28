@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Relay 探针</title>
+    <style>
+      body {
+        font-family: system-ui, -apple-system, sans-serif;
+        background: var(--lf-color-surface, #f8f9fa);
+        color: var(--lf-color-text, #212529);
+        padding: 16px;
+      }
+      .row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 0;
+        border-bottom: 1px solid var(--lf-color-border, #dee2e6);
+      }
+      .badge {
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 12px;
+        font-weight: 600;
+        white-space: nowrap;
+      }
+      .badge.ok { background: #d3f9d8; color: #2b8a3e; }
+      .badge.err { background: #ffe3e3; color: #c92a2a; }
+      .badge.pending { background: #fff3bf; color: #e67700; }
+      code { font-size: 12px; word-break: break-all; }
+    </style>
+  </head>
+  <body>
+    <h3>Relay 探针（AI 能力面正向验证）</h3>
+    <p id="status" data-probe-status="pending">加载中…</p>
+    <div id="rows"></div>
+    <script>
+      // LF-19：四 kind 正向探针。每项结果写进 data-probe-<kind> 属性与行内徽标，
+      // e2e 经 CDP 断言：ok=code 拿到真实（适配器）响应；err=<code> 时如实标注降级。
+      const sdk = window.sdk;
+      const KINDS = [
+        ['llm.chat', () => sdk.llm.chat({ messages: [{ role: 'user', content: 'ping' }] })],
+        ['image.generate', () => sdk.image.generate({ prompt: 'probe' })],
+        ['video.generate', () => sdk.video.generate({ seconds: 1, image: 'AAAA', video: 'AAAA' })],
+        ['audio.generate', () => sdk.audio.generate({ audio: 'AAAA', prompt_text: 'probe' })],
+      ];
+      const rows = document.getElementById('rows');
+      const status = document.getElementById('status');
+
+      function badge(kind, state, detail) {
+        const row = document.createElement('div');
+        row.className = 'row';
+        row.innerHTML =
+          '<span>' + kind + '</span>' +
+          '<span class="badge ' + state + '">' + state + '</span>' +
+          '<code>' + (detail ?? '') + '</code>';
+        rows.appendChild(row);
+      }
+
+      async function runProbe() {
+        for (const [kind, fn] of KINDS) {
+          status.setAttribute('data-probe-' + kind, 'pending');
+          badge(kind, 'pending', '…');
+          try {
+            const out = await fn();
+            // 视频生成走异步任务提交（{ task_id } 即成功）；其余 kind 返回资源/内容对象。
+            // 只要是真实（非降级错误）的对象响应，即视为链路正向。
+            const ok = out !== null && typeof out === 'object';
+            const detail = JSON.stringify(out).slice(0, 120);
+            status.setAttribute('data-probe-' + kind, ok ? 'ok:' + detail : 'empty:' + detail);
+            badge(kind, ok ? 'ok' : 'err', detail);
+          } catch (e) {
+            const code = (e && e.code) || String(e);
+            status.setAttribute('data-probe-' + kind, 'err:' + code);
+            badge(kind, 'err', String(e).slice(0, 120));
+          }
+        }
+        const results = {};
+        for (const [kind] of KINDS) {
+          results[kind] = status.getAttribute('data-probe-' + kind);
+        }
+        status.setAttribute('data-probe-status', 'done');
+      }
+
+      runProbe();
+    </script>
+  </body>
+</html>

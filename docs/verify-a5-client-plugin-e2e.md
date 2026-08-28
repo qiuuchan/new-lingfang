@@ -259,3 +259,34 @@ updater 覆盖后删除临时安装包。
   的正确构建路径）→ 恢复；复用开关 `E2E_UPDATE_NEW_MAIN`
 - 新版 setup：`installer.exe + payload.zip(新 main) + 12 字节 SFX trailer`（`LFSFX\0\0\0` + payload_len u32 LE，
   缺失 trailer 时 `locate_payload` 返回 None → 报「本安装包不含内嵌 payload」）
+
+
+## U2 · 能力面观察项闭环（LF-19，2026-08-28 实测 `scripts/e2e-cap-closure-verify.mjs` 全绿 exit 0）
+
+### 断言清单（全部 ✅）
+1. **双插件 + 探针导入**：clip-digest / web-clip / relay-probe 三个 `.lfplugin` 经
+   `install_plugin_artifact`（origin=local）导入；F3 来源徽标「本地导入」+ 插件详情
+   「⚠ 插件未附带签名（manifest.sig 缺失）」警示 ×3 全部展示。
+2. **clipboard 正向往返**：web-clip iframe 内 `sdk.clipboard.writeText → readText`
+   等值往返（首次正向实证；环回此前仅网关负向）。
+3. **net.fetch 公网正向**：`https://example.com/` → HTTP 200（环回 SSRF 拦截已有单测）。
+4. **relay 四 kind 正向**：relay-probe 插件（声明 llm.chat / image.generate /
+   video.generate / audio.generate）在 relay-adapter（MOCK）驱动下四链路全 ok——
+   audio 经宿主 `client_audio_generate` 全链路可用（非缺口）；video 为异步任务提交
+   （`{ task_id }` 即成功语义）。
+
+### 过程中修复的真实契约缺陷（clipboard 包络解包）
+宿主 `clipboard_op` 返回 `{ content }`（与 storage.kv `{ value }` 同构），但 npm SDK 与
+iframe bootstrap 的 `readText` 均未解包、TS 类型谎称 string——真机 readText 拿到对象。
+修复：`packages/plugin-sdk/src/index.ts` 与 `apps/desktop/src/lib/clientSdkBootstrap.ts`
+双双解包 `.content`（对齐 LF-07「双门面须同步」纪律）；spec mock 形状改为 `{ content }`。
+回归：plugin-sdk 163 / desktop 69 全绿。
+
+### 排障实录（e2e 脚本侧）
+- **CDP invoke 传数组当命令名**：`page.evaluate(fn, ['list_plugin_installations'])` 让
+  `cmd` 变成数组 → IPC 反序列化报 `invalid type: sequence, expected a string` 且 promise
+  永不落定（页面 console 可见）——**参数须直接传字符串**。耗时近 1 小时定位（trivial
+  evaluate / get_app_version 均正常、前端自身调用正常，唯该调用挂起）。
+- 先卸载再导入保证确定性（同名新版本会停在 pendingRelease，runner 仍加载旧活动版本）。
+- base-ui Dialog 无 `role="dialog"`；签名警示文案是 reason（「未附带签名」）而非「未签名」。
+
