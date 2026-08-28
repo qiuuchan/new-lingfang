@@ -318,9 +318,49 @@ jobs:
             -x "$($setup.FullName).minisig"
           if ($LASTEXITCODE -ne 0) { throw 'installer minisign self-verification failed' }
 
+      # ── LF-16：生成 update feed 的 latest.json ────────────────────────
+      # 字段口径对齐 apps/desktop/src-tauri/src/update.rs 的 Feed 解析结构：
+      # version 必须是纯 semver（tag 的 v 前缀已剥离，否则 check_update 解析失败）；
+      # setup.url / minisig_url 用 GitHub Release 附件固定下载 URL 形态。
+      # 版本三方门槛：tag（去 v）必须等于 tauri.conf.json 的 version——tag 打错
+      # 或忘升版本号时在这里硬失败，而不是产出一个指向错误版本的死 feed。
+      - name: Generate latest.json (update feed)
+        shell: bash
+        run: |
+          set -euo pipefail
+          setup_exe=$(ls target/release/LingFang-Setup-*.exe | head -1)
+          setup_name=$(basename "$setup_exe")
+          sha256=$(sha256sum "$setup_exe" | cut -d' ' -f1)
+          size=$(stat -c%s "$setup_exe")
+          version="${GITHUB_REF_NAME#v}"
+          app_version=$(node -p "require('./apps/desktop/src-tauri/tauri.conf.json').version")
+          if [ "$version" != "$app_version" ]; then
+            echo "tag 版本 $version 与 tauri.conf.json version $app_version 不一致，拒绝发版" >&2
+            exit 1
+          fi
+          base_url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}"
+          node -e "
+            const fs = require('fs');
+            const [version, base, name, sha, size] = process.argv.slice(1);
+            const feed = {
+              version,
+              notes: '',
+              pub_date: new Date().toISOString(),
+              setup: {
+                url: base + '/' + name,
+                sha256: sha,
+                minisig_url: base + '/' + name + '.minisig',
+                size: Number(size),
+              },
+            };
+            fs.writeFileSync('latest.json', JSON.stringify(feed, null, 2) + '\n');
+            console.log(fs.readFileSync('latest.json', 'utf8'));
+          " "$version" "$base_url" "$setup_name" "$sha256" "$size"
+
       - name: Upload installer release asset
         uses: softprops/action-gh-release@v2
         with:
           files: |
             target/release/LingFang-Setup-*.exe
             target/release/LingFang-Setup-*.exe.minisig
+            latest.json

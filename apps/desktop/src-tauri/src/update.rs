@@ -463,4 +463,39 @@ mod tests {
         // 错误信息应说明 sha256 失败；临时文件不应残留。
         assert!(msg.contains("sha256"), "错误信息应提及 sha256：{msg}");
     }
+
+    /// LF-16 验收：CI「Generate latest.json」步骤产出的 feed 形状必须能被
+    /// check_update 的 Feed 解析结构正确解析（字段口径 fixture，双向锁死——
+    /// CI 侧改字段名/结构而不改本解析，或反之，该测试即红）。
+    #[test]
+    fn feed_fixture_parses_ci_latest_json() {
+        let raw = r#"{
+          "version": "0.1.12",
+          "notes": "",
+          "pub_date": "2026-08-28T10:00:00.000Z",
+          "setup": {
+            "url": "https://github.com/qiuuchan/new-lingfang/releases/download/v0.1.12/LingFang-Setup-0.1.12.exe",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "minisig_url": "https://github.com/qiuuchan/new-lingfang/releases/download/v0.1.12/LingFang-Setup-0.1.12.exe.minisig",
+            "size": 633000000
+          }
+        }"#;
+        let feed: Feed = serde_json::from_str(raw).expect("CI latest.json 形状必须可解析");
+        assert_eq!(feed.version, "0.1.12");
+        assert_eq!(feed.setup.size, 633000000);
+        assert!(feed.setup.url.starts_with("https://github.com/"));
+        assert!(feed.setup.minisig_url.ends_with(".minisig"));
+        assert_eq!(feed.setup.sha256.len(), 64);
+        // CI 剥离了 tag 的 v 前缀 → semver 必须可解析（check_update 的硬前提）。
+        assert!(semver::Version::parse(&feed.version).is_ok());
+        // 宽容字段（notes/pub_date 空串缺省）不破坏解析。
+        assert!(feed.notes.is_empty() && feed.pub_date == "2026-08-28T10:00:00.000Z");
+    }
+
+    /// LF-16 反向：tag 前缀若没剥离（version 带 v），semver 解析必须失败——
+    /// 这正是 CI 用 `${GITHUB_REF_NAME#v}` 剥前缀的原因，锁死该约定。
+    #[test]
+    fn feed_version_with_v_prefix_fails_semver() {
+        assert!(semver::Version::parse("v0.1.12").is_err());
+    }
 }
