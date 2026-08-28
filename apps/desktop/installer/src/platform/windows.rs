@@ -225,10 +225,48 @@ fn path_is_under(child: &Path, parent: &Path) -> bool {
 /// 导致 runtimes/python/python.exe 仍被占用、自解压覆盖失败（os error 32）。
 ///
 /// 仅按路径前缀匹配，不会误杀系统同名进程（如系统 python.exe）。返回终止的进程数。
+///
+/// ⚠️ LF-17 集成缺陷修复：update 模式下部署器（新 setup）的**父进程就是 updater.exe**，
+/// 而 updater 恰好运行于安装目录内（deploy.rs 保证安装目录有 updater.exe）——若按旧逻辑
+/// 无差别清场，updater 会被自己的部署流程误杀，更新链在「覆盖成功」后中断：不重启主程序、
+/// 不删临时包、不自删。因此必须豁免「自身 + 父进程链」。
 pub fn kill_app_processes(install_dir: &Path) -> u32 {
     let mut handles: Vec<HANDLE> = Vec::new();
     let mut killed = 0u32;
     unsafe {
+        let snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+        if snapshot.is_null() {
+            return 0;
+        }
+        // 首遍：收集 (pid, parent_pid) 全表（Toolhelp 快照仅此一份，父链查询需回表）。
+        let mut procs: Vec<(u32, u32)> = Vec::new();
+        let mut entry: PROCESSENTRY32W = std::mem::zeroed();
+        entry.dwSize = std::mem::size_of::<PROCESSENTRY32W>() as u32;
+        if Process32FirstW(snapshot, &mut entry) != 0 {
+            loop {
+                procs.push((entry.th32ProcessID, entry.th32ParentProcessID));
+                if Process32NextW(snapshot, &mut entry) == 0 {
+                    break;
+                }
+            }
+        }
+        CloseHandle(snapshot);
+
+        // 豁免集合：自身 + 沿父链向上 3 层（updater → 可能的启动器）。
+        let mut exempt: Vec<u32> = vec![std::process::id()];
+        for _ in 0..3 {
+            let cur = *exempt.last().unwrap();
+            let parent = procs
+                .iter()
+                .find(|(pid, _)| *pid == cur)
+                .map(|(_, p)| *p)
+                .unwrap_or(0);
+            if parent == 0 || exempt.contains(&parent) {
+                break;
+            }
+            exempt.push(parent);
+        }
+
         let snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
         if snapshot.is_null() {
             return 0;
@@ -238,6 +276,12 @@ pub fn kill_app_processes(install_dir: &Path) -> u32 {
         if Process32FirstW(snapshot, &mut entry) != 0 {
             loop {
                 let pid = entry.th32ProcessID;
+                if exempt.contains(&pid) {
+                    if Process32NextW(snapshot, &mut entry) == 0 {
+                        break;
+                    }
+                    continue;
+                }
                 // 取该进程完整 exe 路径，判断是否落在 install_dir 之下。
                 let under = query_process_image_path(pid)
                     .map(|p| path_is_under(Path::new(&p), install_dir))

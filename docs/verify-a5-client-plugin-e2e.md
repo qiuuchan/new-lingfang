@@ -216,3 +216,46 @@ session / 无 handler 即失败」的稳态；`plugin_llm_bridge.rs` 新增 `rou
 - 内置安装须在 `install()` 标记 `dependency_status=Ready` 且 builtin 直接激活（否则 `action_caller_descriptor`
   拦下 → `action_dependency_denied`）。
 
+
+## U1 · 更新链路真机闭环（LF-17，2026-08-28 实测 `scripts/e2e-update-verify.mjs` 双向断言全绿 exit 0）
+
+### 闭环形态（首跑即暴露集成缺陷，修后复跑全绿）
+
+环回 update-feed 适配器（`e2e-update-verify.mjs` 内联零依赖 http 服务器）挂两个版本：
+真实 feed（新包 sha256 正确）+ 篡改 feed（改一字节的包 + 真实 sha256）。驱动桌面壳实例：
+
+```
+[旧版安装实例 0.1.11] --CDP core.invoke--> check_update(环回 feed) → download_update(sha 硬校验)
+  → apply_update(spawn updater.exe update 模式) → invoke quit_app 退出主进程
+  → updater 等 pid 退出 → 运行新 setup --silent --target 覆盖 → 重启新 main.exe
+  → CDP 重连 → get_app_version = 0.1.12（新版自报）
+```
+
+### 双向断言（全部 ✅）
+
+**篡改对照**：篡改包被 `download_update` 拒绝（错误信息含 sha256 期望/实际值）、临时安装包被清理、
+目标 `lingfang-desktop.exe` hash 不变（未被覆盖）、实例仍报 0.1.11。
+**成功闭环**：check_update 返回 0.1.12 → download 落盘（sha256 匹配）→ apply 拉起 updater →
+主进程退出 → updater 覆盖 → 新版实例重启 → CDP 重连后 `get_app_version` 自报 **0.1.12**；
+updater 覆盖后删除临时安装包。
+
+### 暴露并修复的集成缺陷（updater.exe update 模式首次真机运行）
+
+**缺陷（严重）**：installer `platform::kill_app_processes`（`deploy_to` 步骤 0）会终止所有
+「exe 路径位于安装目录之下」的进程——而 update 模式下新 setup 的**父进程 updater.exe 恰好
+运行于安装目录内**（deploy.rs 设计保证安装目录有 updater.exe）。部署流程把 updater 自己杀了：
+日志停在「静默安装完成」后无「更新覆盖完成」，主程序不重启、临时包不删、updater 不自删。
+**修复**：`kill_app_processes` 先收集进程表，构建「自身 + 父进程链 3 层」豁免集合后再清场
+（`apps/desktop/installer/src/platform/windows.rs`）。复跑：全链恢复，断言全绿。
+
+**e2e 脚本侧三处修复**：① `window.__TAURI__.invoke` → `window.__TAURI__.core.invoke`
+（Tauri v2 全局形态，`invoke` 在 `core` 命名空间下）；② `window.close()` 不触发 close-requested
+（JS close 非用户点 X），改用 `core.invoke('quit_app')` 干净退出；③ WebView2 首启初始导航竞态
+（`Execution context was destroyed`）——connectPage 等页面稳定后再取。
+
+### 环境与产物
+- 旧版实例：`LingFang-Setup-0.1.11.exe --silent --target`（LF-18 重建安装器产物）
+- 新版主程序：临时改 `tauri.conf.json` version=0.1.12 → `tauri build --no-bundle`（LF-18 缺陷 B 后
+  的正确构建路径）→ 恢复；复用开关 `E2E_UPDATE_NEW_MAIN`
+- 新版 setup：`installer.exe + payload.zip(新 main) + 12 字节 SFX trailer`（`LFSFX\0\0\0` + payload_len u32 LE，
+  缺失 trailer 时 `locate_payload` 返回 None → 报「本安装包不含内嵌 payload」）

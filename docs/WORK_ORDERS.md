@@ -415,6 +415,20 @@ feed = GitHub Releases，但发版 CI 目前不上传 latest.json、安装包未
 
 **依赖**：LF-15。apply 段需安装实例环境，建议与 LF-18 同机连做。
 
+> **🔧 已交付，待验收（2026-08-28，分支 `feat/lf-17-update-e2e`）——期间暴露并修复 1 个真实集成缺陷**
+>
+> `scripts/e2e-update-verify.mjs` 双向断言真机全绿 exit 0（成功闭环：0.1.11 实例 →
+> check → download 验签 → apply → quit_app → updater 覆盖 → 重启 → 0.1.12 自报；
+> 篡改对照：sha256 不符拒绝 + 临时包清理 + 目标未覆盖）。执行记录见
+> `docs/verify-a5-client-plugin-e2e.md` U1 节。
+>
+> **缺陷（updater.exe update 模式首次真机运行暴露）**：`kill_app_processes` 清场时误杀
+> 运行于安装目录内的 updater 自身 → 覆盖成功后更新链中断（不重启/不删包/不自删）。
+> 修复：豁免「自身 + 父进程链」（`installer/src/platform/windows.rs`）；installer 单测 33/33。
+>
+> **基线**：cargo **273 + installer 33** 全绿（回归跑于合并 main 后的 LF-17 分支）。
+> e2e 脚本侧三处修复：`core.invoke` 路径、`quit_app` 替代 `window.close()`、CDP 首启导航竞态。
+
 ---
 
 ## LF-18 · 安装闭环本机复核（LF-11 遗留）
