@@ -50,13 +50,15 @@ AI 能力在应用设置中录入 relay 凭据后，经宿主代理命令转发�
 
 ## 从哪开始
 
-| 目的 | 入口 |
-| --- | --- |
-| 理解架构与能力面 | [`CODEBUDDY.md`](./CODEBUDDY.md) |
+| 目的                                        | 入口                                                         |
+| ------------------------------------------- | ------------------------------------------------------------ |
+| **全部文档索引（按身份选路）**              | [`docs/index.md`](./docs/index.md)                           |
+| 快速装机 + 试插件（5 分钟）                 | [`docs/getting-started.md`](./docs/getting-started.md)       |
 | 开发插件（create / validate / build / dev） | [`docs/plugin-development.md`](./docs/plugin-development.md) |
-| 关键决策记录（ADR） | [`docs/decisions/`](./docs/decisions/) |
-| 装机与运行环境 | [`docs/lfs-setup.md`](./docs/lfs-setup.md) |
-| 发版与自动更新 | [`docs/release-runbook.md`](./docs/release-runbook.md) |
+| 关键决策记录（ADR）                         | [`docs/decisions/index.md`](./docs/decisions/index.md)       |
+| 理解架构与能力面                            | [`CODEBUDDY.md`](./CODEBUDDY.md)                             |
+| 装机与运行环境（LFS）                       | [`docs/lfs-setup.md`](./docs/lfs-setup.md)                   |
+| 发版与自动更新                              | [`docs/release-runbook.md`](./docs/release-runbook.md)       |
 
 计划与状态：第一轮 `IMPLEMENTATION_PLAN.md`（A–D 阶段，已完成）→ 第二轮
 `IMPROVEMENT_PLAN.md`（E–H 阶段）→ 第三轮 `IMPROVEMENT_PLAN_3.md`（I–K 阶段）→
@@ -78,14 +80,14 @@ AI 能力（llm/image/video/audio）由用户在应用设置中录入**平台 re
 
 混合 monorepo（pnpm workspace + Cargo workspace），详细指南见 [`CODEBUDDY.md`](./CODEBUDDY.md)：
 
-| 位置 | 内容 |
-| --- | --- |
-| `apps/desktop` | Tauri 壳：React 18 前端（iframe 插件容器 + 能力网关调用）+ Rust 引擎（安装账本、能力网关、进程运行器、runtime 解析器、minisign 验签） |
-| `apps/desktop/installer` | SFX 安装器 crate（流式解压注入 ~1.7GB 内置 runtime） |
-| `packages/contract` | host↔插件类型的唯一权威来源（Zod schema；契约漂移视为缺陷） |
-| `packages/platform-contract` | 平台侧契约（治理 / 计费 / 市场等 Zod schema，与服务端对齐） |
-| `packages/plugin-sdk` | 插件作者 SDK + `lingfang-plugin` CLI（create/validate/build/publish） |
-| `packages/ui-tokens` | 设计 token（CSS 变量），宿主注入每个插件 iframe |
+| 位置                         | 内容                                                                                                                                  |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/desktop`               | Tauri 壳：React 18 前端（iframe 插件容器 + 能力网关调用）+ Rust 引擎（安装账本、能力网关、进程运行器、runtime 解析器、minisign 验签） |
+| `apps/desktop/installer`     | SFX 安装器 crate（流式解压注入 ~1.7GB 内置 runtime）                                                                                  |
+| `packages/contract`          | host↔插件类型的唯一权威来源（Zod schema；契约漂移视为缺陷）                                                                           |
+| `packages/platform-contract` | 平台侧契约（治理 / 计费 / 市场等 Zod schema，与服务端对齐）                                                                           |
+| `packages/plugin-sdk`        | 插件作者 SDK + `lingfang-plugin` CLI（create/validate/build/publish）                                                                 |
+| `packages/ui-tokens`         | 设计 token（CSS 变量），宿主注入每个插件 iframe                                                                                       |
 
 ### 安全模型（三档边界，如实版）
 
