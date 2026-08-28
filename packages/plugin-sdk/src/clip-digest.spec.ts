@@ -27,7 +27,7 @@ function isRelayNotConfigured(err: unknown): boolean {
 
 describe('clip-digest: clipboard + storage SDK calls', () => {
   it('sdk.clipboard.readText() routes to the clipboard bridge with op=read', async () => {
-    const bridge = vi.fn().mockResolvedValue('hello clipboard');
+    const bridge = vi.fn().mockResolvedValue({ content: 'hello clipboard' });
     (globalThis as TestGlobal).__lingfangInvoke = bridge;
 
     await expect(sdk.clipboard.readText()).resolves.toBe('hello clipboard');

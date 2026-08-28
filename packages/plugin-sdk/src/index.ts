@@ -601,7 +601,11 @@ export const sdk = {
       invoke<unknown>('net.fetch', { url, init: sanitizeFetchInit(init) }),
   },
   clipboard: {
-    readText: () => invoke<string>('clipboard', { op: 'read' }),
+    // 宿主返回包络 { content }（与 storage.kv 的 { value } 同构），此处解包对齐 TS 类型 string。
+    readText: async () => {
+      const res = await invoke<{ content?: string }>('clipboard', { op: 'read' });
+      return (res && res.content) ?? '';
+    },
     writeText: (text: string) => invoke<void>('clipboard', { op: 'write', text }),
   },
   storage: {

@@ -491,6 +491,21 @@ feed = GitHub Releases，但发版 CI 目前不上传 latest.json、安装包未
 
 **依赖**：LF-15（插件与断言须在 main 上）。不被 LF-18 阻塞（可用 dev/debug 壳先行）。
 
+> **🔧 已交付，待验收（2026-08-28，分支 `feat/lf-19-cap-closure`）**
+>
+> `scripts/e2e-cap-closure-verify.mjs` 真机全绿 exit 0（执行记录见
+> `docs/verify-a5-client-plugin-e2e.md` U2 节）：
+> 1) clip-digest + web-clip + relay-probe 三 `.lfplugin` 导入 + F3 徽标「本地导入」+
+>    详情「未附带签名」警示；2) clipboard writeText→readText 正向往返（修出真实契约缺陷：
+>    宿主 `{content}` 包络未解包，npm SDK + iframe bootstrap 双门面已修 + spec 对齐）；
+>    3) net.fetch 公网 200；4) relay 四 kind 正向全绿（llm/image/video/audio，
+>    video 异步任务 `{task_id}` 语义；audio 全链路可用非缺口）；
+>    5) `is_blocked_host` 可控 resolver 注入 + 4 新单测（公网放行/内网拦截/混合拦截/
+>    fail-closed）+ `.invalid` 保留域真机 DNS fail-closed 实证；
+>    6) 全树回归引用 LF-15 + 本分支三基线。
+>
+> **基线**：cargo **273+33**、vitest 163/69/37/34、四包 typecheck 干净。
+
 ---
 
 ## 第六轮工单（2026-08-28 登记）

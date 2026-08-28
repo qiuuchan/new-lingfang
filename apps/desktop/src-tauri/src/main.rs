@@ -65,6 +65,24 @@ fn is_blocked_ip(ip: std::net::IpAddr) -> bool {
 /// net.fetch SSRF 防护：拒绝环回/私网/链路本地/未指定/组播地址（含云元数据 169.254.169.254）。
 /// 域名会做 DNS 解析后逐一检查；解析失败按拦截处理（fail-closed）。
 fn is_blocked_host(host: &str) -> bool {
+    is_blocked_host_with(host, resolve_host_addrs)
+}
+
+/// 真实 DNS 解析（唯一网络调用点；测试注入可控 resolver，见 `is_blocked_host_with`）。
+fn resolve_host_addrs(host: &str) -> Result<Vec<std::net::IpAddr>, ()> {
+    let addrs = std::net::ToSocketAddrs::to_socket_addrs(&format!("{host}:0"))
+        .map_err(|_| ())?;
+    Ok(addrs.map(|a| a.ip()).collect())
+}
+
+/// 注入式 SSRF 判定（LF-19：真实域名 DNS fail-closed 的稳定单测由此可控 resolver 提供）。
+/// 语义与 `is_blocked_host` 完全一致，仅解析实现可替换：
+/// - 字面 IP / localhost：纯判定，不触网；
+/// - 域名：解析结果逐地址检查，**解析失败一律拦截**（fail-closed——宁可误拦不可放行）。
+fn is_blocked_host_with(
+    host: &str,
+    resolve: impl Fn(&str) -> Result<Vec<std::net::IpAddr>, ()>,
+) -> bool {
     let host = host.trim_matches(['[', ']']).to_ascii_lowercase();
     if host == "localhost" {
         return true;
@@ -73,10 +91,10 @@ fn is_blocked_host(host: &str) -> bool {
         return is_blocked_ip(ip);
     }
     // 域名：解析后逐地址检查（fail-closed：解析失败即拦截）。
-    let Ok(mut addrs) = std::net::ToSocketAddrs::to_socket_addrs(&format!("{host}:0")) else {
+    let Ok(addrs) = resolve(&host) else {
         return true;
     };
-    addrs.any(|addr| is_blocked_ip(addr.ip()))
+    addrs.into_iter().any(is_blocked_ip)
 }
 
 /// 壳全局状态：能力注册表 + 已加载插件。
@@ -644,5 +662,57 @@ mod tests {
     fn is_blocked_host_public_domain_literal_allowed() {
         // 字面公网地址确定性允许；真实域名解析走 fail-closed 由集成覆盖。
         assert!(!is_blocked_host("8.8.8.8"));
+    }
+
+    // ── LF-19：真实域名 DNS fail-closed 稳定化——可控 resolver 注入（不触真实 DNS） ──
+    /// 公网域名 → 解析出公网地址 → 放行。
+    #[test]
+    fn is_blocked_host_with_public_domain_allowed() {
+        let resolve = |_: &str| Ok(vec![IpAddr::V4(Ipv4Addr::new(1, 1, 1, 1))]);
+        assert!(!is_blocked_host_with("example.com", resolve));
+    }
+
+    /// 多地址解析中只要**有一个**内网地址即拦截（DNS rebinding 防御：
+    /// 连接可能落在任一解析地址上，含内网的那个）。
+    #[test]
+    fn is_blocked_host_with_mixed_addrs_blocked() {
+        let resolve = |_: &str| {
+            Ok(vec![
+                IpAddr::V4(Ipv4Addr::new(10, 0, 0, 1)),
+                IpAddr::V4(Ipv4Addr::new(93, 184, 216, 34)),
+            ])
+        };
+        assert!(
+            is_blocked_host_with("mixed.example", resolve),
+            "域名解析出内网地址（哪怕混有公网）必须拦截"
+        );
+    }
+
+    /// 域名解析出内网地址 → 拦截（DNS rebinding 的典型形态）。
+    #[test]
+    fn is_blocked_host_with_domain_to_private_blocked() {
+        let resolve = |_: &str| Ok(vec![IpAddr::V4(Ipv4Addr::new(192, 168, 1, 1))]);
+        assert!(is_blocked_host_with("evil.example", resolve));
+        let resolve = |_: &str| Ok(vec![IpAddr::V6(Ipv6Addr::new(0xfd00, 0, 0, 0, 0, 0, 0, 1))]);
+        assert!(is_blocked_host_with("v6-ula.example", resolve));
+    }
+
+    /// **fail-closed**：真实域名解析失败（NXDOMAIN / 无网络 / 解析器故障）一律拦截。
+    #[test]
+    fn is_blocked_host_with_dns_failure_fail_closed() {
+        let resolve = |_: &str| Err(());
+        assert!(is_blocked_host_with("nonexistent.invalid", resolve));
+        assert!(is_blocked_host_with("dns-down.example", resolve));
+    }
+
+    /// 真机 DNS 的 fail-closed 实证：RFC 2606 保留域 `.invalid` 永不解析，
+    /// 无论网络通断（NXDOMAIN）或解析器故障（超时/失败）都必然被拦截。
+    /// 这是「真实域名」路径（走 ToSocketAddrs）而非注入 resolver 的纯逻辑证明。
+    #[test]
+    fn is_blocked_host_real_invalid_domain_fail_closed() {
+        assert!(
+            is_blocked_host("nonexistent-host.invalid"),
+            ".invalid 保留域必须 fail-closed 拦截"
+        );
     }
 }

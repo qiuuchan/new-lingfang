@@ -47,7 +47,9 @@ export const CLIENT_SDK_BOOTSTRAP = `(function(){
       notify: function(title, body){ return cap('system.notify', { title: title, body: body }); }
     },
     clipboard: {
-      readText: function(){ return cap('clipboard', { op: 'read' }); },
+      // LF-19 契约修复：宿主返回 { content }（与 storage.kv { value } 同构），
+      // 与 npm SDK 门面一致解包为 string（此前直传对象，readText 拿不到文本）。
+      readText: function(){ return cap('clipboard', { op: 'read' }).then(function(r){ return r && r.content; }); },
       writeText: function(text){ return cap('clipboard', { op: 'write', text: text }); }
     },
     fs: {
