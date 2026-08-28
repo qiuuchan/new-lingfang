@@ -100,7 +100,7 @@ describe('create 命令 — manifest 校验', () => {
       visibility: 'tenant',
       capabilities: [
         { kind: 'llm.chat', reason: '需要调用 LLM', risk: 'medium', requires_admin: false },
-        { kind: 'fs.read', reason: '需要读取文件', risk: 'low', requires_admin: false },
+        { kind: 'fs.read', reason: '需要读取文件', risk: 'low', requires_admin: false, paths: ['$HOME/Documents'] },
       ],
     };
     const result = validateManifest(manifest);

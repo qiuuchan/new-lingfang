@@ -571,6 +571,21 @@ feed = GitHub Releases，但发版 CI 目前不上传 latest.json、安装包未
 
 **依赖**：D1 拍板 ✅。
 
+> **🔧 已交付，待验收（2026-08-28，分支 `feat/lf-23-kb-station`）**
+>
+> `packages/plugin-sdk/examples/kb-station/` 全链真机绿（`scripts/e2e-kb-station-verify.mjs`
+> exit 0，记录见 `docs/verify-a5-client-plugin-e2e.md` U3 节）：粘贴导入 → 切片 → 列表 →
+> 关键词检索（重叠二元组 CJK 分词）→ LLM 问答（片段 context + MOCK relay）→ fs.read 白名单
+> 双向 → reload 持久化。能力面 storage.kv + llm.chat + ui.view + fs.read（$HOME/Documents 白名单）。
+>
+> **dogfooding 暴露并修复的真实缺陷**：
+> ① fs.read `paths` 白名单被契约 Zod 校验往返剥离（装机后 fs.read 恒 OutOfScope）——
+>    `PluginCapability` 补 `paths` 字段 + 新规则 `fs_scope_requires_paths`（friction #13）；
+> ② kv `list` 前缀语义误解致检索静默 0 命中（friction #14）；③ CJK 分词（friction #15）。
+>
+> 摩擦记录第三轮 ≥3 条（实际 4 条：#13-#16）已落地。基线：cargo 278+33、
+> vitest 37/34/163/69、四包 typecheck 干净。待用户：自用 ≥1 周（验收第 2 条）。
+
 ## LF-24 · 摩擦反哺（R2）
 
 **范围**：按 R1 dogfoading 暴露项逐个评估：SDK 层（错误码/超时/API 形状）→ 修；

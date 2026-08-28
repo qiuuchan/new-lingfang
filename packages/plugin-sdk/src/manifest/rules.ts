@@ -208,6 +208,23 @@ export function ruleUnsafeEntryPath(manifest: PluginManifest): ManifestError[] {
   return [];
 }
 
+// LF-23：fs.read / fs.write 必须声明非空 paths 白名单——
+// 空白名单意味着该能力恒 OutOfScope（fail-closed 但功能断裂），是配置错误而非运行时报错。
+export function ruleFsScopeRequiresPaths(manifest: PluginManifest): ManifestError[] {
+  const errors: ManifestError[] = [];
+  for (let i = 0; i < manifest.capabilities.length; i++) {
+    const cap = manifest.capabilities[i];
+    if ((cap.kind === 'fs.read' || cap.kind === 'fs.write') && (cap.paths?.length ?? 0) === 0) {
+      errors.push({
+        code: 'fs_scope_requires_paths',
+        path: `capabilities[${i}].paths`,
+        message: `能力 "${cap.kind}" 必须声明非空 paths 白名单（如 ["$HOME/Documents"]）`,
+      });
+    }
+  }
+  return errors;
+}
+
 /** 所有业务规则的有序数组，供测试逐条验证。 */
 export const RULES: Array<(manifest: PluginManifest) => ManifestError[]> = [
   ruleId,
@@ -218,4 +235,5 @@ export const RULES: Array<(manifest: PluginManifest) => ManifestError[]> = [
   ruleMissingReason,
   ruleDuplicateCapability,
   ruleUnsafeEntryPath,
+  ruleFsScopeRequiresPaths,
 ];

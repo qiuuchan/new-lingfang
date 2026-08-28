@@ -1,0 +1,376 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>知识库工作站</title>
+    <style>
+      :root {
+        --bg: var(--lf-color-surface, #f8f9fa);
+        --surface: #ffffff;
+        --text: var(--lf-color-text, #212529);
+        --text-secondary: #868e96;
+        --border: #dee2e6;
+        --accent: #3b82f6;
+        --danger: #ef4444;
+        --radius: 8px;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: var(--lf-color-surface, #0f1117);
+          --surface: #1a1b26;
+          --text: var(--lf-color-text, #c9d1d9);
+          --text-secondary: #8b949e;
+          --border: #30363d;
+          --accent: #58a6ff;
+          --danger: #f87171;
+        }
+      }
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body {
+        font-family: system-ui, -apple-system, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        padding: 16px;
+        font-size: 14px;
+      }
+      h3 { margin-bottom: 12px; }
+      .card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 14px;
+        margin-bottom: 14px;
+      }
+      .card h4 { margin-bottom: 10px; font-size: 14px; }
+      textarea, input[type="text"] {
+        width: 100%;
+        background: var(--bg);
+        color: var(--text);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 8px;
+        font-size: 13px;
+        font-family: inherit;
+        resize: vertical;
+      }
+      textarea { min-height: 90px; }
+      .row { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+      button {
+        background: var(--accent);
+        color: #fff;
+        border: none;
+        border-radius: 6px;
+        padding: 6px 14px;
+        font-size: 13px;
+        cursor: pointer;
+      }
+      button.secondary { background: transparent; color: var(--accent); border: 1px solid var(--accent); }
+      button.danger { background: transparent; color: var(--danger); border: 1px solid var(--danger); }
+      button:disabled { opacity: 0.5; cursor: not-allowed; }
+      .status { margin-top: 8px; font-size: 12px; color: var(--text-secondary); word-break: break-all; }
+      .status.err { color: var(--danger); }
+      .doc-item {
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 8px 0; border-bottom: 1px solid var(--border); gap: 8px;
+      }
+      .doc-item:last-child { border-bottom: none; }
+      .doc-title { font-weight: 500; }
+      .doc-sub { font-size: 12px; color: var(--text-secondary); }
+      .hits { margin-top: 8px; }
+      .hit {
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 8px;
+        margin-top: 6px;
+        font-size: 12px;
+        white-space: pre-wrap;
+        word-break: break-all;
+        max-height: 120px;
+        overflow-y: auto;
+      }
+      .hit b { color: var(--accent); }
+      .answer {
+        background: var(--bg);
+        border: 1px solid var(--accent);
+        border-radius: 6px;
+        padding: 10px;
+        margin-top: 8px;
+        font-size: 13px;
+        white-space: pre-wrap;
+        word-break: break-all;
+      }
+      .empty { color: var(--text-secondary); font-size: 12px; padding: 8px 0; }
+      code { background: var(--bg); padding: 1px 5px; border-radius: 4px; font-size: 12px; }
+    </style>
+  </head>
+  <body>
+    <h3>知识库工作站</h3>
+
+    <div class="card">
+      <h4>① 导入文档（.md / .txt，仅 $HOME/Documents 白名单内）</h4>
+      <input type="text" id="filePath" placeholder="文件路径，如 C:/Users/you/Documents/note.md（留空则读桌面下 kb-note.md）" />
+      <div class="row">
+        <button id="btnReadFile">从文件读取并导入</button>
+      </div>
+      <textarea id="pasteText" placeholder="或直接粘贴文本内容…"></textarea>
+      <div class="row">
+        <button id="btnImportText">粘贴文本导入</button>
+      </div>
+      <div class="status" id="importStatus"></div>
+    </div>
+
+    <div class="card">
+      <h4>② 我的文档</h4>
+      <div id="docList"><div class="empty">加载中…</div></div>
+    </div>
+
+    <div class="card">
+      <h4>③ 检索 + 问答</h4>
+      <input type="text" id="query" placeholder="输入问题或关键词，如：项目用的是什么技术栈？" />
+      <div class="row">
+        <button id="btnSearch">检索</button>
+        <button id="btnAsk" class="secondary">检索并 LLM 问答</button>
+      </div>
+      <div class="hits" id="hits"></div>
+      <div class="answer" id="answer" hidden></div>
+      <div class="status" id="askStatus"></div>
+    </div>
+
+    <script>
+      // ── 知识库工作站 v1（R1 真用插件）：切片 → storage.kv 持久化 → 关键词全文检索 → LLM 问答 ──
+      const sdk = window.sdk;
+      const $ = (id) => document.getElementById(id);
+
+      const CHUNK_MAX = 800; // 每切片上限字符
+      const Q = (s) => (s ?? '').toLowerCase();
+      const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+      // 切片：按空行分段，段超长再按句号/换行切，最后截断到 CHUNK_MAX。
+      function chunkText(text) {
+        const paras = String(text).split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
+        const chunks = [];
+        for (const p of paras) {
+          if (p.length <= CHUNK_MAX) { chunks.push(p); continue; }
+          const parts = p.split(/(?<=[。！？!?]\s*)/);
+          let cur = '';
+          for (const part of parts) {
+            if ((cur + part).length > CHUNK_MAX && cur) { chunks.push(cur); cur = ''; }
+            cur += part;
+            if (cur.length > CHUNK_MAX) { chunks.push(cur.slice(0, CHUNK_MAX)); cur = ''; }
+          }
+          if (cur) chunks.push(cur);
+        }
+        return chunks.length ? chunks : [String(text).slice(0, CHUNK_MAX)];
+      }
+
+      // 文档 id：标题 + 时间戳（保留可读性）。
+      function docId(title) {
+        return 'doc:' + title.trim().replace(/[^\w\u4e00-\u9fa5.-]/g, '_').slice(0, 40) + ':' + Date.now();
+      }
+
+      async function importText(title, text) {
+        if (!text || !text.trim()) throw new Error('内容为空');
+        const chunks = chunkText(text);
+        const id = docId(title || '未命名');
+        const meta = { title: title.trim() || '未命名', createdAt: Date.now(), chunkCount: chunks.length };
+        await sdk.storage.set(id + ':meta', meta);
+        for (let i = 0; i < chunks.length; i++) {
+          await sdk.storage.set(id + ':chunk:' + i, { text: chunks[i] });
+        }
+        return { id, chunks: chunks.length };
+      }
+
+      async function listDocs() {
+        const keys = await sdk.storage.list('doc:');
+        const ids = [...new Set(keys.map((k) => k.replace(/:meta$|:chunk:\d+$/, '')))];
+        const docs = [];
+        for (const id of ids) {
+          try {
+            const meta = await sdk.storage.get(id + ':meta');
+            if (meta && typeof meta === 'object') docs.push({ id, title: meta.title, createdAt: meta.createdAt, chunkCount: meta.chunkCount });
+          } catch { /* 忽略损坏项 */ }
+        }
+        return docs.sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
+      }
+
+      async function deleteDoc(id) {
+        const keys = await sdk.storage.list(id + ':');
+        for (const k of keys) await sdk.storage.delete(k);
+      }
+
+      // 关键词全文检索：token 化 + 词频加权（v1 不引入向量/倒排，客户端 JS 直接打分）。
+      // CJK 连续运行切成重叠二元组（如「能力网关检查」→ 能力/力网/网关/关检/检查），
+      // 使短查询「能力网关」能与长片段匹配（LF-23 首跑实测：整串 token 匹配不上）。
+      function tokenize(s) {
+        const ascii = (s.toLowerCase().match(/[a-z0-9]+/g) ?? []);
+        const cjk = (s.match(/[\u4e00-\u9fa5]{2,}/g) ?? []);
+        const grams = [];
+        for (const run of cjk) {
+          if (run.length === 2) { grams.push(run); continue; }
+          for (let i = 0; i + 2 <= run.length; i++) grams.push(run.slice(i, i + 2));
+        }
+        return [...ascii, ...grams];
+      }
+
+      async function search(query) {
+        const tokens = tokenize(query);
+        if (!tokens.length) return [];
+        // ⚠️ 键形为 doc:<id>:<ts>:chunk:<i>——前缀必须是 'doc:' 再过滤 chunk
+        // （首版误用 'doc:chunk:'，前缀不匹配任何键，检索恒 0 命中，LF-23 实测）。
+        const keys = (await sdk.storage.list('doc:')).filter((k) => k.includes(':chunk:'));
+        const hits = [];
+        for (const key of keys) {
+          try {
+            const entry = await sdk.storage.get(key);
+            if (!entry || typeof entry.text !== 'string') continue;
+            const text = entry.text;
+            const lt = Q(text);
+            let score = 0;
+            const matched = [];
+            for (const t of tokens) {
+              const n = (lt.match(new RegExp(esc(t), 'g')) ?? []).length;
+              if (n > 0) { score += 1 + n; matched.push(t); }
+            }
+            if (score > 0) hits.push({ key, score, matched, text });
+          } catch { /* 忽略损坏项 */ }
+        }
+        hits.sort((a, b) => b.score - a.score);
+        return hits.slice(0, 3);
+      }
+
+      function renderHits(hits) {
+        const el = $('hits');
+        if (!hits.length) { el.innerHTML = '<div class="empty">无命中（先导入文档）</div>'; return; }
+        el.innerHTML = hits.map((h) => {
+          let html = esc(h.text);
+          for (const t of h.matched) html = html.replace(new RegExp('(' + esc(t).replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi'), '<b>$1</b>');
+          return '<div class="hit" data-hit="' + h.key + '">' + html + '</div>';
+        }).join('');
+      }
+
+      function highlightHit(text, matched) {
+        let html = esc(text);
+        for (const t of matched) html = html.replace(new RegExp('(' + esc(t).replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi'), '<b>$1</b>');
+        return html;
+      }
+
+      function setStatus(id, msg, isErr) {
+        const el = $(id);
+        el.textContent = msg;
+        el.className = 'status' + (isErr ? ' err' : '');
+      }
+
+      // ── UI 事件 ──
+      $('btnReadFile').onclick = async () => {
+        const raw = ($('filePath').value || '').trim();
+        // 默认路径：$HOME/Documents/kb-note.md（若用户未填）
+        const target = raw || (await resolveDefaultPath());
+        setStatus('importStatus', '读取 ' + target + ' …');
+        try {
+          const content = await sdk.fs.read(target);
+          const text = typeof content === 'string' ? content : (content && (content.content ?? content.text)) ?? '';
+          if (!text.trim()) throw new Error('文件为空或格式不支持');
+          const title = target.split(/[\\/]/).pop() || '未命名';
+          const r = await importText(title, text);
+          setStatus('importStatus', '已导入「' + title + '」（' + r.chunks + ' 个切片）');
+          await refreshDocs();
+        } catch (e) {
+          setStatus('importStatus', '导入失败：' + ((e && e.message) || e), true);
+        }
+      };
+
+      async function resolveDefaultPath() {
+        try {
+          const info = await sdk.system.info();
+          const home = (info && (info.home || info.homedir)) || '';
+          return home ? home.replace(/\\/g, '/') + '/Documents/kb-note.md' : 'C:/Users/Public/Documents/kb-note.md';
+        } catch {
+          return 'C:/Users/Public/Documents/kb-note.md';
+        }
+      }
+
+      $('btnImportText').onclick = async () => {
+        const text = $('pasteText').value;
+        setStatus('importStatus', '导入中…');
+        try {
+          const r = await importText('粘贴 ' + new Date().toLocaleDateString(), text);
+          setStatus('importStatus', '已导入（' + r.chunks + ' 个切片）');
+          $('pasteText').value = '';
+          await refreshDocs();
+        } catch (e) {
+          setStatus('importStatus', '导入失败：' + ((e && e.message) || e), true);
+        }
+      };
+
+      $('btnSearch').onclick = async () => {
+        const q = $('query').value;
+        if (!q.trim()) return;
+        const hits = await search(q);
+        renderHits(hits);
+      };
+
+      $('btnAsk').onclick = async () => {
+        const q = $('query').value;
+        if (!q.trim()) return;
+        setStatus('askStatus', '检索中…');
+        const hits = await search(q);
+        if (!hits.length) { setStatus('askStatus', '无命中，先导入相关文档', true); renderHits([]); return; }
+        renderHits(hits);
+        const context = hits.map((h, i) => '【片段 ' + (i + 1) + '】' + h.text).join('\n\n');
+        setStatus('askStatus', '调用 LLM 生成回答…');
+        try {
+          const out = await sdk.llm.chat({
+            messages: [
+              { role: 'system', content: '你是本地知识库助手。仅依据用户提供的检索片段回答；片段不足以回答时明确说明，不要编造。' },
+              { role: 'user', content: '检索片段：\n' + context + '\n\n问题：' + q },
+            ],
+          });
+          const answer = (out && out.content) || '';
+          if (!answer.trim()) throw new Error('LLM 未返回内容');
+          setStatus('askStatus', '');
+          // 宿主弹层展示答案（Markdown 渲染，不注入 HTML）。
+          await sdk.ui.render({ type: 'markdown', body: '## 回答\n\n' + answer + '\n\n---\n\n### 依据片段\n\n' + hits.map((h, i) => '**片段 ' + (i + 1) + '**：\n\n> ' + h.text.slice(0, 200)).join('\n\n') });
+          const ansEl = $('answer');
+          ansEl.hidden = false;
+          ansEl.innerHTML = highlightHit(answer, []);
+        } catch (e) {
+          const msg = ((e && e.message) || String(e));
+          const code = (e && e.code) || '';
+          setStatus('askStatus', '问答失败：' + msg + (code ? '（' + code + '）' : ''), true);
+        }
+      };
+
+      async function refreshDocs() {
+        const el = $('docList');
+        try {
+          const docs = await listDocs();
+          if (!docs.length) { el.innerHTML = '<div class="empty">暂无文档——从「导入文档」开始，把 .md/.txt 装进你的本地知识库</div>'; return; }
+          el.innerHTML = '';
+          for (const d of docs) {
+            const row = document.createElement('div');
+            row.className = 'doc-item';
+            row.dataset.docId = d.id;
+            row.innerHTML =
+              '<div><div class="doc-title">' + esc(d.title) + '</div>' +
+              '<div class="doc-sub">' + new Date(d.createdAt).toLocaleString() + ' · ' + d.chunkCount + ' 个切片</div></div>' +
+              '<button class="danger doc-del" data-id="' + esc(d.id) + '">删除</button>';
+            row.querySelector('.doc-del').onclick = async () => {
+              await deleteDoc(d.id);
+              await refreshDocs();
+            };
+            el.appendChild(row);
+          }
+        } catch (e) {
+          el.innerHTML = '<div class="empty">文档列表加载失败：' + esc((e && e.message) || e) + '</div>';
+        }
+      }
+
+      // ── 测试钩子（e2e 经 CDP 驱动，与按钮同路径）──
+      window.__kb = { importText, listDocs, search, deleteDoc, chunkText, docId, renderHits, refreshDocs };
+
+      refreshDocs();
+    </script>
+  </body>
+</html>

@@ -237,7 +237,7 @@ describe('M7 — unknown_capability', () => {
     // 因此这里直接调用规则函数验证其正确性。
     const m = validManifest({
       capabilities: [
-        { kind: 'unknown.kind' as never, reason: '', risk: 'low', requires_admin: false },
+        { kind: 'unknown.kind' as never, reason: '', risk: 'low', requires_admin: false, paths: [] },
       ],
     });
     const errors = ruleKnownCapability(m);
@@ -248,7 +248,7 @@ describe('M7 — unknown_capability', () => {
   it('Zod 阶段已拒绝未知 kind（defensive M7 不触发，由 schema_invalid 兜底）', () => {
     const m = {
       ...validManifest({}),
-      capabilities: [{ kind: 'unknown.kind', reason: '', risk: 'low', requires_admin: false }],
+      capabilities: [{ kind: 'unknown.kind', reason: '', risk: 'low', requires_admin: false, paths: [] }],
     };
     const result = validateManifest(m);
     expect(result.success).toBe(false);
@@ -261,8 +261,8 @@ describe('M7 — unknown_capability', () => {
   it('合法能力全部通过', () => {
     const m = validManifest({
       capabilities: [
-        { kind: 'ui.view', reason: '', risk: 'low', requires_admin: false },
-        { kind: 'llm.chat', reason: 'need chat', risk: 'medium', requires_admin: false },
+        { kind: 'ui.view', reason: '', risk: 'low', requires_admin: false, paths: [] },
+        { kind: 'llm.chat', reason: 'need chat', risk: 'medium', requires_admin: false, paths: [] },
       ],
     });
     expect(ruleKnownCapability(m)).toHaveLength(0);
@@ -274,7 +274,7 @@ describe('M7 — unknown_capability', () => {
 describe('M8 — missing_reason', () => {
   it('medium 风险 + 空 reason → 拒绝', () => {
     const m = validManifest({
-      capabilities: [{ kind: 'llm.chat', reason: '', risk: 'medium', requires_admin: false }],
+      capabilities: [{ kind: 'llm.chat', reason: '', risk: 'medium', requires_admin: false, paths: [] }],
     });
     const errors = ruleMissingReason(m);
     expect(errors).toHaveLength(1);
@@ -283,7 +283,7 @@ describe('M8 — missing_reason', () => {
 
   it('high 风险 + 空 reason → 拒绝', () => {
     const m = validManifest({
-      capabilities: [{ kind: 'llm.chat', reason: '  ', risk: 'high', requires_admin: false }],
+      capabilities: [{ kind: 'llm.chat', reason: '  ', risk: 'high', requires_admin: false, paths: [] }],
     });
     const errors = ruleMissingReason(m);
     expect(errors).toHaveLength(1);
@@ -292,7 +292,7 @@ describe('M8 — missing_reason', () => {
   it('medium 风险 + 有 reason → 通过', () => {
     const m = validManifest({
       capabilities: [
-        { kind: 'llm.chat', reason: '调用大模型', risk: 'medium', requires_admin: false },
+        { kind: 'llm.chat', reason: '调用大模型', risk: 'medium', requires_admin: false, paths: [] },
       ],
     });
     expect(ruleMissingReason(m)).toHaveLength(0);
@@ -300,7 +300,7 @@ describe('M8 — missing_reason', () => {
 
   it('none 风险 + 空 reason → 通过', () => {
     const m = validManifest({
-      capabilities: [{ kind: 'ui.view', reason: '', risk: 'none', requires_admin: false }],
+      capabilities: [{ kind: 'ui.view', reason: '', risk: 'none', requires_admin: false, paths: [] }],
     });
     expect(ruleMissingReason(m)).toHaveLength(0);
   });
@@ -312,8 +312,8 @@ describe('M9 — duplicate_capability', () => {
   it('重复 capability → 拒绝', () => {
     const m = validManifest({
       capabilities: [
-        { kind: 'llm.chat', reason: 'reason 1', risk: 'medium', requires_admin: false },
-        { kind: 'llm.chat', reason: 'reason 2', risk: 'medium', requires_admin: false },
+        { kind: 'llm.chat', reason: 'reason 1', risk: 'medium', requires_admin: false, paths: [] },
+        { kind: 'llm.chat', reason: 'reason 2', risk: 'medium', requires_admin: false, paths: [] },
       ],
     });
     const errors = ruleDuplicateCapability(m);
@@ -324,8 +324,8 @@ describe('M9 — duplicate_capability', () => {
   it('不重复 → 通过', () => {
     const m = validManifest({
       capabilities: [
-        { kind: 'ui.view', reason: '', risk: 'none', requires_admin: false },
-        { kind: 'llm.chat', reason: 'chat', risk: 'medium', requires_admin: false },
+        { kind: 'ui.view', reason: '', risk: 'none', requires_admin: false, paths: [] },
+        { kind: 'llm.chat', reason: 'chat', risk: 'medium', requires_admin: false, paths: [] },
       ],
     });
     expect(ruleDuplicateCapability(m)).toHaveLength(0);
@@ -434,8 +434,8 @@ describe('M11 — runtime_locally_unsupported', () => {
 // ── RULES 导出完整性 ──────────────────────────────────────────────────
 
 describe('RULES 数组', () => {
-  it('包含全部 8 条规则函数', () => {
-    expect(RULES).toHaveLength(8);
+  it('包含全部 9 条规则函数', () => {
+    expect(RULES).toHaveLength(9);
   });
 
   it('每条规则都是函数且返回数组', () => {

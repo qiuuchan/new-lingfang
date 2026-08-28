@@ -321,3 +321,56 @@ web-clip 是纯 `ui/index.html`（client 静态插件）。每次 `cli:dev -- bu
 | 10 | storage 配额错误 npm 与宿主归一化待真机核对 | 观察 | `invoke` 不对 storage 错误做 `PluginAiError` 包装 | 真机核对 `code` + 增 `PluginStorageErrorCode` |
 | 11 | `net.fetch` SSRF 守卫拦截本地/内网（含 localhost 调试） | 观察 | 安全正确但误伤本机预览 | 文档明示边界 + `net_fetch_ssrf_blocked` 码 |
 | 12 | clip-digest 静默 localStorage 兜底（#5.3） | 高→已修 | LF-13 自修为 LRU 淘汰 + 配额如实提示 | 单测覆盖，已落地 |
+
+---
+
+## 11. 第三轮摩擦记录（LF-23 · kb-station 知识库工作站 dogfooding，2026-08-28）
+
+### #13 · `fs.read` 的 paths 白名单被 manifest 校验往返剥离 ⚠️ 高优先（已修）
+
+- **现象**：manifest 声明 `{ "kind": "fs.read", "paths": ["$HOME/Documents"] }` 后，
+  `lingfang-plugin validate/build` 通过，但**产物 .lfplugin 内的 manifest 丢失 paths**；
+  安装后 `sdk.fs.read` 对白名单内路径恒报 `capability_out_of_scope`（fail-closed 但功能全断）。
+- **根因**：契约 `PluginCapability`（Zod）无 `paths` 字段，`validateManifest` 解析往返
+  （parse→serialize）剥离未知键；宿主 `capabilities_from_manifest` 读原始 JSON 的 paths，
+  两端信息不对称。
+- **修复（已落地）**：`packages/contract/src/plugin.ts` 的 `PluginCapability` 补
+  `paths: z.array(z.string()).default([])`（round-trip 保留）；plugin-sdk 新增业务规则
+  `fs_scope_requires_paths`（fs.read/fs.write 空白名单即拒绝——空白名单=恒 OutOfScope 的
+  配置错误，应在构建期暴露而非装机后无声断裂）。
+- **建议**：SDK 文档 fs 能力节明示 paths 白名单形态与 `$HOME` 模板。
+
+### #14 · `storage.kv list` 前缀语义：键前缀 ≠ 子串/通配 ⚠️ 中优先（插件侧已修，文档待补）
+
+- **现象**：kb-station 首版检索用 `list('doc:chunk:')` 期望拿到全部 chunk 键，但实际键形为
+  `doc:<id>:<ts>:chunk:<i>`（`doc:` 在前）——前缀不匹配任何键，检索恒 0 命中，静默出错。
+- **根因**：`list(prefix)` 是「键前缀匹配」而非「包含子串/目录式通配」；插件作者按「子串」
+  心智写前缀。
+- **修复**：插件侧 `list('doc:')` 后 `filter(k => k.includes(':chunk:'))`。
+- **建议**：plugin-development.md 的 storage.kv 节补一句「list 按键前缀匹配，不是子串；
+  需要子串过滤时先 list 宽前缀再客户端过滤」。
+
+### #15 · 检索分词：CJK 整串 token 匹配不上短查询 ⚠️ 中优先（插件侧已修）
+
+- **现象**：文档含「能力网关检查」，查询「能力网关」→ 0 命中。token 化把连续 CJK 整串
+  （能力网关检查）作为单个 token，与查询的整串（能力网关）精确不等。
+- **修复**：插件 `tokenize` 对 CJK 连续运行切**重叠二元组**（能力/力网/网关/关检/检查），
+  短查询可与长片段重叠命中。
+- **建议**：若后续做检索 SDK 化（v2），此形态是「客户端检索」的真实需求输入；
+  v1 记录为插件层知识。
+
+### #16 · `fs.read` 路径必须真实存在 + 错误码脱敏（观察，安全设计但排查成本高）
+
+- **现象**：白名单内路径若文件不存在，报 `capability_out_of_scope` 且不带任何路径信息
+  （防存在性 oracle 的脱敏设计）——开发时把「拼错路径」误判为「越权」。
+- **结论**：安全取舍正确（LF-19 已证 capability_out_of_scope 稳定码）；建议文档明示
+  「canonicalize 前置要求 + 错误码脱敏」，排查时先确认路径存在。
+
+### 第三轮速查表增补
+
+| # | 摩擦 | 优先级 | 现象要点 | 建议要点 |
+|---|---|---|---|---|
+| 13 | fs.read paths 被契约往返剥离 | 高→已修 | validate 通过但产物丢 paths，装机后 fs.read 恒 out_of_scope | PluginCapability 补 paths + 规则 fs_scope_requires_paths |
+| 14 | kv list 前缀语义误解 | 中→已修 | `list('doc:chunk:')` 前缀不匹配 `doc:<id>:...:chunk:<i>`，检索静默 0 命中 | 文档明示「键前缀非子串」；插件宽前缀+客户端过滤 |
+| 15 | CJK 检索分词 | 中→已修 | 整串 token 匹配不上短查询 | 重叠二元组分词（插件层，v2 检索 SDK 化输入） |
+| 16 | fs.read 存在性 + 脱敏 | 观察 | 路径不存在=out_of_scope 且无路径信息，易误判越权 | 文档明示 canonicalize 前置与脱敏语义 |

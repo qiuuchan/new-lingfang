@@ -290,3 +290,27 @@ iframe bootstrap 的 `readText` 均未解包、TS 类型谎称 string——真�
 - 先卸载再导入保证确定性（同名新版本会停在 pendingRelease，runner 仍加载旧活动版本）。
 - base-ui Dialog 无 `role="dialog"`；签名警示文案是 reason（「未附带签名」）而非「未签名」。
 
+
+## U3 · R1 真用插件 kb-station 真机闭环（LF-23，2026-08-28 实测 `scripts/e2e-kb-station-verify.mjs` 全绿 exit 0）
+
+### 断言清单（全部 ✅）
+1. 粘贴导入 → 切片（chunkText 空行分段 + 超长截断）；
+2. listDocs（storage.kv list('doc:') + meta）命中导入文档；
+3. 关键词检索命中（重叠二元组 CJK 分词，查询「能力网关」命中含「能力网关检查」片段）；
+4. LLM 问答（检索片段拼 context → relay-adapter MOCK → 答案返回）；
+5. fs.read 白名单内读取成功 + 白名单外 capability_out_of_scope；
+6. 文件导入闭环（$HOME/Documents 下真实 .md）；
+7. reload 重开插件后文档持久化（kv 跨刷新）。
+
+### 过程中暴露并修复的真实缺陷（R1 dogfooding 的价值）
+1. **fs.read paths 被契约往返剥离（严重，已修）**：PluginCapability（Zod）无 paths 字段，
+   validate/build 往返剥掉 → 装机后 fs.read 恒 OutOfScope。修复：契约补
+   `paths: z.array(z.string()).default([])` + 新业务规则 `fs_scope_requires_paths`
+   （fs.read/fs.write 空白名单即拒绝）。摩擦记录 #13。
+2. **kv list 前缀语义（已修）**：`list('doc:chunk:')` 前缀不匹配 `doc:<id>:<ts>:chunk:<i>`
+   键形 → 检索静默 0 命中。插件改宽前缀 + 客户端过滤。摩擦记录 #14。
+3. **CJK 分词（已修）**：整串 token 匹配不上短查询 → 重叠二元组。摩擦记录 #15。
+
+### e2e 侧笔记
+- Playwright `locator.evaluate` 会把数组参数序列化成空对象（`['a','b']` → `{}`），
+  参数化 evaluate 必须走 `frame.evaluate` / `page.evaluate`（LF-23 实测）。

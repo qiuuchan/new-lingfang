@@ -1,0 +1,15 @@
+{
+  "id": "com.lingfang.kb-station",
+  "name": "知识库工作站",
+  "version": "0.1.0",
+  "description": "本地优先的 AI 知识库工作站（R1 真用插件，D1=A）：导入 .md/.txt 文档 → 切片 → 关键词全文检索 → LLM 问答（带检索片段 context）。v1 红线：不做向量检索 / 跨插件共享知识层 / PDF·Office 解析。能力面：fs.read（白名单 $HOME/Documents）+ storage.kv + llm.chat + ui.view。",
+  "runtime_type": "client",
+  "entry": "ui/index.html",
+  "visibility": "private",
+  "capabilities": [
+    { "kind": "fs.read", "reason": "导入用户指定的 .md/.txt 文档（仅 $HOME/Documents 白名单内路径）", "risk": "medium", "requires_admin": false, "paths": ["$HOME/Documents"] },
+    { "kind": "storage.kv", "reason": "按插件隔离持久化文档切片与元数据", "risk": "low", "requires_admin": false },
+    { "kind": "llm.chat", "reason": "基于检索片段生成问答（无凭据时优雅降级提示）", "risk": "medium", "requires_admin": false },
+    { "kind": "ui.view", "reason": "以宿主弹层展示问答结果（Markdown 渲染，不注入 HTML）", "risk": "low", "requires_admin": false }
+  ]
+}
