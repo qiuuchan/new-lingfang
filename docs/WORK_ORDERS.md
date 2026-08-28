@@ -555,6 +555,13 @@ feed = GitHub Releases，但发版 CI 目前不上传 latest.json、安装包未
 
 **依赖**：LF-20。
 
+> **✅ 已交付（2026-08-28，分支 `feat/lf-22-docs-facade`）**
+>
+> `docs/index.md`（按身份选路的一页索引）+ `docs/getting-started.md`（用户向 5 分钟装机 +
+> 知识库工作站三步试用）+ `docs/decisions/index.md`（5 条 ADR 索引表）。README「从哪开始」
+> 入口收口到 `docs/index.md`。验收：README → 装机 / 用插件 / 开发插件三类入口均 1 跳直达
+> （≤3 跳达标）；基线 typecheck 4 包 + vitest 全绿。
+
 ## LF-23 · 真用插件 v1：本地知识库 / RAG（R1，D1=A 路径）
 
 **目标**：选垂直场景做深 1 个真用插件，小潘自己每天用，逼出真实摩擦反哺 SDK。
