@@ -434,6 +434,43 @@ feed = GitHub Releases，但发版 CI 目前不上传 latest.json、安装包未
 
 **依赖**：LF-15。执行环境 = 用户本机（脚本已就绪，开发机即可）。
 
+> **🔧 已交付，待验收（2026-08-27，分支 `feat/lf-18-install-closed-loop`）——期间揪出并修复 2 个真缺陷**
+>
+> **范围第 1 条 ✅ 安装器重建**（陈旧 Aug23 产物已删，全部按当前代码重新产出）。
+> **范围第 2 条 ✅ 安装闭环真机绿**：`LINGFANG_SETUP_EXE=<新构建> pnpm test:install` 全断言通过——
+> 静默装进全新目标目录 → 启动**安装实例**（非调试壳）→ 插件中心渲染 / notes iframe /
+> storage.kv 真落盘 / 四 runtime keyFiles sha256 命中 / requiredFiles 10/10。
+>
+> **缺陷 A · 「静默空安装」假成功（严重，若带病发版将核弹级）**
+> - **现象**：首跑闭环显示绿，实为脚本静默降级到调试壳；手动 `--silent --target` exit=0
+>   但目录里只有 1.65GB 的 updater.exe（= Setup 自身字节数），主程序与 runtimes 零落地。
+> - **根因链**：打包机 PATH 先命中 GNU tar（git-bash `/usr/bin/tar`），`tar -a` 对未知后缀
+>   `.zip` **静默产出 ustar 归档**（首字节 `./` 非 zip 的 `PK`）→ 安装器 zip 层在该畸形流上
+>   **误解析为空归档** → 0 条目解压「成功」→ 走「复制自身为 updater.exe」兜底 → 日志记
+>   「静默安装完成」。三层防线（打包脚本/安装器/e2e 脚本降级路径）全部沉默放行。
+> - **修复（三层独立守卫）**：
+>   1. `build-installer.mjs`：拼接前 zip 魔数硬门槛（PK 头 + 尾部 EOCD 哨兵）；命中 GNU tar
+>      自动改用 `%SystemRoot%\System32\tar.exe`（bsdtar）重试；仍不对则拒绝打包；
+>   2. installer `deploy.rs` 新增 `ensure_main_exe`：解压后主程序必须真实落地，否则显式报错
+>      （附 3 个单测，installer 计数 30→33）；
+>   3. `e2e-install-verify.mjs`：安装器 exit=0 但目标目录无主程序 → **硬失败 exit 2 并保留现场
+>      列目录清单**，不再退化成调试壳把断言跑绿（工单点名的「复用必假阳性」形态由此堵死）。
+>
+> **缺陷 B · release 产物烘焙 devUrl，安装实例白屏指向 dev server**
+> - **现象**：正确 zip 的安装器装完后启动安装实例，页面 URL=`http://localhost:1420/`
+>   （开发服务器地址），30000ms 无渲染。
+> - **根因**：CI publish-runtimes 用裸 `cargo build --release` 构建桌面壳——缺少 tauri CLI
+>   注入的 custom-protocol 配置与 dist 资产烘焙。此路径此前从未被真实启动过，属首次暴露。
+> - **修复**：ci.yml 桌面壳改经 `tauri build --no-bundle` 构建（installer crate 保持 cargo）；
+>   `e2e-install-verify.mjs` 对安装实例 URL 命中 localhost:1420 时硬失败 exit 3 并说明成因。
+> - **实测对照**：`tauri build --no-bundle` 后安装实例页面 URL=`http://tauri.localhost/` ✓。
+>
+> **范围第 3 条 ⬜ populate 远程回退实跑未执行**：需从 GitHub Release 拉取 ~600MB 归档 +
+> 本地 runtimes 备份搬移，网络窗口与磁盘空间占用大，本轮如实留待——脚本
+> `scripts/populate-local-runtimes.mjs` 已具备远程路径，待补执行记录。
+>
+> **基线**：cargo **271 passed（1 ignored）/ installer 33** 全绿；vitest 37/34/163/69；node 语法检查过。
+
 ---
 
 ## LF-19 · 双插件导入 + 能力面观察项闭环（LF-13/LF-12 遗留）

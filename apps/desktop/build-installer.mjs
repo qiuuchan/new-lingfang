@@ -120,8 +120,11 @@ async function main() {
     }
   }
 
-  // 使用 Windows 内置 tar 打包（Windows 10+ 自带，支持 zip / zip64）
-  // 注意：tar 需要相对路径或 Unix 风格路径
+  // 使用 Windows 内置 tar 打包（Windows 10+ 自带 bsdtar，-a 按扩展名输出真 zip）。
+  // ⚠️ LF-18 真机缺陷修复：PATH 里若先命中 GNU tar（如 Git Bash /usr/bin/tar），
+  // 它不支持 zip 输出，对未知后缀 `.zip` 会**静默降级为 ustar 归档**（首字节 `./`），
+  // 产物装配流程零报错；安装器侧 zip 解析在垃圾数据上可能「成功解析出 0 条目」，
+  // 最终只落地兜底复制的 updater.exe、退出码 0。因此打包后必须做 zip 魔数硬门槛。
   console.log('   使用 tar 命令打包...');
   if (fs.existsSync(payloadZip)) fs.unlinkSync(payloadZip);
 
@@ -136,8 +139,56 @@ async function main() {
     else resolveTar();
   });
 
-  // 清理临时目录
+  // zip 魔数硬门槛：bsdtar 产出的 zip 必以 PK\x03\x04 开头；
+  // 命中 GNU tar 时重试用 System32 的 bsdtar 绝对路径，仍不对则拒绝打包
+  // （绝不把非 zip payload 拼进 SFX——那会在装机现场表现为静默空安装）。
+  const isRealZip = () => {
+    const head = Buffer.alloc(4);
+    const fd = fs.openSync(payloadZip, 'r');
+    fs.readSync(fd, head, 0, 4, 0);
+    fs.closeSync(fd);
+    return head.equals(Buffer.from([0x50, 0x4b, 0x03, 0x04]));
+  };
+  if (!isRealZip()) {
+    const bsdtar = path.join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'tar.exe');
+    if (fs.existsSync(bsdtar)) {
+      console.log(`   ⚠️ PATH 中的 tar 不是 bsdtar（产出了非 zip 归档），改用 ${bsdtar} 重试`);
+      await new Promise((resolveTar, rejectTar) => {
+        const child = spawnSync(
+          `cd "${targetRelease}" && "${bsdtar}" -a -c -f "${relPayloadZip}" -C "${relTempDir}" .`,
+          { shell: true, stdio: 'inherit' },
+        );
+        if (child.status !== 0) rejectTar(new Error(`bsdtar 打包失败（exit=${child.status}）`));
+        else resolveTar();
+      });
+    }
+  }
   fs.rmSync(tempDir, { recursive: true, force: true });
+  if (!fs.existsSync(payloadZip) || !isRealZip()) {
+    die(
+      'payload 归档不是合法 zip（PK 头缺失）。' +
+        `tar 解析到 GNU 版本且 System32 bsdtar 兜底失败：${payloadZip}。` +
+        '请检查 PATH（git-bash 的 /usr/bin/tar 不支持 zip 输出）后重跑。',
+    );
+  }
+
+  // 尾部 EOCD 哨兵：zip 结尾 64KiB 内必含中央目录结束记录签名 PK\x05\x06。
+  // 仅防极端错位/半写盘（LF-18 中安装器曾在此类畸形流上静默解出 0 条目）。
+  {
+    const size = fs.statSync(payloadZip).size;
+    const tailWin = Buffer.alloc(Math.min(size, 65_536 + 22));
+    const fd = fs.openSync(payloadZip, 'r');
+    fs.readSync(fd, tailWin, 0, tailWin.length, Math.max(0, size - tailWin.length));
+    fs.closeSync(fd);
+    let eocd = -1;
+    for (let i = tailWin.length - 4; i >= 0; i--) {
+      if (
+        tailWin[i] === 0x50 && tailWin[i + 1] === 0x4b &&
+        tailWin[i + 2] === 0x05 && tailWin[i + 3] === 0x06
+      ) { eocd = i; break; }
+    }
+    if (eocd < 0) die('payload.zip 尾部缺少 zip EOCD 记录（PK\\x05\\x06），拒绝拼接');
+  }
 
   const payloadSize = fs.statSync(payloadZip).size;
   console.log(`✅ payload.zip 已生成 (${(payloadSize / 1024 / 1024).toFixed(1)} MB)`);
