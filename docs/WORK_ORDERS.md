@@ -635,6 +635,13 @@ feed = GitHub Releases，但发版 CI 目前不上传 latest.json、安装包未
 
 **依赖**：D3 拍板 ✅ + LF-23（产品可演示）。
 
+> **🔧 物料已交付，触达待用户执行（2026-08-28，分支 `feat/lf-26-seed-outreach`）**
+>
+> 物料齐备：`docs/seed-outreach-kit.md`（一句话定位 + 私聊短/长版文案 + 朋友圈帖子模板 +
+> 装机指引含门槛提示 + 反馈通道 + 验收核对清单）+ `.github/ISSUE_TEMPLATE/`（bug-report.yml +
+> feature-request.yml 两个表单模板）。**剩余执行项（用户）**：建微信内测群填占位 → 私聊触达 ≥10 人
+> → 收集 3-5 名种子 → ≥1 名跑通插件（核对清单打勾），完成后登记并衔接 LF-27。
+
 ## LF-27 · 反馈循环与摩擦记录（S2）
 
 **范围**：每周复盘 Issues/群反馈 → 转 friction 记录或工单；用户反馈缺陷优先级高于 R3 自驱迭代。
