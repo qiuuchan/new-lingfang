@@ -456,6 +456,129 @@ feed = GitHub Releases，但发版 CI 目前不上传 latest.json、安装包未
 
 ---
 
+## 第六轮工单（2026-08-28 登记）
+
+> 来源：`IMPROVEMENT_PLAN_5.md`（第五轮，阶段 Q-T，LF-20~31）。
+> D1-D4 战略拍板已完成（2026-08-28，见 IMPROVEMENT_PLAN_5.md 第 1 节）：
+> **D1=A 本地知识库/RAG、D2=建议口径（README+GIF 必做，Landing 可选）、D3=同学/朋友圈、D4=仅 GitHub Discussions**。
+> 纪律不变：独立分支 + 验收后合 main，PR 描述引用工单号。
+> 总闸：**阶段 P（LF-16~19）先行且必须验收通过（P5 闸门）**；Q-R-S-T 各工单按依赖表放行。
+
+## LF-20 · README 重写 + Demo GIF（Q1+Q2，D2 拍板=必做）
+
+**目标**：让陌生人在 GitHub 打开仓库 3 分钟内决定"装一个试试"。
+
+**范围**：
+1. README 顶部 3 屏：一句话定位（绑定 D1=A：本地优先 AI 知识库工作站）→ 1 张 Demo GIF
+   → 装机命令 → 装好后能看到什么。
+2. 中段：垂直场景插件（R1 kb-station）真实使用截图。
+3. 底部：链接 CODEBUDDY.md / docs/plugin-development.md / docs/decisions/。
+4. 现有"零服务器叙事 + 三档安全 + 仓库名说明"下移"技术细节"折叠区。
+5. Demo GIF：60 秒以内、<5MB、纯真实操作录屏（导入→运行→看到结果），README 顶部嵌入。
+
+**验收标准**：README 在 GitHub 渲染 3 屏内说清"是什么/为什么/怎么装"；含 Demo GIF 与真实截图。
+
+**依赖**：P5（LF-16~19 验收通过）；R1 截图（LF-23 落地后补中段截图）。
+
+## LF-22 · 文档门面校准（Q4）
+
+**范围**：`docs/index.md`（一页索引）+ `docs/getting-started.md`（用户向 5 分钟装机+试插件）
++ `docs/decisions/index.md`（ADR 索引）。
+
+**验收标准**：陌生人从 README 出发 3 跳内找到装机/用插件/开发插件三类入口。
+
+**依赖**：LF-20。
+
+## LF-23 · 真用插件 v1：本地知识库 / RAG（R1，D1=A 路径）
+
+**目标**：选垂直场景做深 1 个真用插件，小潘自己每天用，逼出真实摩擦反哺 SDK。
+
+**范围**：
+1. `packages/plugin-sdk/examples/kb-station/`（client 运行时，新插件），走完整流程
+   `plugin:create` → `validate` → `build` → `dev` 热循环 → 本地导入真机跑通。
+2. 能力面：`storage.kv` + `llm.chat` + `ui.view` + `fs.read`（+ `net.fetch` 可选）。
+3. v1 范围红线（已拍板）：导入 .md/.txt → 切片 → 关键词全文检索（storage.kv list + 客户端 JS 检索）
+   → LLM 问答（带检索片段 context）。**不做**向量检索 / 跨插件共享知识层 / PDF·Office 解析。
+
+**验收标准**：插件真机跑通（CDP 证据）；小潘自用 ≥1 周每日使用；`docs/g2-sdk-friction.md`
+第三轮新增 ≥3 条摩擦记录。
+
+**依赖**：D1 拍板 ✅。
+
+## LF-24 · 摩擦反哺（R2）
+
+**范围**：按 R1 dogfoading 暴露项逐个评估：SDK 层（错误码/超时/API 形状）→ 修；
+能力面层（限额/新 op）→ 评估+单测；文档层 → 补。不做项显式记录理由。
+
+**验收标准**：friction 记录新增 ≥3 条；高价值项落地修复；三基线全绿。
+
+**依赖**：LF-23。
+
+## LF-25 · v1.x 真用插件迭代（R3，如需要）
+
+**范围**：R1 后继续自用 ≥2 个月按真实需求迭代；候选方向不预设（文档分类/标签/最近列表/检索优化/跨笔记链接）；
+每迭代走完整流程并记 friction。
+
+**验收标准**：每迭代真机跑通 + friction 记录更新。
+
+**依赖**：LF-23。
+
+## LF-26 · 种子用户触达（S1，D3 拍板=同学/朋友圈）
+
+**范围**：私聊触达同学/朋友 ≥10 人（北理工珠海学院 2026 届软件工程圈），目标转化 3-5 名种子；
+帖子内容模板：一句话定位 + Demo GIF + 装机指引 + 内测群入口 + 反馈通道（GitHub Issues + 微信群）。
+
+**验收标准**：3-5 名种子用户加入反馈通道；至少 1 名完成"装好 + 跑通一个插件"流程。
+
+**依赖**：D3 拍板 ✅ + LF-23（产品可演示）。
+
+## LF-27 · 反馈循环与摩擦记录（S2）
+
+**范围**：每周复盘 Issues/群反馈 → 转 friction 记录或工单；用户反馈缺陷优先级高于 R3 自驱迭代。
+
+**验收标准**：每周有反馈复盘记录；用户反馈驱动的修复 ≥3 项落地。
+
+**依赖**：LF-26。
+
+## LF-28 · 公开 Release v0.1.0（S3）
+
+**范围**：第一个面向公众 GitHub Release；Release notes 含定位 + Demo GIF 链接 + 装机指引 +
+已知限制（v1 Windows-only / 无市场 / 无自动更新后台下载）；配套发布 D4 选题 1 架构博客（Discussions）。
+
+**验收标准**：v0.1.0 Release 上线；notes 完整；架构博客首发。
+
+**依赖**：P5 + LF-23 + LF-20。
+
+## LF-29 · 内容输出持续（S4，D4 拍板=仅 GitHub Discussions）
+
+**范围**：6 个月 4-6 篇，每月约 1 篇，质量优先；每篇发布后同步 README 链接；结尾引导 stars。
+首发选题：《零服务器桌面插件平台：Tauri v2 + Job Object 沙箱的三档安全边界》。
+
+**验收标准**：6 个月末发布 ≥4 篇；每篇有可量化的浏览/stars 转化数据。
+
+**依赖**：D4 拍板 ✅。
+
+## LF-30 · 项目深度叙事文档（T2）
+
+**范围**：`docs/PROJECT_NARRATIVE.md`：一页讲清项目定位、核心架构决策（4-5 个"为什么这么做"）、
+技术深度亮点（求职向量化指标）、6 个月发展轨迹、未来方向。纯工程叙事，面试官 5 分钟读完能问出深度问题。
+
+**验收标准**：文档存在；含 4-5 个架构决策理由；含可量化指标（测试数/Runtime 物料大小/冷启动时间/单插件成本等）。
+
+**依赖**：LF-23 落地后。
+
+## LF-31 · README metrics badges（T3）
+
+**范围**：README 加 "Metrics" 段（stars / clones / Release downloads，shields.io badges）；
+6 个月末目标 stars ≥200、Release 下载 ≥500、至少 1 篇博客上掘金首页（注：D4 已改仅 Discussions，
+该子目标相应调整为 Discussions 转化数据）；不刷 stars。
+
+**验收标准**：README 含 metrics badges；6 个月末达标或如实标注未达原因。
+
+**依赖**：LF-28。
+
+---
+
 ## 观察项（延续第四轮，不派发）
 
 - **K3**：本轮 PR 首次真实触发 `rust-tests` job——记录冷/热时长；nightly `desktop-e2e`
