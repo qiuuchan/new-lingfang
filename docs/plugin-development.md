@@ -70,6 +70,24 @@
 因此，**插件作者必须如实声明每一项用到的能力**，未声明的 kind 调用会被网关直接拒绝
 （`capability_not_declared`）。
 
+**fs.read / fs.write 的 paths 白名单（LF-23 起强制）**：这两个能力必须在 capability 里声明
+`paths` 数组（支持 `$HOME` 模板，如 `["$HOME/Documents"]`），白名单外的路径一律拒绝
+（`capability_out_of_scope`）。从 LF-23 起 `lingfang-plugin validate` 会拒绝「声明了
+fs.read/fs.write 却没有 paths」的 manifest（规则 `fs_scope_requires_paths`）——空白名单意味着
+该能力恒被拒，是配置错误而非运行时报错。
+
+```json
+{ "kind": "fs.read", "reason": "读取用户文档", "risk": "medium",
+  "requires_admin": false, "paths": ["$HOME/Documents"] }
+```
+
+**路径语义（排查必读）**：`canonicalize` 前置要求目标路径**真实存在**（不存在与越权统一
+返回 `capability_out_of_scope`，且错误信息**不携带任何路径**——防存在性 oracle 的脱敏设计）。
+排查 `out_of_scope` 时先确认：①路径在 paths 白名单内；②文件/目录确实存在；
+③路径大小写与分隔符不干扰 canonicalize。`fs.read` 文件返回 `{ content }`（1 MiB 上限），
+目录返回 `{ entries, truncated }`（4096 条目上限）；`fs.write` 校验**父目录**在白名单内
+（支持新建文件）。
+
 进程隔离：插件进程运行于 Windows Job Object 沙箱中；`.lfplugin` 包通过 minisign 签名校验，
 并对照召回（recall）列表检查。
 
@@ -258,6 +276,10 @@ await sdk.ui.render({ type: 'json', body: { ok: true, count: 3 } });
 | 方法 | 宿主 op | 入参 | 返回 | 说明 |
 | --- | --- | --- | --- | --- |
 | `sdk.storage.list(prefix?)` | `list` | `prefix?: string` | `string[]`（仅键名） | 按前缀过滤键名；不回传值（单值可达 256KB）。缺省返回全部键 |
+
+⚠️ **`list(prefix)` 是「键前缀匹配」，不是子串/通配**：`list('doc:chunk:')` 匹配不到
+`doc:<id>:<ts>:chunk:<i>`（前缀不匹配）。需要子串/目录式过滤时，先 `list` 宽前缀（如
+`list('doc:')`）再在客户端 `filter`。
 | `sdk.storage.delete(key)` | `delete` | `key: string` | `{ deleted: boolean }` | 键不存在返回 `{ deleted: false }`，不报错 |
 | `sdk.storage.count()` | `count` | — | `number` | 当前插件条目数 |
 

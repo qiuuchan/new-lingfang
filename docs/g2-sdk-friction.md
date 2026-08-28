@@ -374,3 +374,40 @@ web-clip 是纯 `ui/index.html`（client 静态插件）。每次 `cli:dev -- bu
 | 14 | kv list 前缀语义误解 | 中→已修 | `list('doc:chunk:')` 前缀不匹配 `doc:<id>:...:chunk:<i>`，检索静默 0 命中 | 文档明示「键前缀非子串」；插件宽前缀+客户端过滤 |
 | 15 | CJK 检索分词 | 中→已修 | 整串 token 匹配不上短查询 | 重叠二元组分词（插件层，v2 检索 SDK 化输入） |
 | 16 | fs.read 存在性 + 脱敏 | 观察 | 路径不存在=out_of_scope 且无路径信息，易误判越权 | 文档明示 canonicalize 前置与脱敏语义 |
+
+---
+
+## 12. 第四轮摩擦反哺记录（LF-24 · R2，2026-08-28，输入=第三轮 #13-#16 + kb-station 全链评估）
+
+### #17 · 能力面限额评估：kb-station 用量 vs 上限（✅ 无问题）
+
+| 限额 | kb-station 实际用量 | 结论 |
+|---|---|---|
+| kv 单插件 1024 条目 | 每文档 2 条目（1 meta + N chunk）→ ~512 文档/插件 | 够用；文档量级超限前会先遇到使用体验问题 |
+| kv 单值 256KB | 切片 ≤800 字符（<2KB） | 富余 2 个数量级 |
+| fs.read 1 MiB / 4096 条目 | .md/.txt 文本远小于 1MiB | 够用；超限错误文案已明确 |
+| llm.chat 180s 超时 | 问答（带 3 片段 context）在 MOCK/真实均远小于超时 | 够用 |
+| net.fetch 30s / 10MiB | v1 未启用（可选能力，红线外） | 未使用不评估 |
+
+### #18 · SDK API 形状评估（✅ 无新增问题，显式确认）
+
+kb-station 全链使用的 API 形状与文档/宿主一致：`storage.kv` get/set/list/delete（LF-07 管理
+API 全走通，list 前缀语义经 #14 修正后正确）、`llm.chat` 返回 `{content}`、`ui.view` 入参
+`{type:'markdown', body}`、`fs.read` 返回 `{content}`（文件）/`{entries,truncated}`（目录）。
+**无新增形状摩擦**——第三轮 #13-#16 已覆盖本轮全部真实摩擦面。
+
+### #19 · 文档缺口补齐（已落地，plugin-development.md）
+
+1. §3 能力声明新增「fs.read / fs.write 的 paths 白名单」节：白名单形态、`$HOME` 模板、
+   `fs_scope_requires_paths` 校验规则、canonicalize 前置（路径须存在）+ 错误脱敏语义、
+   排查清单、返回形状（#13/#16 建议落地）。
+2. §5.6 storage.kv 管理 API 补「list 是键前缀匹配不是子串/通配」警示 + 宽前缀+客户端过滤
+   范式（#14 建议落地）。
+
+### 不做项（显式记录理由，延续 J5 模式）
+
+| 项 | 理由 |
+|---|---|
+| 不新增 kv 子串/通配 list API | 前缀匹配 + 客户端过滤已覆盖真实场景；新增 API 增契约面（延续「停止追加基础设施」） |
+| 不新增 fs 存在性预检 API（fs.exists 类） | 会破坏 canonicalize + 脱敏的安全设计——存在性 oracle 是刻意关闭的（CAP-01 修复）；排查成本已用文档补偿 |
+| 不把检索 SDK 化（分词/打分留在插件层） | v1 红线（向量检索 v2）；单一插件需求不足以定 SDK 形状，待更多真实检索插件出现（延续 H3 思想） |

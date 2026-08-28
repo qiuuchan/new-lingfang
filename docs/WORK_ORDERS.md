@@ -595,6 +595,21 @@ feed = GitHub Releases，但发版 CI 目前不上传 latest.json、安装包未
 
 **依赖**：LF-23。
 
+> **🔧 已交付，待验收（2026-08-28，分支 `feat/lf-24-friction-feedback`）**
+>
+> 输入=第三轮摩擦 #13-#16 + kb-station 全链评估，输出 `docs/g2-sdk-friction.md` 第四轮
+> #17-#19（≥3 达标）+ 不做项记录（延续 J5 模式）：
+> - **SDK 层（#18）**：kb-station 全链 API 形状显式确认无新增摩擦（storage.kv 管理 API、
+>   llm.chat {content}、ui.view {type,body}、fs.read {content}|{entries} 类型核实正确）；
+> - **能力面层（#17）**：限额 vs 用量评估表（kv 1024 条目/256KB、fs.read 1MiB、llm 180s
+>   均够用，无新 op 需求）；
+> - **文档层（#19）**：`docs/plugin-development.md` §3 补 fs paths 白名单/`$HOME` 模板/
+>   `fs_scope_requires_paths` 规则/canonicalize 前置+脱敏语义/返回形状；§5.6 补
+>   「list 键前缀非子串」警示与宽前缀+客户端过滤范式（#13/#14/#16 建议全部落地）；
+> - **不做项**：kv 子串 list API / fs 存在性预检 API / 检索 SDK 化（各记理由）。
+>
+> 基线：cargo 278+33、vitest 37/34/163/69、四包 typecheck 干净。
+
 ## LF-25 · v1.x 真用插件迭代（R3，如需要）
 
 **范围**：R1 后继续自用 ≥2 个月按真实需求迭代；候选方向不预设（文档分类/标签/最近列表/检索优化/跨笔记链接）；
