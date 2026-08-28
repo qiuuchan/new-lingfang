@@ -1,0 +1,36 @@
+name: 功能建议 / 产品反馈（Feature Request）
+description: 想要的新能力、交互改进、或任何想法——都算反馈，每周复盘
+title: '[suggest] '
+labels: ['enhancement']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        任何想法都欢迎：功能缺失、交互别扭、性能问题、或者「如果能有 X 就太好了」。
+        我会在每周反馈复盘里处理（路径：Issue → 摩擦记录 → 工单）。
+  - type: textarea
+    id: problem
+    attributes:
+      label: 想解决什么问题？
+      description: 你在什么场景下遇到了什么不便？
+      placeholder: 例如：我想在导入文档时支持 PDF……
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: 期望的方案
+      description: 你希望怎么解决？（也可以只描述问题，方案我来想）
+      placeholder: 例如：支持 PDF 解析后同样按段落切片入库
+    validations:
+      required: false
+  - type: dropdown
+    id: priority
+    attributes:
+      label: 对你来说多重要？
+      options:
+        - 没有它就很难用（阻塞）
+        - 有了会更好（锦上添花）
+        - 只是随便想想
+    validations:
+      required: true

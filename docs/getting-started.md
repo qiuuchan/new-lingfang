@@ -8,7 +8,8 @@
 
 - **Windows 10/11** + WebView2 运行时（Win11 自带；Win10 首次启动桌面壳时按提示安装）
 - **Node.js ≥ 20**、**pnpm 9**（`corepack enable` 后可用 `pnpm`，或 `npm i -g pnpm@9`）
-- 不需要 Rust 工具链（那是改桌面壳本身才需要的）
+- **Rust 工具链**（MSVC target，`pnpm dev:desktop` 是 `tauri dev`，会编译桌面壳本体；Rust 改动另需 MSVC 构建工具）
+- 只想试用、不想搭开发环境：等公开 Release 安装包（见 [`release-runbook.md`](./release-runbook.md)）
 
 ## 1. 装机（约 3 分钟）
 
