@@ -331,7 +331,9 @@
           if (!answer.trim()) throw new Error('LLM 未返回内容');
           setStatus('askStatus', '');
           // 宿主弹层展示答案（Markdown 渲染，不注入 HTML）。
-          await sdk.ui.render({ type: 'markdown', body: '## 回答\n\n' + answer + '\n\n---\n\n### 依据片段\n\n' + hits.map((h, i) => '**片段 ' + (i + 1) + '**：\n\n> ' + h.text.slice(0, 200)).join('\n\n') });
+          // LF-20 修复：render 直接收 Markdown 字符串——传 {type,body} 对象会被宿主
+          // 当 JSON 展示（UiViewHost 仅对 string 走 Markdown）。
+          await sdk.ui.render('## 回答\n\n' + answer + '\n\n---\n\n### 依据片段\n\n' + hits.map((h, i) => '**片段 ' + (i + 1) + '**：\n\n> ' + h.text.slice(0, 200)).join('\n\n'));
           const ansEl = $('answer');
           ansEl.hidden = false;
           ansEl.innerHTML = highlightHit(answer, []);
