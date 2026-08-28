@@ -41,8 +41,11 @@ const MODEL_FAST = process.env.RELAY_ADAPTER_MODEL_FAST?.trim() || 'deepseek-cha
 const MODEL_PREMIUM = process.env.RELAY_ADAPTER_MODEL_PREMIUM?.trim() || 'deepseek-reasoner';
 const PROXY = (process.env.HTTPS_PROXY || process.env.http_proxy || '').trim();
 const MOCK = process.env.RELAY_ADAPTER_MOCK === '1';
+// KB 演示模式（LF-20）：与 MOCK 的「链路标识语」不同，返回一条自然的本地知识库回答，
+// 供 README Demo GIF / 截图使用（无 key、可复现）。仅影响 /chat/completions。
+const MOCK_KB = process.env.RELAY_ADAPTER_MOCK_KB === '1';
 
-if (!UPSTREAM_KEY && !MOCK) {
+if (!UPSTREAM_KEY && !MOCK && !MOCK_KB) {
   console.error('[relay-adapter] ✗ 缺少 RELAY_ADAPTER_UPSTREAM_KEY（官方模型商 API key），拒绝启动');
   process.exit(1);
 }
@@ -151,6 +154,22 @@ const server = http.createServer((req, res) => {
           id: `mock-${requestId}`,
           object: 'chat.completion',
           choices: [{ index: 0, message: { role: 'assistant', content: mockText }, finish_reason: 'stop' }],
+          usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
+        });
+      }
+
+      // KB 演示模式（LF-20）：返回自然语言回答（内容与 kb-station 演示文档一致），
+      // 不泄露 MOCK 标识，供 README 真机截图/GIF 复现。
+      if (MOCK_KB) {
+        const mockKbText =
+          '根据本地知识库检索到的片段：灵坊工作台是一个零服务器的 Tauri v2 桌面插件平台。' +
+          '插件在本地桌面壳中运行，所有特权调用都要经过能力网关检查；' +
+          '客户端插件运行在沙箱 iframe 中，无法触达宿主页面与 Tauri IPC；' +
+          'nodejs 与 python 进程插件是普通操作系统进程，真实防线是安装时信任（minisign 验签）。';
+        return done(200, {
+          id: `mockkb-${requestId}`,
+          object: 'chat.completion',
+          choices: [{ index: 0, message: { role: 'assistant', content: mockKbText }, finish_reason: 'stop' }],
           usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
         });
       }
