@@ -130,6 +130,9 @@ async function spawnElevated(exe, env) {
   log('检测到 elevated 上下文，降权（Task Scheduler RunLevel=Limited）启动桌面壳…');
   const taskName = `LingFangE2E_${process.pid}_${Date.now()}`;
   const launcherPath = path.join(os.tmpdir(), `${taskName}.bat`);
+  // app stdout/stderr 前台重定向到日志：诊断盲区修复——之前 `start ""` 异步
+  // 启动，进程崩溃原因完全不可见（CI 日志 tail 恒为空）。
+  const appLog = path.join(os.tmpdir(), `${taskName}.log`);
   const wvArgs = env.WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS ?? '';
   const wvData = env.WEBVIEW2_USER_DATA_FOLDER ?? '';
   // .bat 用 latin1 写纯 ASCII（端口数字 + 路径），无双引号/特殊字符风险
@@ -138,11 +141,11 @@ async function spawnElevated(exe, env) {
     `set "WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=${wvArgs}"`,
     `set "WEBVIEW2_USER_DATA_FOLDER=${wvData}"`,
     `cd /d "${path.dirname(exe)}"`,
-    `start "" "${exe}"`,
+    `"${exe}" > "${appLog}" 2>&1`,
     '',
   ].join('\r\n');
   fs.writeFileSync(launcherPath, bat, 'latin1');
-  log(`launcher=${launcherPath}\ntask=${taskName}`);
+  log(`launcher=${launcherPath}\ntask=${taskName}\nappLog=${appLog}`);
 
   const psCreate = [
     '$ErrorActionPreference="Stop"',
@@ -177,7 +180,7 @@ async function spawnElevated(exe, env) {
       const pid = parseInt((out.stdout ?? '').trim(), 10);
       if (pid > 0) {
         log(`桌面壳已启动（PID=${pid}，Task Scheduler 降权模式）`);
-        return { pid, env, child: null, taskName, launcherPath };
+        return { pid, env, child: null, taskName, launcherPath, appLog };
       }
     } catch {
       /* 继续轮询 */
@@ -194,9 +197,22 @@ async function spawnElevated(exe, env) {
     ],
     { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] },
   );
+  // app 秒退时把重定向日志带进诊断（前台运行后 appLog 会有内容）
+  let appLogTail = '';
+  try {
+    if (fs.existsSync(appLog)) {
+      appLogTail = `\n--- appLog（tail 40）---\n${fs
+        .readFileSync(appLog, 'utf8')
+        .split(/\r?\n/)
+        .slice(-40)
+        .join('\n')}`;
+    }
+  } catch {
+    /* 读取失败不阻塞主诊断 */
+  }
   throw new Error(
     `Task Scheduler 降权启动后未找到 ${path.basename(exe)} 进程。\n` +
-      `--- 任务状态 ---\n${(diag.stdout ?? '').trim()}`,
+      `--- 任务状态 ---\n${(diag.stdout ?? '').trim()}${appLogTail}`,
   );
 }
 
@@ -273,9 +289,13 @@ async function run() {
   log(`产物：${exe}`);
 
   const port = await freePort();
+  // WebView2 用户数据目录：必须放在降权（medium IL）进程可写的目录。
+  // 之前放 repo 根（D:\a\new-lingfang\...），GitHub Actions runner 的 admin
+  // token 创建该目录后，降权进程无写权限 → WebView2 初始化失败 → app 启动即退
+  // （nightly e2e 连续 6 次失败，2026-08-29 定位）。os.tmpdir() 对降权进程可写。
   const webviewDataDir = path.join(
-    repoRoot,
-    `.e2e-webview2-data-${process.pid}-${Date.now()}`,
+    os.tmpdir(),
+    `lf-e2e-webview2-${process.pid}-${Date.now()}`,
   );
 
   const child = spawnShell(exe, port, webviewDataDir);
@@ -297,6 +317,13 @@ async function run() {
     if (child.launcherPath) {
       try {
         fs.unlinkSync(child.launcherPath);
+      } catch {
+        /* 已删 */
+      }
+    }
+    if (child.appLog) {
+      try {
+        fs.unlinkSync(child.appLog);
       } catch {
         /* 已删 */
       }
@@ -384,10 +411,24 @@ async function run() {
           return `netstat 失败: ${e2.message}`;
         }
       })();
+      // elevated 降权路径下 app 输出已重定向到 appLog（普通 spawn 走 childOutput 管道）
+      const appLogTail = (() => {
+        if (!child.appLog) return [];
+        try {
+          if (!fs.existsSync(child.appLog)) return ['（appLog 不存在）'];
+          return fs
+            .readFileSync(child.appLog, 'utf8')
+            .split(/\r?\n/)
+            .slice(-80);
+        } catch (e2) {
+          return [`appLog 读取失败: ${e2.message}`];
+        }
+      })();
       const diag = [
         `等待 CDP(${port}) 超时；app 进程存活=${exeAlive}；${webviewProcs}`,
         `--- app stdout/stderr（tail 80）---`,
         ...childOutput.slice(-80),
+        ...(child.appLog ? [`--- appLog（tail 80）---`, ...appLogTail] : []),
         `--- ${portState} ---`,
       ].join('\n');
       throw new Error(`${e.message}\n${diag}`);
@@ -551,6 +592,14 @@ async function run() {
       }
       child.launcherPath = null;
     }
+    if (child.appLog) {
+      try {
+        fs.unlinkSync(child.appLog);
+      } catch {
+        /* 已删 */
+      }
+      child.appLog = null;
+    }
     await new Promise((r) => setTimeout(r, 1500));
     const child2 = spawnShell(exe, port, webviewDataDir);
     if (child2.child) {
@@ -560,6 +609,7 @@ async function run() {
     child.pid = child2.pid; // 让 cleanup 杀最新进程
     child.taskName = child2.taskName ?? null; // 让 cleanup 清第二次的 task
     child.launcherPath = child2.launcherPath ?? null;
+    child.appLog = child2.appLog ?? null; // 让诊断读第二次的 appLog
     const inFrame2 = await connectWithDiagnostics();
     const resurrected = await inFrame2(async (k) => {
       const v = await window.sdk.storage.get(k);
