@@ -1,8 +1,8 @@
-# 灵坊工作台 · 本地优先的 AI 知识库工作站
+# 千匣台 · 本地优先的 AI 知识库工作站
 
 > **一句话定位**：把散落在本机的 `.md` / `.txt` 文档收进一个**本地知识库**——自动切片、关键词全文检索、带着检索片段向大模型提问。你的资料不出本机。
 
-灵坊工作台（LingFang Workbench）是一个 Tauri v2 桌面**插件平台**：插件在本地桌面壳里运行，安装、能力鉴权、文件与 AI 调用全部由桌面壳托管。仓库名 `my-treasure` 是个人仓库占位名，产品名以「灵坊工作台」为准（exe 产物名即 `灵坊工作台`）。
+千匣台（QianXia Workbench）是一个 Tauri v2 桌面**插件平台**：插件在本地桌面壳里运行，安装、能力鉴权、文件与 AI 调用全部由桌面壳托管。仓库名 `my-treasure` 是个人仓库占位名，产品名以「千匣台」为准（exe 产物名即 `千匣台`）。
 
 ![知识库工作站演示：导入 → 检索 → LLM 问答](./docs/assets/kb-demo.gif)
 
@@ -20,11 +20,11 @@ pnpm dev:desktop                        # 启动桌面壳，打开插件中心
 
 - **插件中心**：内置计算器、2048、Markdown 笔记、动作演示、动作调用器 5 个插件，一键运行；
 - **知识库工作站**（上方 Demo 的主角）：把本机文档导入成可检索的本地知识库，提问时自动携带检索片段；
-- **安装与更新闭环**：`.lfplugin` 制品导入、版本回滚、自动更新（见 [`docs/release-runbook.md`](./docs/release-runbook.md)）。
+- **安装与更新闭环**：`.qplugin` 制品导入、版本回滚、自动更新（见 [`docs/release-runbook.md`](./docs/release-runbook.md)）。
 
 ## 真实场景：本地知识库（真用插件）
 
-「知识库工作站」是项目自己每天在用的第一个垂直场景插件（client 运行时，`.lfplugin` 制品导入）。
+「知识库工作站」是项目自己每天在用的第一个垂直场景插件（client 运行时，`.qplugin` 制品导入）。
 文档全程留在本机：`fs.read` 只允许 `$HOME/Documents` 白名单内的路径，切片与索引存在插件私有
 `storage.kv`，LLM 问答经宿主代理转发，插件永不持有凭据。
 
@@ -86,7 +86,7 @@ AI 能力（llm/image/video/audio）由用户在应用设置中录入**平台 re
 | `apps/desktop/installer`     | SFX 安装器 crate（流式解压注入 ~1.7GB 内置 runtime）                                                                                  |
 | `packages/contract`          | host↔插件类型的唯一权威来源（Zod schema；契约漂移视为缺陷）                                                                           |
 | `packages/platform-contract` | 平台侧契约（治理 / 计费 / 市场等 Zod schema，与服务端对齐）                                                                           |
-| `packages/plugin-sdk`        | 插件作者 SDK + `lingfang-plugin` CLI（create/validate/build/publish）                                                                 |
+| `packages/plugin-sdk`        | 插件作者 SDK + `qianxia-plugin` CLI（create/validate/build/publish）                                                                 |
 | `packages/ui-tokens`         | 设计 token（CSS 变量），宿主注入每个插件 iframe                                                                                       |
 
 ### 安全模型（三档边界，如实版）
@@ -98,7 +98,7 @@ AI 能力（llm/image/video/audio）由用户在应用设置中录入**平台 re
 - **第二档 · nodejs/python 插件是生命周期围栏，不是安全边界**：进程插件在 Windows Job Object
   下运行，仅保证进程树收容与随壳退出；没有受限令牌 / 完整性级别 / 文件系统与网络隔离。
   能力网关只约束走 SDK/桥的调用——这是对诚实插件的 API 契约，不是对抗恶意插件的墙。
-- **第三档 · 进程插件的真实防线是安装时信任**：`.lfplugin` 制品 minisign 验签 + 召回检查；
+- **第三档 · 进程插件的真实防线是安装时信任**：`.qplugin` 制品 minisign 验签 + 召回检查；
   v1 政策下本地导入仅接受 client 运行时，`nodejs` / `python` 安装保留给内置/一方签名插件
   （`IMPROVEMENT_PLAN.md` F2）。
 

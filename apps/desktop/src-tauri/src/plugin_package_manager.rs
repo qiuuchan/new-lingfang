@@ -153,7 +153,7 @@ pub(crate) enum DraftDiagnosticStatus {
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub(crate) enum PluginReleaseSourceKind {
-    LingfangCreator,
+    QianxiaCreator,
     ExternalTool,
     LocalArtifact,
     CopiedInstallation,
@@ -166,7 +166,7 @@ pub(crate) enum PluginReleaseSourceKind {
 impl PluginReleaseSourceKind {
     pub(crate) fn as_header_value(self) -> &'static str {
         match self {
-            Self::LingfangCreator => "LINGFANG_CREATOR",
+            Self::QianxiaCreator => "QIANXIA_CREATOR",
             Self::ExternalTool => "EXTERNAL_TOOL",
             Self::LocalArtifact => "LOCAL_ARTIFACT",
             Self::CopiedInstallation => "COPIED_INSTALLATION",
@@ -178,9 +178,9 @@ impl PluginReleaseSourceKind {
 
     fn default_label(self) -> &'static str {
         match self {
-            Self::LingfangCreator => "灵枋创建器",
+            Self::QianxiaCreator => "灵枋创建器",
             Self::ExternalTool => "外部开发工具",
-            Self::LocalArtifact => "本地 .lfplugin 制品",
+            Self::LocalArtifact => "本地 .qplugin 制品",
             Self::CopiedInstallation => "已安装插件副本",
             Self::Api => "API",
             Self::LegacyMigration => "旧版迁移",
@@ -376,7 +376,7 @@ pub(crate) struct DownloadReleaseInput {
     pub origin: InstallationOrigin,
 }
 
-/// 仓库即市场：从外部 URL 直接下载 .lfplugin v4 制品并安装。
+/// 仓库即市场：从外部 URL 直接下载 .qplugin v4 制品并安装。
 /// 零服务器架构——不经过任何平台后端，URL 指向 GitHub Release 资产等公开地址。
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -531,7 +531,7 @@ impl PluginPackageManager {
     }
 
     fn staging_root(&self) -> PathBuf {
-        self.plugins_root.join(".lingfang-staging")
+        self.plugins_root.join(".qianxia-staging")
     }
 
     fn read_installations(&self) -> InstallationLedger {
@@ -720,7 +720,7 @@ impl PluginPackageManager {
     pub(crate) fn action_caller_descriptor(&self, package_id: &str, release_id: &str, sha256: &str) -> Result<Value, String> {
         let installation = self.read_installations().installations.into_iter().find(|item| item.package_id == package_id).ok_or_else(|| "Action 调用方插件未安装".to_string())?;
         // 内置插件随包分发、自包含，不经市场依赖解析流水线，安装即就绪；其 dependency_status
-        // 恒视为 Ready（LF-06：action-caller 为内置插件，须可经 /actions/call 调 client action）。
+        // 恒视为 Ready（QX-06：action-caller 为内置插件，须可经 /actions/call 调 client action）。
         // 其余来源仍要求显式 Ready（依赖解析/activate 后才放行）。
         let deps_ready = installation.origin == InstallationOrigin::Builtin
             || installation.active_release.dependency_status == DependencyStatus::Ready;
@@ -844,7 +844,7 @@ impl PluginPackageManager {
     }
 
     fn materialize_builtin_artifact(&self, sha256: &str, bytes: &[u8]) -> Result<PathBuf, String> {
-        let destination = self.cache_root().join(format!("{sha256}.lfplugin"));
+        let destination = self.cache_root().join(format!("{sha256}.qplugin"));
         if destination.is_file() && sha256_file(&destination).as_deref() == Ok(sha256) {
             return Ok(destination);
         }
@@ -892,7 +892,7 @@ impl PluginPackageManager {
             let name = entry.file_name().to_string_lossy().to_string();
             if matches!(
                 name.as_str(),
-                ".lingfang" | ".lingfang-staging" | "installed" | "cache" | "workspaces"
+                ".qianxia" | ".qianxia-staging" | "installed" | "cache" | "workspaces"
             ) || completed.contains(&name)
             {
                 continue;
@@ -1006,7 +1006,7 @@ impl PluginPackageManager {
 
         let artifact_path = self
             .cache_root()
-            .join(format!("legacy-{}.lfplugin", Uuid::new_v4()));
+            .join(format!("legacy-{}.qplugin", Uuid::new_v4()));
         let artifact = package_workspace(path, &artifact_path)?;
         let manifest_id = manifest.get("id").and_then(Value::as_str).unwrap_or(name);
         let backup = self
@@ -1150,7 +1150,7 @@ impl PluginPackageManager {
         if let Some(index) = existing_index {
             let current = &ledger.installations[index];
             // 内置插件随包分发、无「准备→激活」流水线：残留 pending 视为无效，直接丢弃，
-            // 改以新发行版替换 active（避免重启后新内置代码无法生效，见 LF-06 真机闭环）。
+            // 改以新发行版替换 active（避免重启后新内置代码无法生效，见 QX-06 真机闭环）。
             if current.pending_release.is_some() && input.origin != InstallationOrigin::Builtin {
                 return Err("已有待激活版本，请先完成启动验证或回滚后再更新".to_string());
             }
@@ -1222,7 +1222,7 @@ impl PluginPackageManager {
         let _ = fs::remove_dir_all(&staging);
         let cache_path = self
             .cache_root()
-            .join(format!("{}.lfplugin", inspected.sha256));
+            .join(format!("{}.qplugin", inspected.sha256));
         if !cache_path.exists() {
             if let Err(error) = fs::copy(&artifact_path, &cache_path) {
                 remove_release_directory(&final_package.to_string_lossy());
@@ -1236,7 +1236,7 @@ impl PluginPackageManager {
         let now = Utc::now().to_rfc3339();
         // 内置插件随包分发、自包含，不经市场依赖解析流水线，安装即视为依赖就绪；
         // 否则 action_caller_descriptor / resolve_action_binding 会因 Pending 拒绝调用
-        // （LF-06 真机闭环依赖此：action-caller 为内置插件，须 Ready 才能调 /actions/call）。
+        // （QX-06 真机闭环依赖此：action-caller 为内置插件，须 Ready 才能调 /actions/call）。
         // 其余来源（marketplace/team/local）仍 Pending，待 prepare→activate 置 Ready。
         let dependency_status = if input.origin == InstallationOrigin::Builtin {
             DependencyStatus::Ready
@@ -1254,7 +1254,7 @@ impl PluginPackageManager {
         if let Some(index) = existing_index {
             if input.origin == InstallationOrigin::Builtin {
                 // 内置插件随包分发，无独立「准备→激活」流水线；新发行版直接置为 active，
-                // 否则重建后新制品只会成为 pending 而永不生效（LF-06 fixture 重建后仍跑旧代码）。
+                // 否则重建后新制品只会成为 pending 而永不生效（QX-06 fixture 重建后仍跑旧代码）。
                 let old_active = ledger.installations[index].active_release.clone();
                 ledger.installations[index].previous_release = Some(old_active);
                 ledger.installations[index].active_release = release;
@@ -1638,7 +1638,7 @@ impl PluginPackageManager {
         Ok(())
     }
 
-    /// `lingfang-plugin dev` 命令：将本地源目录登记为开发态安装（origin = Dev）。
+    /// `qianxia-plugin dev` 命令：将本地源目录登记为开发态安装（origin = Dev）。
     ///
     /// 与正式安装的关键差异：dev 安装直接以源目录作为 `active_release.path`，
     /// 不经 unpack/校验，也不走 `checked_release_package_path`（目录安全性由源目录本身负责）。
@@ -1670,10 +1670,10 @@ impl PluginPackageManager {
             .and_then(Value::as_str)
             .unwrap_or("client");
         if runtime_type != "client" {
-            // F2 v1 安全政策 + IMPROVEMENT_PLAN LF-02：v1 中 dev 安装仅支持 client 运行时，
+            // F2 v1 安全政策 + IMPROVEMENT_PLAN QX-02：v1 中 dev 安装仅支持 client 运行时，
             // nodejs/python 进程插件的开发态挂载待签名信任根建立后再放开。
             return Err(
-                "v1 安全政策（LF-02）：开发态安装暂仅支持 client 运行时；nodejs/python 进程插件保留给内置或一方签名插件（进程沙箱非安全边界，见 IMPROVEMENT_PLAN.md F2）"
+                "v1 安全政策（QX-02）：开发态安装暂仅支持 client 运行时；nodejs/python 进程插件保留给内置或一方签名插件（进程沙箱非安全边界，见 IMPROVEMENT_PLAN.md F2）"
                     .to_string(),
             );
         }
@@ -1831,7 +1831,7 @@ impl PluginPackageManager {
         let provenance = normalize_release_provenance(
             input
                 .source_kind
-                .unwrap_or(PluginReleaseSourceKind::LingfangCreator),
+                .unwrap_or(PluginReleaseSourceKind::QianxiaCreator),
             input.source_label.as_deref(),
         )?;
         let workspace_id = Uuid::new_v4().to_string();
@@ -1962,7 +1962,7 @@ impl PluginPackageManager {
     ) -> Result<DraftWorkspace, String> {
         let installation = self.installation(installation_id)?;
         let artifact_path = self.cache_root().join(format!(
-            "workspace-copy-{}-{}.lfplugin",
+            "workspace-copy-{}-{}.qplugin",
             installation_id,
             Uuid::new_v4()
         ));
@@ -1982,7 +1982,7 @@ impl PluginPackageManager {
         let workspace = self.workspace(workspace_id)?;
         let output = output_path.map(Path::to_path_buf).unwrap_or_else(|| {
             self.cache_root()
-                .join(format!("workspace-{workspace_id}.lfplugin"))
+                .join(format!("workspace-{workspace_id}.qplugin"))
         });
         let artifact = package_workspace(Path::new(&workspace.path), &output)?;
         Ok(PackWorkspaceResult {

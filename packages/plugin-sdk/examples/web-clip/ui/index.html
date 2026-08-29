@@ -121,7 +121,7 @@
   <body>
     <div class="card">
       <h1>网页剪藏</h1>
-      <div class="subtitle">剪贴板取 URL → 抓取正文 → 灵坊平台 LLM 摘要 → 存档</div>
+      <div class="subtitle">剪贴板取 URL → 抓取正文 → 千匣平台 LLM 摘要 → 存档</div>
 
       <div class="actions">
         <button class="primary" id="btnClip">从剪贴板读取 URL</button>
@@ -305,7 +305,7 @@
         const summaryEl = document.getElementById('summaryText');
         const summarySection = document.getElementById('summarySection');
         summarySection.style.display = 'block';
-        summaryEl.innerHTML = '<div class="loading"><div class="spinner"></div>灵坊平台 LLM 正在总结…</div>';
+        summaryEl.innerHTML = '<div class="loading"><div class="spinner"></div>千匣平台 LLM 正在总结…</div>';
         setStatus('正文已抓取，正在生成摘要…');
 
         const SYSTEM_PROMPT = '你是网页剪藏助手，用简洁中文总结要点，分条列出，控制在200字内。';
@@ -352,8 +352,8 @@
           if (code === 'relay_not_configured' || msg.includes('relay_not_configured')) {
             record.summary = null;
             summaryEl.textContent =
-              'AI 摘要暂不可用：未配置灵坊平台 LLM 凭据（relay_not_configured）。已为你抓取正文。';
-            showNotice('AI 摘要暂不可用：未配置灵坊平台 LLM 凭据。已为你抓取正文。');
+              'AI 摘要暂不可用：未配置千匣平台 LLM 凭据（relay_not_configured）。已为你抓取正文。';
+            showNotice('AI 摘要暂不可用：未配置千匣平台 LLM 凭据。已为你抓取正文。');
             setStatus('已抓取正文；AI 摘要因凭据缺失跳过。');
             try {
               await persistRecord(record);
@@ -363,7 +363,7 @@
             try {
               await sdk.ui.render({
                 type: 'markdown',
-                body: '## 网页剪藏（降级）\n\nAI 摘要暂不可用：未配置灵坊平台 LLM 凭据。\n\n已抓取：' + url,
+                body: '## 网页剪藏（降级）\n\nAI 摘要暂不可用：未配置千匣平台 LLM 凭据。\n\n已抓取：' + url,
               });
             } catch (uiErr) {
               /* 降级弹层失败可忽略 */

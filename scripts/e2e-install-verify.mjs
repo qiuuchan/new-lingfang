@@ -1,9 +1,9 @@
 #!/usr/bin/env node
-// e2e-install-verify.mjs — 干净机器安装实证（LF-11 / 阶段 L2）。
+// e2e-install-verify.mjs — 干净机器安装实证（QX-11 / 阶段 L2）。
 //
 // 实证「Release 产物 → 干净环境安装 → 启动 → 插件可用」最后一公里：
 //   - 全新目标目录（无 runtimes 缓存 + 隔离 WebView2 用户数据目录）；
-//   - 若有 SFX 安装器 → 跑 `LingFang-Setup-*.exe --silent --target <目标目录>`；
+//   - 若有 SFX 安装器 → 跑 `QianXia-Setup-*.exe --silent --target <目标目录>`；
 //   - 启动安装实例 → CDP 断言：插件中心加载 / 内置 notes 打开 / storage.kv 真落盘 /
 //     四 runtime keyFiles 在位（对齐 verify-bundled-runtimes.mjs 口径）。
 //
@@ -16,7 +16,7 @@
 // 用法（cwd = apps/desktop）：
 //   pnpm test:install                       # 先构建再验证
 //   E2E_SKIP_BUILD=1 pnpm test:install     # 复用 target/debug
-//   LINGFANG_SETUP_EXE=../path/to/LingFang-Setup-x.exe pnpm test:install
+//   QIANXIA_SETUP_EXE=../path/to/QianXia-Setup-x.exe pnpm test:install
 //   E2E_INSTALLER_SKIP=1 pnpm test:install # 跳过安装器自动探测，强制用 target/debug 调试壳做断言（CI/本机复核降级）
 //
 // 依赖 @playwright/test（仅用 CDP 连接）。仅 Windows（WebView2）。任一断言失败 → 退出码 1。
@@ -37,8 +37,8 @@ const requireFromDesktop = createRequire(path.join(desktopDir, 'package.json'));
 const { chromium } = requireFromDesktop('@playwright/test');
 
 const NOTES_NAME = 'Markdown 笔记';
-const EXE_CANDIDATES = ['lingfang-desktop.exe', '灵坊工作台.exe', 'main.exe'];
-const SETUP_CANDIDATES = ['LingFang-Setup-*.exe', '灵坊工作台-Setup-*.exe'];
+const EXE_CANDIDATES = ['qianxia-desktop.exe', '千匣台.exe', 'main.exe'];
+const SETUP_CANDIDATES = ['QianXia-Setup-*.exe', '千匣台-Setup-*.exe'];
 const OVERALL_TIMEOUT_MS = 5 * 60 * 1000;
 
 // runtime keyFiles 口径对齐 verify-bundled-runtimes.mjs（runtime-lock.json）
@@ -136,7 +136,7 @@ async function spawnElevated(exe, env) {
       const out = spawnSync('powershell', [
         '-NoProfile', '-Command',
         `Get-CimInstance Win32_Process -Filter "Name='${path.basename(exe)}'" | ` +
-          'Where-Object { $_.CommandLine -like "*lingfang*" } | ' +
+          'Where-Object { $_.CommandLine -like "*qianxia*" } | ' +
           'Sort-Object CreationDate -Descending | Select-Object -First 1 -ExpandProperty ProcessId',
       ], { stdio: ['ignore', 'pipe', 'ignore'], encoding: 'utf8' });
       const pid = parseInt(out.stdout.trim(), 10);
@@ -149,7 +149,7 @@ async function spawnElevated(exe, env) {
     }
     await new Promise((r) => setTimeout(r, 500));
   }
-  throw new Error('runas 降权启动后未找到 lingfang-desktop 进程');
+  throw new Error('runas 降权启动后未找到 qianxia-desktop 进程');
 }
 
 function sha256Of(p) {
@@ -203,7 +203,7 @@ async function run() {
   log(`干净目标目录：${targetDir}`);
 
   // ── 安装器来源选择 ──
-  let setupExe = process.env.LINGFANG_SETUP_EXE ?? null;
+  let setupExe = process.env.QIANXIA_SETUP_EXE ?? null;
   if (!setupExe && process.env.E2E_INSTALLER_SKIP !== '1') {
     setupExe = findExe(path.join(repoRoot, 'target', 'release'), SETUP_CANDIDATES);
   }
@@ -226,7 +226,7 @@ async function run() {
       const installedExe = findExe(targetDir, EXE_CANDIDATES);
       launchExe = installedExe ?? null;
       if (!launchExe) {
-        // LF-18：静默安装 exit=0 但目录里没有主程序 = 「假成功」级安装链路缺陷
+        // QX-18：静默安装 exit=0 但目录里没有主程序 = 「假成功」级安装链路缺陷
         // （2026-08-27 实测形态：GNU tar 静默产出非 zip payload，安装器 zip 层在
         // 垃圾数据上误解析为空归档 + 兜底复制自身为 updater.exe）。此处必须硬失败，
         // 不允许退化成调试壳把断言跑绿——那正是工单警告的「复用必假阳性」。
@@ -298,7 +298,7 @@ async function run() {
     const page = context.pages().find((p) => /tauri/i.test(p.url())) ?? context.pages()[0];
     assert(page, 'CDP 连接成功并找到桌面壳页面');
     log(`页面 URL: ${page.url()}`);
-    // LF-18 诊断：release 产物若未经 tauri CLI 构建（custom-protocol 未启用），
+    // QX-18 诊断：release 产物若未经 tauri CLI 构建（custom-protocol 未启用），
     // devUrl（localhost:1420）会被烘焙进二进制，安装实例启动即白屏指向 dev server。
     if (/localhost:1420/.test(page.url())) {
       console.error(
@@ -359,7 +359,7 @@ async function run() {
     if (!usedInstaller) {
       log('────────────────────────────────────────────────────────────');
       log('待本机复核项：SFX 安装器 --silent 安装闭环（本环境无 Release / 安装器 exe）。');
-      log('在具备 Release 的机器上：LINGFANG_SETUP_EXE=... pnpm test:install 即跑完整闭环。');
+      log('在具备 Release 的机器上：QIANXIA_SETUP_EXE=... pnpm test:install 即跑完整闭环。');
       log('────────────────────────────────────────────────────────────');
     }
   } finally {

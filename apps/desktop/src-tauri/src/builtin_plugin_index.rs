@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use serde::{Deserialize, Serialize};
 
-pub(crate) const INDEX_FORMAT: &str = "lingfang-builtin-plugin-index";
+pub(crate) const INDEX_FORMAT: &str = "qianxia-builtin-plugin-index";
 pub(crate) const INDEX_VERSION: u32 = 1;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -75,7 +75,7 @@ pub(crate) fn parse_builtin_index(json: &str) -> Result<BuiltinArtifactIndex, St
         {
             return Err(format!("内置插件 SHA-256 格式错误：{manifest_id}"));
         }
-        if artifact.artifact_file != format!("{}.lfplugin", artifact.sha256)
+        if artifact.artifact_file != format!("{}.qplugin", artifact.sha256)
             || artifact.artifact_file.contains(['/', '\\'])
         {
             return Err(format!("内置插件制品文件名非法：{manifest_id}"));
@@ -100,7 +100,7 @@ mod tests {
     fn valid_index() -> String {
         let sha = "a".repeat(64);
         format!(
-            r#"{{"format":"lingfang-builtin-plugin-index","formatVersion":1,"artifacts":[{{"packageId":"builtin:builtin.demo","releaseId":"builtin-{sha}","manifestId":"builtin.demo","version":"1.0.0","artifactFile":"{sha}.lfplugin","sha256":"{sha}","sizeBytes":42}}]}}"#
+            r#"{{"format":"qianxia-builtin-plugin-index","formatVersion":1,"artifacts":[{{"packageId":"builtin:builtin.demo","releaseId":"builtin-{sha}","manifestId":"builtin.demo","version":"1.0.0","artifactFile":"{sha}.qplugin","sha256":"{sha}","sizeBytes":42}}]}}"#
         )
     }
 
@@ -113,8 +113,8 @@ mod tests {
     #[test]
     fn rejects_artifact_path_and_checksum_mismatch() {
         let invalid = valid_index().replace(
-            &format!("{}.lfplugin", "a".repeat(64)),
-            "../builtin.demo.lfplugin",
+            &format!("{}.qplugin", "a".repeat(64)),
+            "../builtin.demo.qplugin",
         );
         assert!(parse_builtin_index(&invalid).is_err());
 

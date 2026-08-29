@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "灵坊工作台",
+  "productName": "千匣台",
   "version": "0.1.11",
-  "identifier": "com.lingfang.desktop",
+  "identifier": "com.qianxia.desktop",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:1420",
@@ -16,10 +16,10 @@
       "../builtin-plugins": "builtin-plugins",
       "../runtimes": "runtimes"
     },
-    "copyright": "© 2026 灵坊工作台",
-    "shortDescription": "灵坊工作台 协作平台桌面客户端",
-    "longDescription": "灵坊工作台 协作平台桌面客户端：AI 插件创建、团队协作、插件市场与钱包，内置完整插件运行环境。",
-    "publisher": "灵坊工作台",
+    "copyright": "© 2026 千匣台",
+    "shortDescription": "千匣台 协作平台桌面客户端",
+    "longDescription": "千匣台 协作平台桌面客户端：AI 插件创建、团队协作、插件市场与钱包，内置完整插件运行环境。",
+    "publisher": "千匣台",
     "category": "Productivity",
     "icon": [
       "icons/32x32.png",
@@ -41,7 +41,7 @@
     "withGlobalTauri": true,
     "windows": [
       {
-        "title": "灵坊工作台",
+        "title": "千匣台",
         "width": 1600,
         "height": 1000,
         "minWidth": 1024,

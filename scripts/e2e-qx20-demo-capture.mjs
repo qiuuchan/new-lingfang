@@ -1,4 +1,4 @@
-//! e2e-lf20-demo-capture.mjs — LF-20 README Demo 素材采集（真机、真实 UI 操作）。
+//! e2e-qx20-demo-capture.mjs — QX-20 README Demo 素材采集（真机、真实 UI 操作）。
 //!
 //! CDP 驱动桌面壳真实 UI（点击/输入，非 window.__kb 钩子）走 kb-station 完整流程：
 //!   插件中心 → 运行「知识库工作站」→ 文件导入（fs.read 白名单 $HOME/Documents）
@@ -26,27 +26,27 @@ const requireFromDesktop = createRequire(path.resolve('apps/desktop/package.json
 const { chromium } = requireFromDesktop('@playwright/test');
 
 const REPO_ROOT = process.cwd();
-const MAIN_EXE = 'lingfang-desktop.exe';
-const PLUGIN = { id: 'com.lingfang.kb-station', name: '知识库工作站' };
-const KB_ARTIFACT = path.join(REPO_ROOT, 'packages/plugin-sdk', 'com.lingfang.kb-station-0.1.0.lfplugin');
+const MAIN_EXE = 'qianxia-desktop.exe';
+const PLUGIN = { id: 'com.qianxia.kb-station', name: '知识库工作站' };
+const KB_ARTIFACT = path.join(REPO_ROOT, 'packages/plugin-sdk', 'com.qianxia.kb-station-0.1.0.qplugin');
 const FFMPEG = path.join(REPO_ROOT, 'apps/desktop/runtimes/ffmpeg/ffmpeg.exe');
 const ASSETS_DIR = path.join(REPO_ROOT, 'docs/assets');
-const DEMO_DOC_FILE = path.join(os.homedir(), 'Documents', '灵坊工作台-产品笔记.md');
+const DEMO_DOC_FILE = path.join(os.homedir(), 'Documents', '千匣台-产品笔记.md');
 
 // 演示文档（真实产品笔记，内容与 kb-station 检索/问答结果一致）。
-const DEMO_DOC_TEXT = `灵坊工作台是一个零服务器的 Tauri v2 桌面插件平台。
+const DEMO_DOC_TEXT = `千匣台是一个零服务器的 Tauri v2 桌面插件平台。
 
 插件在本地桌面壳中运行，所有特权调用都要经过能力网关检查。客户端插件运行在沙箱 iframe 中，nodejs 与 python 插件是普通操作系统进程，真实防线是安装时信任（minisign 验签）。
 
 本地知识库场景：把 .md 与 .txt 文档导入插件，自动按段落切片，随后用关键词全文检索，最后带着检索片段向 LLM 提问。
 
-内置插件包括计算器、2048、Markdown 笔记与动作演示；第三方插件通过 .lfplugin 制品导入，v1 政策仅接受 client 运行时。`;
+内置插件包括计算器、2048、Markdown 笔记与动作演示；第三方插件通过 .qplugin 制品导入，v1 政策仅接受 client 运行时。`;
 
 const FPS = 2.5; // GIF 目标帧率（帧间隔 400ms，帧序列均匀）
 const FRAME_MS = Math.round(1000 / FPS);
 
 let failed = 0;
-const log = (msg) => console.log(`[lf20-capture] ${msg}`);
+const log = (msg) => console.log(`[qx20-capture] ${msg}`);
 const ok = (msg) => console.log(`  ✅ ${msg}`);
 const fail = (msg) => { console.error(`  ❌ ${msg}`); failed += 1; };
 const assert = (cond, msg) => (cond ? ok(msg) : fail(msg));
@@ -64,7 +64,7 @@ function isElevated() {
 }
 
 async function spawnElevated(exe, env) {
-  const taskName = `LingFangDemo_${process.pid}_${Date.now()}`;
+  const taskName = `QianXiaDemo_${process.pid}_${Date.now()}`;
   const launcherPath = path.join(os.tmpdir(), `${taskName}.bat`);
   const bat = [
     '@echo off',
@@ -128,7 +128,7 @@ async function waitForCdp(port, timeoutMs) {
 async function connectPage(port) {
   const browser = await chromium.connectOverCDP(`http://127.0.0.1:${port}`);
   const context = browser.contexts()[0];
-  await pause(2500); // WebView2 首帧导航竞态（LF-17 实测）
+  await pause(2500); // WebView2 首帧导航竞态（QX-17 实测）
   const page = context.pages().find((p) => /tauri/i.test(p.url())) ?? context.pages()[0];
   assert(page, `CDP 连接成功并找到桌面壳页面 (${port})`);
   return { browser, page };
@@ -178,7 +178,7 @@ async function still(page, name) {
 // ── 主流程 ───────────────────────────────────────────────────────────────
 
 async function run() {
-  const tmpRoot = path.join(os.tmpdir(), `lingfang-lf20-demo-${Date.now()}`);
+  const tmpRoot = path.join(os.tmpdir(), `qianxia-qx20-demo-${Date.now()}`);
   const framesDir = path.join(tmpRoot, 'frames');
   const webviewData = path.join(tmpRoot, 'webview-data');
   fs.mkdirSync(framesDir, { recursive: true });
@@ -205,8 +205,8 @@ async function run() {
     const exe = path.join(REPO_ROOT, 'target/release', MAIN_EXE);
     if (!fs.existsSync(exe)) throw new Error(`未找到 release 桌面壳：${exe}`);
     appHandle = spawnShell(exe, port, webviewData, {
-      LINGFANG_RELAY_API_BASE: `http://127.0.0.1:${adapterPort}`,
-      LINGFANG_RELAY_TOKEN: 'mock-token',
+      QIANXIA_RELAY_API_BASE: `http://127.0.0.1:${adapterPort}`,
+      QIANXIA_RELAY_TOKEN: 'mock-token',
     });
     await waitForCdp(port, 90_000);
     const { browser, page } = await connectPage(port);
@@ -278,7 +278,7 @@ async function run() {
 
     // 3.5 检索并 LLM 问答（宿主 markdown 弹层）
     await fk.locator('#query').fill('');
-    await fk.locator('#query').pressSequentially('灵坊工作台是什么？', { delay: 50 });
+    await fk.locator('#query').pressSequentially('千匣台是什么？', { delay: 50 });
     await hold(page, framesDir, 800);
     await fk.locator('#btnAsk').click();
 
@@ -357,13 +357,13 @@ async function run() {
   }
 
   if (failed > 0) {
-    console.error(`[lf20-capture] ${failed} 项断言失败`);
+    console.error(`[qx20-capture] ${failed} 项断言失败`);
     process.exit(1);
   }
   log('完成');
 }
 
 run().catch((e) => {
-  console.error(`[lf20-capture] 失败：${e.stack || e}`);
+  console.error(`[qx20-capture] 失败：${e.stack || e}`);
   process.exit(1);
 });

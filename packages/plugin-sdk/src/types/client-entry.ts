@@ -1,10 +1,10 @@
 // Client runtime 插件的宿主注入全局类型。
 //
-// 桌面壳在 iframe srcDoc 注入 `window.sdk`，结构与 @lingfang/plugin-sdk 导出的 sdk 一致。
+// 桌面壳在 iframe srcDoc 注入 `window.sdk`，结构与 @qianxia/plugin-sdk 导出的 sdk 一致。
 // TS 用户用法：
 //
 // ```ts
-// import type { ClientPluginEntry } from '@lingfang/plugin-sdk/types/client-entry';
+// import type { ClientPluginEntry } from '@qianxia/plugin-sdk/types/client-entry';
 // declare const sdk: ClientPluginEntry;
 // await sdk.llm.chat({ messages: [...] });
 // ```
@@ -18,7 +18,7 @@ export type ClientPluginEntry = typeof sdk;
 declare global {
   interface Window {
     sdk?: ClientPluginEntry;
-    __lingfangInvoke?: (capability: string, args: unknown) => Promise<unknown>;
+    __qianxiaInvoke?: (capability: string, args: unknown) => Promise<unknown>;
   }
 }
 

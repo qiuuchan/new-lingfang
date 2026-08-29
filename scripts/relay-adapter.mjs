@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-// relay-adapter.mjs — 本地 relay 适配器（LF-04b 官方模型商路径）。
+// relay-adapter.mjs — 本地 relay 适配器（QX-04b 官方模型商路径）。
 //
-// 背景：灵坊桌面壳把 llm.chat 等调用转发到「平台 relay」协议
+// 背景：千匣桌面壳把 llm.chat 等调用转发到「平台 relay」协议
 //（POST {api_base}/api/relay/v1/chat/completions，model=fast|premium，
 //  Authorization: Bearer <token>）。本仓库零服务器、不含该 relay；
 // 本脚本在本机扮演这个 relay，把请求转发给任意 OpenAI 兼容官方模型商。
@@ -20,8 +20,8 @@
 //   HTTPS_PROXY=http://127.0.0.1:7897 \        # 可选；不设则直连上游
 //   node scripts/relay-adapter.mjs             # 默认监听 http://127.0.0.1:8787
 //
-// 配合桌面壳：LINGFANG_RELAY_API_BASE=http://127.0.0.1:8787
-// LINGFANG_RELAY_TOKEN=<任意非空值> 跑 scripts/e2e-relay-verify.mjs。
+// 配合桌面壳：QIANXIA_RELAY_API_BASE=http://127.0.0.1:8787
+// QIANXIA_RELAY_TOKEN=<任意非空值> 跑 scripts/e2e-relay-verify.mjs。
 //
 // 协议细节对齐 apps/desktop/src-tauri/src/plugin_llm_bridge.rs：
 //   - relay_response_json 解析错误体 {code, message, requestId, details.upstreamDetail}
@@ -41,7 +41,7 @@ const MODEL_FAST = process.env.RELAY_ADAPTER_MODEL_FAST?.trim() || 'deepseek-cha
 const MODEL_PREMIUM = process.env.RELAY_ADAPTER_MODEL_PREMIUM?.trim() || 'deepseek-reasoner';
 const PROXY = (process.env.HTTPS_PROXY || process.env.http_proxy || '').trim();
 const MOCK = process.env.RELAY_ADAPTER_MOCK === '1';
-// KB 演示模式（LF-20）：与 MOCK 的「链路标识语」不同，返回一条自然的本地知识库回答，
+// KB 演示模式（QX-20）：与 MOCK 的「链路标识语」不同，返回一条自然的本地知识库回答，
 // 供 README Demo GIF / 截图使用（无 key、可复现）。仅影响 /chat/completions。
 const MOCK_KB = process.env.RELAY_ADAPTER_MOCK_KB === '1';
 
@@ -158,11 +158,11 @@ const server = http.createServer((req, res) => {
         });
       }
 
-      // KB 演示模式（LF-20）：返回自然语言回答（内容与 kb-station 演示文档一致），
+      // KB 演示模式（QX-20）：返回自然语言回答（内容与 kb-station 演示文档一致），
       // 不泄露 MOCK 标识，供 README 真机截图/GIF 复现。
       if (MOCK_KB) {
         const mockKbText =
-          '根据本地知识库检索到的片段：灵坊工作台是一个零服务器的 Tauri v2 桌面插件平台。' +
+          '根据本地知识库检索到的片段：千匣台是一个零服务器的 Tauri v2 桌面插件平台。' +
           '插件在本地桌面壳中运行，所有特权调用都要经过能力网关检查；' +
           '客户端插件运行在沙箱 iframe 中，无法触达宿主页面与 Tauri IPC；' +
           'nodejs 与 python 进程插件是普通操作系统进程，真实防线是安装时信任（minisign 验签）。';
@@ -207,7 +207,7 @@ const server = http.createServer((req, res) => {
     return done(200, { models: [{ id: MODEL_FAST }, { id: MODEL_PREMIUM }] });
   }
 
-  // ── 图像生成（LF-12 scope #3）：确定性伪响应，对齐 SDK { images: string[] } ──
+  // ── 图像生成（QX-12 scope #3）：确定性伪响应，对齐 SDK { images: string[] } ──
   if (req.method === 'POST' && req.url === '/api/relay/v1/images/generations') {
     let raw = '';
     req.on('data', (c) => { raw += c; });
@@ -228,7 +228,7 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  // ── 图像编辑（LF-12 scope #3）：与生成同形，标记 EDITED ──
+  // ── 图像编辑（QX-12 scope #3）：与生成同形，标记 EDITED ──
   if (req.method === 'POST' && req.url === '/api/relay/v1/images/edits') {
     let raw = '';
     req.on('data', (c) => { raw += c; });
@@ -248,7 +248,7 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  // ── 视频生成（LF-12 scope #3）：确定性伪响应，对齐 SDK 透传 {
+  // ── 视频生成（QX-12 scope #3）：确定性伪响应，对齐 SDK 透传 {
   //    task_id, call_log_id, charged, credits } ──
   if (req.method === 'POST' && req.url === '/api/relay/v1/videos/generations') {
     let raw = '';
@@ -269,7 +269,7 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  // ── 音频生成（LF-12 scope #3）：确定性伪响应，对齐 SDK { audio: string } ──
+  // ── 音频生成（QX-12 scope #3）：确定性伪响应，对齐 SDK { audio: string } ──
   if (req.method === 'POST' && req.url === '/api/relay/v1/audio/generations') {
     let raw = '';
     req.on('data', (c) => { raw += c; });

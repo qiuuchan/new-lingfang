@@ -170,7 +170,7 @@
   <body>
     <div class="card">
       <h1>剪藏摘要</h1>
-      <div class="subtitle">读取剪贴板 → 本地剪藏 → 灵坊平台 LLM 摘要</div>
+      <div class="subtitle">读取剪贴板 → 本地剪藏 → 千匣平台 LLM 摘要</div>
 
       <div class="actions">
         <button class="primary" id="btnClip">读取剪贴板并剪藏</button>
@@ -229,7 +229,7 @@
         document.querySelector('.card').appendChild(div);
       }
 
-      // LF-13：不再静默降级到 localStorage。改用 LF-07 的 list/delete/count 做 LRU 淘汰，
+      // QX-13：不再静默降级到 localStorage。改用 QX-07 的 list/delete/count 做 LRU 淘汰，
       // 配额错误如实提示用户，避免掩盖 kv 配额耗尽的真实语义（消除 g2-sdk-friction #5.3 隐患）。
       const PREFIX = 'clip-digest:';
 
@@ -307,7 +307,7 @@
         const summarySection = document.getElementById('summarySection');
         summarySection.style.display = 'block';
         summaryEl.innerHTML =
-          '<div class="loading"><div class="spinner"></div>灵坊平台 LLM 正在总结…</div>';
+          '<div class="loading"><div class="spinner"></div>千匣平台 LLM 正在总结…</div>';
 
         const SYSTEM_PROMPT =
           '你是剪藏摘要助手，用简洁中文总结要点，分条列出，控制在200字内。';
@@ -348,7 +348,7 @@
             );
           }
         } catch (err) {
-          // LF-05 / g2-sdk-friction #1：优先按稳定 code 判定（client iframe 走宿主归一化，
+          // QX-05 / g2-sdk-friction #1：优先按稳定 code 判定（client iframe 走宿主归一化，
           // 拿到 err.code === 'relay_not_configured'）；message 前缀兜底旧形态。
           const code = (err && err.code) || '';
           const msg = (err && err.message) || '';
@@ -362,9 +362,9 @@
             }
 
             summaryEl.textContent =
-              'AI 摘要暂不可用：未配置灵坊平台 LLM 凭据（relay_not_configured）。已为你保存原文剪藏。';
+              'AI 摘要暂不可用：未配置千匣平台 LLM 凭据（relay_not_configured）。已为你保存原文剪藏。';
             showNotice(
-              'AI 摘要暂不可用：未配置灵坊平台 LLM 凭据（relay_not_configured）。已为你保存原文剪藏。'
+              'AI 摘要暂不可用：未配置千匣平台 LLM 凭据（relay_not_configured）。已为你保存原文剪藏。'
             );
             setStatus('已保存原文剪藏；AI 摘要因凭据缺失跳过。');
 
@@ -373,7 +373,7 @@
               await sdk.ui.render({
                 type: 'markdown',
                 body:
-                  '## 剪藏摘要（降级）\n\nAI 摘要暂不可用：未配置灵坊平台 LLM 凭据（relay_not_configured）。\n\n已为你保存原文剪藏。',
+                  '## 剪藏摘要（降级）\n\nAI 摘要暂不可用：未配置千匣平台 LLM 凭据（relay_not_configured）。\n\n已为你保存原文剪藏。',
               });
             } catch (uiErr) {
               /* 降级弹层失败可忽略 */

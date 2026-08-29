@@ -13,7 +13,7 @@ import {
   AdminPluginReleaseCoreDetail,
   AdminPluginReleaseManifest,
   AdminPluginReleasePage,
-} from '@lingfang/contract';
+} from '@qianxia/contract';
 
 const PACKAGE_ID = '11111111-1111-4111-8111-111111111111';
 const RELEASE_ID = '22222222-2222-4222-8222-222222222222';

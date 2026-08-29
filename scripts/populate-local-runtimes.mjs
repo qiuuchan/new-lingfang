@@ -1,24 +1,24 @@
 #!/usr/bin/env node
 
-// populate-local-runtimes.mjs — 新克隆开发者一键灌装 runtimes（LF-11 / 阶段 L3）。
+// populate-local-runtimes.mjs — 新克隆开发者一键灌装 runtimes（QX-11 / 阶段 L3）。
 //
 // 让新克隆的开发者一条命令把 node/python/ffmpeg/chromium 灌进 apps/desktop/runtimes/，
 // 对齐 verify-bundled-runtimes.mjs 的 keyFiles 口径。设计原则：**本地优先 + 远程回退**，
 // 且**可重跑 + 备份式重灌**（满足工单「runtimes 移走 → 重灌 → runtime:verify 通过」关键验证项）。
 //
 // 源选择顺序：
-//   1. 环境变量 LINGFANG_RUNTIME_BUNDLE 指向本地 runtimes-bundle.zip（+ 同目录 .minisig）→ 用之；
+//   1. 环境变量 QIANXIA_RUNTIME_BUNDLE 指向本地 runtimes-bundle.zip（+ 同目录 .minisig）→ 用之；
 //   2. 本地 apps/desktop/runtimes/ 已通过 verify-bundled-runtimes.mjs（idempotent）→ exit 0，不动；
-//   3. 远程回退：从 GitHub Release 下载 runtimes-bundle.zip + .minisig（需 LINGFANG_RUNTIME_PUBKEY），
+//   3. 远程回退：从 GitHub Release 下载 runtimes-bundle.zip + .minisig（需 QIANXIA_RUNTIME_PUBKEY），
 //      验签后解压；本环境无 Release/密钥时明确提示并打印手工步骤，不假阳性。
 //
-// minisign 验签：复用 plugin_security.rs 同信任根公钥（LINGFANG_RUNTIME_PUBKEY）。
+// minisign 验签：复用 plugin_security.rs 同信任根公钥（QIANXIA_RUNTIME_PUBKEY）。
 // 本机无 minisign 时按 ci.yml 方式拉取 minisign-0.12-win64.zip 自解压（临时目录，不入库）。
 //
 // 用法：
 //   pnpm -C apps/desktop runtime:populate           # 一键（本地优先）
 //   node scripts/populate-local-runtimes.mjs --force # 强制重灌（先备份现有 runtimes）
-//   LINGFANG_RUNTIME_BUNDLE=../runtimes-bundle.zip node scripts/populate-local-runtimes.mjs
+//   QIANXIA_RUNTIME_BUNDLE=../runtimes-bundle.zip node scripts/populate-local-runtimes.mjs
 //
 // 退出码：0=成功；1=失败（含未配置密钥的明确提示，防假阳性）。
 
@@ -104,7 +104,7 @@ function ensureMinisign() {
   const zip = resolve(cacheDir, 'minisign.zip');
   const dl = spawnSync('curl', ['-L', '--retry', '8', '--retry-all-errors', '--retry-delay', '5', '-o', zip,
     'https://github.com/jedisct1/minisign/releases/download/0.12/minisign-0.12-win64.zip'], { stdio: 'inherit' });
-  if (dl.status !== 0) fail('minisign 下载失败，无法验签（请手动安装 minisign 或设置 LINGFANG_RUNTIME_PUBKEY 跳过远程回退）');
+  if (dl.status !== 0) fail('minisign 下载失败，无法验签（请手动安装 minisign 或设置 QIANXIA_RUNTIME_PUBKEY 跳过远程回退）');
   // 解压取 x86_64 minisign.exe
   const tmp = resolve(cacheDir, 'tmp');
   rmSync(tmp, { recursive: true, force: true });
@@ -209,10 +209,10 @@ function main() {
   if (!existsSync(lockPath)) fail(`缺少锁文件：${lockPath}`);
 
   // 1. 显式本地 bundle
-  const envBundle = process.env.LINGFANG_RUNTIME_BUNDLE;
+  const envBundle = process.env.QIANXIA_RUNTIME_BUNDLE;
   if (envBundle && existsSync(envBundle)) {
     log(`使用本地 bundle：${envBundle}`);
-    const pubkey = process.env.LINGFANG_RUNTIME_PUBKEY ?? '';
+    const pubkey = process.env.QIANXIA_RUNTIME_PUBKEY ?? '';
     repopulateFromBundle(envBundle, { verifySig: !!pubkey, pubkey });
     return;
   }
@@ -229,21 +229,21 @@ function main() {
   }
 
   // 3. 远程回退：GitHub Release
-  const pubkey = process.env.LINGFANG_RUNTIME_PUBKEY;
+  const pubkey = process.env.QIANXIA_RUNTIME_PUBKEY;
   if (!pubkey) {
-    warn('未配置 LINGFANG_RUNTIME_PUBKEY，无法验签远程 bundle；跳过远程回退。');
+    warn('未配置 QIANXIA_RUNTIME_PUBKEY，无法验签远程 bundle；跳过远程回退。');
     warn('本环境若无 Release / 安装器，请在本机（具备密钥与 Release 的机器）复核安装闭环。');
     console.error(MANUAL_STEPS);
     process.exit(1);
   }
 
-  const tag = process.env.LINGFANG_RUNTIME_RELEASE_TAG ?? 'latest';
+  const tag = process.env.QIANXIA_RUNTIME_RELEASE_TAG ?? 'latest';
   const dl = resolve(repoRoot, 'apps', 'desktop', 'runtimes-bundle.zip');
   log(`从 GitHub Release（${tag}）下载 runtimes-bundle.zip …`);
   // gh 不传 tag 即取最新 Release；字面量 'latest' 会被当成 tag 名导致找不到。
   const ghArgs = ['release', 'download'];
   if (tag !== 'latest') ghArgs.push(tag);
-  ghArgs.push('-R', process.env.LINGFANG_RUNTIME_REPO ?? 'qiuuchan/new-lingfang',
+  ghArgs.push('-R', process.env.QIANXIA_RUNTIME_REPO ?? 'qiuuchan/new-qianxia',
     '-p', 'runtimes-bundle.zip', '-p', 'runtimes-bundle.zip.minisig', '-D', resolve(repoRoot, 'apps', 'desktop'));
   const gh = spawnSync('gh', ghArgs, { stdio: 'inherit' });
   if (gh.status !== 0) {

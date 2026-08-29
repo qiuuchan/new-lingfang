@@ -6,9 +6,9 @@ use crate::plugin_runner;
 pub(super) fn default_entry(runtime: &str) -> &'static [u8] {
     match runtime {
         "python" => {
-            b"def main():\n    print('LingFang plugin')\n\nif __name__ == '__main__':\n    main()\n"
+            b"def main():\n    print('QianXia plugin')\n\nif __name__ == '__main__':\n    main()\n"
         }
-        "nodejs" => b"console.log('LingFang plugin');\n",
+        "nodejs" => b"console.log('QianXia plugin');\n",
         _ => b"<!doctype html><html><body><main id=\"app\"></main></body></html>\n",
     }
 }

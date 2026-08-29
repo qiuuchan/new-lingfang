@@ -7,8 +7,8 @@
     <style>
       body {
         font-family: system-ui, -apple-system, sans-serif;
-        background: var(--lf-color-surface, #f8f9fa);
-        color: var(--lf-color-text, #212529);
+        background: var(--qx-color-surface, #f8f9fa);
+        color: var(--qx-color-text, #212529);
         padding: 16px;
       }
       .row {
@@ -16,7 +16,7 @@
         align-items: center;
         gap: 8px;
         padding: 8px 0;
-        border-bottom: 1px solid var(--lf-color-border, #dee2e6);
+        border-bottom: 1px solid var(--qx-color-border, #dee2e6);
       }
       .badge {
         padding: 2px 8px;
@@ -36,7 +36,7 @@
     <p id="status" data-probe-status="pending">加载中…</p>
     <div id="rows"></div>
     <script>
-      // LF-19：四 kind 正向探针。每项结果写进 data-probe-<kind> 属性与行内徽标，
+      // QX-19：四 kind 正向探针。每项结果写进 data-probe-<kind> 属性与行内徽标，
       // e2e 经 CDP 断言：ok=code 拿到真实（适配器）响应；err=<code> 时如实标注降级。
       const sdk = window.sdk;
       const KINDS = [

@@ -1,12 +1,12 @@
-// @lingfang/plugin-sdk：插件作者用的类型化能力客户端（见 docs/02 §B-5）。
-// 插件不直连网络、不持 LLM key——所有越权操作经宿主注入的桥 __lingfangInvoke，
+// @qianxia/plugin-sdk：插件作者用的类型化能力客户端（见 docs/02 §B-5）。
+// 插件不直连网络、不持 LLM key——所有越权操作经宿主注入的桥 __qianxiaInvoke，
 // 由壳的 capability 网关三重校验后执行。
 
 import {
   ArtifactRefV1,
   type ArtifactRefV1 as ArtifactRefV1Type,
   type CapabilityKind,
-} from '@lingfang/contract';
+} from '@qianxia/contract';
 
 export {
   SharedRecoveryError,
@@ -108,7 +108,7 @@ export type PluginAiErrorInit = {
   cause?: unknown;
 };
 
-// LF-05 / g2-sdk-friction #1：AI 桥错误的稳定错误码常量。
+// QX-05 / g2-sdk-friction #1：AI 桥错误的稳定错误码常量。
 // 与宿主侧 plugins-runtime.ts 的归一化语义对齐（relay_not_configured / relay_error），
 // 插件按 code 判断即可，不再依赖 message 字符串前缀。
 export const PluginAiErrorCode = {
@@ -194,7 +194,7 @@ function pluginAiError(
     rawString ??
     fallback.message ??
     '平台 AI 调用失败';
-  // LF-05 / g2-sdk-friction #1：宿主 Rust 侧以裸前缀字符串返回（relay_not_configured: /
+  // QX-05 / g2-sdk-friction #1：宿主 Rust 侧以裸前缀字符串返回（relay_not_configured: /
   // relay_error:），npm SDK 形态（nodejs/python 插件与单测）此前只把它透传为 message，
   // code 落成泛化的 plugin_ai_error → 与 client iframe 形态不一致。这里按前缀补归一化，
   // 使三种运行形态下「relay 未配置 / relay 错误」都拿到稳定 code（语义对齐 pluginActionError
@@ -336,7 +336,7 @@ type ScriptBridgeEnv = {
   fetch?: typeof fetch;
 };
 
-// 脚本桥路由表：capability → localhost 桥路径（LINGFANG_PLUGIN_BRIDGE_URL 是基础 endpoint，不含路径后缀）。
+// 脚本桥路由表：capability → localhost 桥路径（QIANXIA_PLUGIN_BRIDGE_URL 是基础 endpoint，不含路径后缀）。
 // Rust 端 plugin_llm_bridge.rs 的 route_request 据此分发：/llm/chat、/image/generate。
 const SCRIPT_BRIDGE_PATH: Record<string, string> = {
   'llm.chat': '/llm/chat',
@@ -349,15 +349,15 @@ const SCRIPT_BRIDGE_PATH: Record<string, string> = {
   'artifacts.import': '/artifacts/import',
 };
 
-// Node.js / Python 脚本插件的本地桥回退：window.__lingfangInvoke 不存在时（脚本无 DOM）走 localhost HTTP 桥。
+// Node.js / Python 脚本插件的本地桥回退：window.__qianxiaInvoke 不存在时（脚本无 DOM）走 localhost HTTP 桥。
 // 桥用当前进程会话 token 鉴权，宿主转发到平台 relay（真正计费在 relay 侧扣当前团队灵石）。
 // 支持能力：llm.chat（返回 {content:string}）、image.generate（返回 {images:string[]}）。
 async function invokeScriptBridge<T>(capability: string, args: unknown): Promise<T | null> {
   const path = SCRIPT_BRIDGE_PATH[capability];
   if (!path) return null;
   const g = globalThis as unknown as ScriptBridgeEnv;
-  const baseValue = g.process?.env?.LINGFANG_PLUGIN_BRIDGE_URL;
-  const token = g.process?.env?.LINGFANG_PLUGIN_BRIDGE_TOKEN;
+  const baseValue = g.process?.env?.QIANXIA_PLUGIN_BRIDGE_URL;
+  const token = g.process?.env?.QIANXIA_PLUGIN_BRIDGE_TOKEN;
   if (!baseValue || !token || typeof g.fetch !== 'function') return null;
   const base = localhostBridgeBase(baseValue);
   const input = record(args);
@@ -372,7 +372,7 @@ async function invokeScriptBridge<T>(capability: string, args: unknown): Promise
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'X-LingFang-Plugin-Token': token,
+      'X-QianXia-Plugin-Token': token,
     },
     body: JSON.stringify(body),
   });
@@ -405,8 +405,8 @@ async function invoke<T>(
   timeoutMs = DEFAULT_BRIDGE_TIMEOUT_MS
 ): Promise<T> {
   const bridge = (
-    globalThis as unknown as { __lingfangInvoke?: (c: string, a: unknown) => Promise<unknown> }
-  ).__lingfangInvoke;
+    globalThis as unknown as { __qianxiaInvoke?: (c: string, a: unknown) => Promise<unknown> }
+  ).__qianxiaInvoke;
   const operation =
     typeof bridge === 'function'
       ? (bridge(capability, args) as Promise<T>)
@@ -615,7 +615,7 @@ export const sdk = {
       assertSerializable(value, 'storage.set value');
       return invoke<void>('storage.kv', { op: 'set', key, value });
     },
-    // LF-07：管理 API。list 仅回传键名（值可达 256KB 不回传）；delete 不存在返回 {deleted:false}；
+    // QX-07：管理 API。list 仅回传键名（值可达 256KB 不回传）；delete 不存在返回 {deleted:false}；
     // count 返回条目数。三者均走 storage.kv 网关，受 capability 与 30s 超时约束。
     list: (prefix?: string) =>
       invoke<{ keys: string[] }>('storage.kv', {
@@ -655,7 +655,7 @@ export const sdk = {
   },
   // 计费/中转：生图走平台 relay（/api/relay/v1/images/generations），按张计费，按团队灵石结算。
   // 输入 prompt 必填；model 默认 fast；返回 { images: string[] }（url 或 data:base64）。
-  // 系统提示词已由平台强制注入：必须且仅能使用灵坊平台服务（需求 #3）。
+  // 系统提示词已由平台强制注入：必须且仅能使用千匣平台服务（需求 #3）。
   image: {
     generate: (input: ImageGenerateInput) => invokeAi<ImageGenerateResult>('image.generate', input),
     // 计费/中转：图片编辑（带参考图）走平台 relay（/api/relay/v1/images/edits），multipart 透传，按张计费。

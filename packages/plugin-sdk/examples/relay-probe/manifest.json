@@ -1,15 +1,15 @@
 {
-  "id": "com.lingfang.relay-probe",
+  "id": "com.qianxia.relay-probe",
   "name": "Relay 探针",
   "version": "0.1.0",
-  "description": "AI 能力面正向探针插件（LF-19）：声明 image.generate / video.generate / audio.generate / llm.chat 四个 kind，加载后依次调用并输出每项状态，供 e2e 以 CDP 断言四 kind 经 relay 适配器的正向闭环。",
+  "description": "AI 能力面正向探针插件（QX-19）：声明 image.generate / video.generate / audio.generate / llm.chat 四个 kind，加载后依次调用并输出每项状态，供 e2e 以 CDP 断言四 kind 经 relay 适配器的正向闭环。",
   "runtime_type": "client",
   "entry": "ui/index.html",
   "visibility": "private",
   "capabilities": [
-    { "kind": "llm.chat", "reason": "调用灵坊平台 LLM 对话，验证 relay 正向链路", "risk": "medium", "requires_admin": false },
-    { "kind": "image.generate", "reason": "调用灵坊平台图像生成，验证 relay 正向链路", "risk": "medium", "requires_admin": false },
-    { "kind": "video.generate", "reason": "调用灵坊平台视频生成，验证 relay 正向链路", "risk": "medium", "requires_admin": false },
-    { "kind": "audio.generate", "reason": "调用灵坊平台音频生成，验证 relay 正向链路（SDK 侧接线与否如实标注）", "risk": "medium", "requires_admin": false }
+    { "kind": "llm.chat", "reason": "调用千匣平台 LLM 对话，验证 relay 正向链路", "risk": "medium", "requires_admin": false },
+    { "kind": "image.generate", "reason": "调用千匣平台图像生成，验证 relay 正向链路", "risk": "medium", "requires_admin": false },
+    { "kind": "video.generate", "reason": "调用千匣平台视频生成，验证 relay 正向链路", "risk": "medium", "requires_admin": false },
+    { "kind": "audio.generate", "reason": "调用千匣平台音频生成，验证 relay 正向链路（SDK 侧接线与否如实标注）", "risk": "medium", "requires_admin": false }
   ]
 }

@@ -40,7 +40,7 @@ fn main() -> ExitCode {
     }
 }
 
-/// 写一行日志到 `%LOCALAPPDATA%\LingFang\logs\updater.log`（无 UI 模式排障用，design §6）。
+/// 写一行日志到 `%LOCALAPPDATA%\QianXia\logs\updater.log`（无 UI 模式排障用，design §6）。
 /// 失败静默（日志本身不应阻断主流程）。
 pub fn log_line(msg: &str) {
     use std::io::Write;

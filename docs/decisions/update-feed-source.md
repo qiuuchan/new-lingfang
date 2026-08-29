@@ -2,12 +2,12 @@
 
 - **状态**：已采纳（Adopted）
 - **拍板日期**：2026-08-25（产品本人决策）
-- **关联工单**：LF-10（阶段 L1 应用侧更新触发链路）
+- **关联工单**：QX-10（阶段 L1 应用侧更新触发链路）
 
 ## 背景
 
-灵坊桌面壳已有安装器 `run_update`（等主进程退出 → 静默覆盖 → 重启 → 自删），但应用侧
-**从未拉起过它**——每个 Release 都是「死版」，用户永远拿不到更新（核实 #1/#2）。LF-10 要补的
+千匣桌面壳已有安装器 `run_update`（等主进程退出 → 静默覆盖 → 重启 → 自删），但应用侧
+**从未拉起过它**——每个 Release 都是「死版」，用户永远拿不到更新（核实 #1/#2）。QX-10 要补的
 是「检测 → 下载 → 验签 → 拉起 `updater.exe`」整条应用侧链路。
 
 这条链路的第一步是「去哪查最新版本」——即更新 feed 的来源。本 ADR 拍板该来源。
@@ -17,7 +17,7 @@
 **更新 feed 直接使用 GitHub Releases。**
 
 具体形态：每次发版，在 Release 资产（assets）中附带一个 `latest.json`（由发布流水线随
-`LingFang-Setup-*.exe` 一起上传），应用侧 `check_update` 拉取该 `latest.json` 解析最新版本
+`QianXia-Setup-*.exe` 一起上传），应用侧 `check_update` 拉取该 `latest.json` 解析最新版本
 与安装包下载地址。字段约定：
 
 ```json
@@ -39,7 +39,7 @@
 安装包完整性验签**复用 `plugin_security.rs::verify_minisign`**——与 runtime 制品（B3 决策）
 **同一 Org secret 信任根**（同一把 minisign 私钥签发）。即「更新包」与「内置 runtime」走同一
 套非对称验签原语，不引入第二把密钥、不引入第二套信任模型。`download_update` 先 sha256 硬校验，
-若提供 `minisig_url` + 配置了公钥（`LINGFANG_UPDATE_PUBKEY` 或宿主设置）再叠加 minisign 验签，
+若提供 `minisig_url` + 配置了公钥（`QIANXIA_UPDATE_PUBKEY` 或宿主设置）再叠加 minisign 验签，
 任一失败即删除临时文件并拒绝。
 
 ### 为什么是 GitHub Releases（而非自建服务）
@@ -59,7 +59,7 @@
 ## 影响
 
 - 新增 `update.rs` 三命令：`check_update` / `download_update` / `apply_update`（+ `get_app_version`）。
-- feed URL 可配：命令参数优先，其次 env `LINGFANG_UPDATE_FEED_URL`，再次默认常量（指向本仓库
+- feed URL 可配：命令参数优先，其次 env `QIANXIA_UPDATE_FEED_URL`，再次默认常量（指向本仓库
   Release 的 `latest.json`，见 `update.rs` `DEFAULT_FEED_URL`）。
 - 安装流水线（ci.yml `publish-runtimes` / 发版 job）需新增「上传 `latest.json` + 对安装包签
   `.minisig`」步骤——本工单范围外，列为发版 runbook 观察项。

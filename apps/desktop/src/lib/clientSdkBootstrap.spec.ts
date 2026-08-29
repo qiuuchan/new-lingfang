@@ -1,6 +1,6 @@
 // clientSdkBootstrap.spec.ts — 注入 client iframe 的 window.sdk 引导脚本回归测试。
 //
-// 回归背景（LF-12 验收实证）：LF-07 给 Rust 网关（client_host_caps kv_apply）与 npm SDK
+// 回归背景（QX-12 验收实证）：QX-07 给 Rust 网关（client_host_caps kv_apply）与 npm SDK
 // （plugin-sdk/src/index.ts）加了 storage list/delete/count，但 CLIENT_SDK_BOOTSTRAP 漏同步，
 // iframe 内 window.sdk.storage.list 不存在——单测全绿、真机 e2e 才暴露（plugin 内 TypeError）。
 // 本测试把引导脚本在 mock window/parent 下真实执行，断言 storage 管理 API 的
@@ -38,7 +38,7 @@ function makeHarness() {
   return { calls, reply, sdk };
 }
 
-describe('CLIENT_SDK_BOOTSTRAP storage 管理 API（LF-07 门面同步回归）', () => {
+describe('CLIENT_SDK_BOOTSTRAP storage 管理 API（QX-07 门面同步回归）', () => {
   it('list(prefix) 发 {op:list,prefix} 包络，解包 keys 为数组', async () => {
     const { calls, reply, sdk } = makeHarness();
     const p = sdk.storage.list('user:');

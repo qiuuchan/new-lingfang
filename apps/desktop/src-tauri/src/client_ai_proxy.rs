@@ -24,7 +24,7 @@ const ERR_CAPABILITY_NOT_DECLARED: &str = "capability_not_declared:";
 const ERR_RELAY_ERROR: &str = "relay_error:";
 
 /// relay api_base 白名单（F5 防线）：https 恒允许；明文 http 仅限环回地址
-/// （LF-04b 本地适配器路径——凭据只发往本机进程，不跨网络，无泄露风险）。
+/// （QX-04b 本地适配器路径——凭据只发往本机进程，不跨网络，无泄露风险）。
 pub(crate) fn is_allowed_api_base(api_base: &str) -> bool {
     let lower = api_base.to_ascii_lowercase();
     if lower.starts_with("https://") {
@@ -38,13 +38,13 @@ pub(crate) fn is_allowed_api_base(api_base: &str) -> bool {
     false
 }
 
-/// 从 PluginStore 读取 relay 凭证；缺失时回退到环境变量（LF-04a 自动化 harness 注入路径）。
+/// 从 PluginStore 读取 relay 凭证；缺失时回退到环境变量（QX-04a 自动化 harness 注入路径）。
 ///
 /// 优先级：用户设置（磁盘 config.json，经 SettingsPanel 录入）> 环境变量
-/// `LINGFANG_RELAY_API_BASE` / `LINGFANG_RELAY_TOKEN`。两者皆空才算「未配置」，
+/// `QIANXIA_RELAY_API_BASE` / `QIANXIA_RELAY_TOKEN`。两者皆空才算「未配置」，
 /// 返回 relay_not_configured 错误（携带中文提示）。
 ///
-/// 环境变量路径用于真实凭据实操（LF-04b）与 CI 验证：凭据仅存在于进程环境，
+/// 环境变量路径用于真实凭据实操（QX-04b）与 CI 验证：凭据仅存在于进程环境，
 /// 不进仓库、不进设置 UI、不落盘，符合「凭据不落地」的验收要求。
 fn require_relay(store: &PluginStore) -> Result<(String, String), String> {
     let settings = store.relay_settings();
@@ -52,17 +52,17 @@ fn require_relay(store: &PluginStore) -> Result<(String, String), String> {
         .api_base
         .filter(|s| !s.trim().is_empty())
         .or_else(|| {
-            std::env::var("LINGFANG_RELAY_API_BASE")
+            std::env::var("QIANXIA_RELAY_API_BASE")
                 .ok()
                 .map(|s| s.trim().to_string())
                 .filter(|s| !s.is_empty())
         })
         .ok_or_else(|| {
-            format!("{ERR_RELAY_NOT_CONFIGURED}请在设置中配置 relay api_base 与 auth_token（或设置环境变量 LINGFANG_RELAY_API_BASE / LINGFANG_RELAY_TOKEN）")
+            format!("{ERR_RELAY_NOT_CONFIGURED}请在设置中配置 relay api_base 与 auth_token（或设置环境变量 QIANXIA_RELAY_API_BASE / QIANXIA_RELAY_TOKEN）")
         })?;
     // F5 防御：api_base 必须是 https（环境变量路径绕过了前端 SettingsPanel 的校验，
     // 故在此对两条来源统一兜底，避免明文 http 泄露 Bearer 凭证）。
-    // LF-04b 例外：明文 http 仅允许环回地址（本地适配器，凭证不跨网络）。
+    // QX-04b 例外：明文 http 仅允许环回地址（本地适配器，凭证不跨网络）。
     if !is_allowed_api_base(&api_base) {
         return Err(format!(
             "{ERR_RELAY_NOT_CONFIGURED}relay api_base 必须是 https 地址（当前：{api_base}）"
@@ -72,13 +72,13 @@ fn require_relay(store: &PluginStore) -> Result<(String, String), String> {
         .auth_token
         .filter(|s| !s.trim().is_empty())
         .or_else(|| {
-            std::env::var("LINGFANG_RELAY_TOKEN")
+            std::env::var("QIANXIA_RELAY_TOKEN")
                 .ok()
                 .map(|s| s.trim().to_string())
                 .filter(|s| !s.is_empty())
         })
         .ok_or_else(|| {
-            format!("{ERR_RELAY_NOT_CONFIGURED}请在设置中配置 relay api_base 与 auth_token（或设置环境变量 LINGFANG_RELAY_API_BASE / LINGFANG_RELAY_TOKEN）")
+            format!("{ERR_RELAY_NOT_CONFIGURED}请在设置中配置 relay api_base 与 auth_token（或设置环境变量 QIANXIA_RELAY_API_BASE / QIANXIA_RELAY_TOKEN）")
         })?;
     Ok((api_base, auth_token))
 }

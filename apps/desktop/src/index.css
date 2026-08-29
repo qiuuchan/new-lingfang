@@ -77,11 +77,11 @@
   --chart-5: oklch(0.269 0 0);
   --radius: 0.5rem;
   /* 界面动画时长 token（桌面壳实际生效来源；ui-tokens/tokens.css 仅作语义对齐，桌面 App 不消费它）。
-       整体偏慢以求舒缓观感，供 dialog/popover/sheet 等 Tailwind 工具类 duration-[var(--lf-dur-*)] 引用。
+       整体偏慢以求舒缓观感，供 dialog/popover/sheet 等 Tailwind 工具类 duration-[var(--qx-dur-*)] 引用。
        framer-motion 的 JS 时长另见 lib/motion.tsx 的 MOTION 常量（数字 duration 不便读 CSS 变量）。 */
-  --lf-dur-fast: 200ms;
-  --lf-dur-base: 320ms;
-  --lf-dur-slow: 480ms;
+  --qx-dur-fast: 200ms;
+  --qx-dur-base: 320ms;
+  --qx-dur-slow: 480ms;
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
   --sidebar-primary: oklch(0.205 0 0);
@@ -176,10 +176,10 @@
   }
   /* 不定进度条：下载总大小未知时进度块左右滑动表示「进行中」（替代旧固定 36% 的误导进度）。 */
   .animate-indeterminate {
-    animation: lf-indeterminate 1.3s ease-in-out infinite alternate;
+    animation: qx-indeterminate 1.3s ease-in-out infinite alternate;
   }
 }
-@keyframes lf-indeterminate {
+@keyframes qx-indeterminate {
   0% {
     margin-left: 0%;
   }

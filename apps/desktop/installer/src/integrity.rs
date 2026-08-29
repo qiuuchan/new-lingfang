@@ -68,7 +68,7 @@ mod tests {
     fn sha256_of_known_content() {
         // "abc" 的 SHA-256 是固定已知值。
         let dir = std::env::temp_dir();
-        let path = dir.join("lingfang-installer-test-abc.bin");
+        let path = dir.join("qianxia-installer-test-abc.bin");
         {
             let mut f = File::create(&path).unwrap();
             f.write_all(b"abc").unwrap();
@@ -84,7 +84,7 @@ mod tests {
     #[test]
     fn verify_matches_and_rejects() {
         let dir = std::env::temp_dir();
-        let path = dir.join("lingfang-installer-test-verify.bin");
+        let path = dir.join("qianxia-installer-test-verify.bin");
         {
             let mut f = File::create(&path).unwrap();
             f.write_all(b"abc").unwrap();

@@ -1,5 +1,5 @@
 {
-  "name": "@lingfang/contract",
+  "name": "@qianxia/contract",
   "version": "0.0.6",
   "type": "module",
   "main": "src/index.ts",

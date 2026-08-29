@@ -2,7 +2,7 @@
 // 所有数据通过 Tauri 命令与本地文件系统交互，无后端依赖。
 import { Channel, isTauri } from '@tauri-apps/api/core';
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
-import type { LocalPluginInstallation } from '@lingfang/contract';
+import type { LocalPluginInstallation } from '@qianxia/contract';
 import { errorMessage, tauriInvoke } from '@/lib/api';
 import type { LoadedPlugin } from '@/lib/types';
 
@@ -197,7 +197,7 @@ export async function uninstallInstallation(installationId: string): Promise<voi
 export async function selectPluginArtifact(): Promise<string | null> {
   if (!isTauri()) return null;
   const path = await openDialog({
-    filters: [{ name: 'LingFang Plugin', extensions: ['lfplugin'] }],
+    filters: [{ name: 'QianXia Plugin', extensions: ['qplugin'] }],
     multiple: false,
     directory: false,
   });
@@ -205,7 +205,7 @@ export async function selectPluginArtifact(): Promise<string | null> {
 }
 
 export function inspectLocalArtifact(artifactPath: string): Promise<PluginArtifactInspection> {
-  return tauriInvoke<PluginArtifactInspection>('inspect_lfplugin_v4', { artifactPath });
+  return tauriInvoke<PluginArtifactInspection>('inspect_qplugin_v4', { artifactPath });
 }
 
 export { errorMessage };

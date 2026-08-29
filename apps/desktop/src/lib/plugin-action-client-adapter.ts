@@ -178,7 +178,7 @@ function clientActionDocument(
     "  if ('error' in message) waiter.reject(Object.assign(new Error(message.error?.message || '宿主能力调用失败'), message.error || {}));",
     '  else waiter.resolve(message.result);',
     '});',
-    'globalThis.__lingfangInvoke = (kind, args) => new Promise((resolve, reject) => {',
+    'globalThis.__qianxiaInvoke = (kind, args) => new Promise((resolve, reject) => {',
     '  const requestId = String(++sequence);',
     '  pending.set(requestId, { resolve, reject });',
     '  parent.postMessage({ __lf_client_action_call: true, session_id: sessionId, invocation_id: invocationId, nonce, request_id: requestId, kind, args }, "*");',

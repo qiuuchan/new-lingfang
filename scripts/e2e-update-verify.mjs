@@ -1,6 +1,6 @@
-//! e2e-update-verify.mjs — LF-17 更新链路真机闭环（环回 update-feed 双向断言）。
+//! e2e-update-verify.mjs — QX-17 更新链路真机闭环（环回 update-feed 双向断言）。
 //!
-//! 目标（LF-10 遗留 L1 第 4 点）：兑现「检测 → 下载 → 验签 → 覆盖 → 重启 → 新版自报版本号」
+//! 目标（QX-10 遗留 L1 第 4 点）：兑现「检测 → 下载 → 验签 → 覆盖 → 重启 → 新版自报版本号」
 //! 的整条真实链路 + 篡改对照。这是 updater.exe update 模式首次真机运行，预期暴露集成缺陷，
 //! 暴露即修并回写单测/runbook。
 //!
@@ -13,18 +13,18 @@
 //! 篡改对照：feed 指向同一 URL 但服务端返回改一字节的包，sha256 必然不符 →
 //! download_update 必须拒绝、临时文件清理、目标 main.exe 不被覆盖。
 //!
-//! 前置（LF-16/LF-18 产物）：
-//!   - 旧版 SFX 安装器 `target/release/LingFang-Setup-*.exe`（LF-18 重建产物，v0.1.11）
+//! 前置（QX-16/QX-18 产物）：
+//!   - 旧版 SFX 安装器 `target/release/QianXia-Setup-*.exe`（QX-18 重建产物，v0.1.11）
 //!     —— 用其 --silent 安装出「旧版安装实例」；
 //!   - 纯 installer 二进制 `target/release/installer.exe` —— 充当 updater.exe 副本与
 //!     新版 setup 的 SFX 壳；
 //!   - 新版 main.exe（v0.1.12）由本脚本临时改 tauri.conf.json version 后经
-//!     `tauri build --no-bundle` 构建（LF-18 缺陷 B：裸 cargo build 会烘焙 devUrl）。
+//!     `tauri build --no-bundle` 构建（QX-18 缺陷 B：裸 cargo build 会烘焙 devUrl）。
 //!     构建一次后缓存在 tmpRoot/work/，重跑复用。
 //!
 //! 用法：
-//!   LINGFANG_SETUP_EXE=<旧版安装器> node scripts/e2e-update-verify.mjs
-//!   或省略 LINGFANG_SETUP_EXE，自动探测 target/release/LingFang-Setup-*.exe。
+//!   QIANXIA_SETUP_EXE=<旧版安装器> node scripts/e2e-update-verify.mjs
+//!   或省略 QIANXIA_SETUP_EXE，自动探测 target/release/QianXia-Setup-*.exe。
 //!   E2E_UPDATE_SKIP_NEW_BUILD=1  跳过新版构建（复用缓存，仅调试链路用）
 
 import { spawn, spawnSync } from 'node:child_process';
@@ -39,11 +39,11 @@ const requireFromDesktop = createRequire(path.resolve('apps/desktop/package.json
 const { chromium } = requireFromDesktop('@playwright/test');
 
 const REPO_ROOT = process.cwd();
-const MAIN_EXE = 'lingfang-desktop.exe';
+const MAIN_EXE = 'qianxia-desktop.exe';
 const UPDATER_EXE = 'updater.exe';
 const OLD_VERSION = '0.1.11';
 const NEW_VERSION = '0.1.12';
-const TEMP_SETUP_NAME = `LingFang-Setup-${NEW_VERSION}.exe`;
+const TEMP_SETUP_NAME = `QianXia-Setup-${NEW_VERSION}.exe`;
 
 let failed = 0;
 const log = (msg) => console.log(`[e2e-update] ${msg}`);
@@ -60,18 +60,18 @@ function assert(cond, msg) {
 // ── 基础工具 ────────────────────────────────────────────────────────────
 
 function findSetupExe() {
-  if (process.env.LINGFANG_SETUP_EXE && fs.existsSync(process.env.LINGFANG_SETUP_EXE)) {
-    return process.env.LINGFANG_SETUP_EXE;
+  if (process.env.QIANXIA_SETUP_EXE && fs.existsSync(process.env.QIANXIA_SETUP_EXE)) {
+    return process.env.QIANXIA_SETUP_EXE;
   }
   const cands = fs
     .readdirSync(path.join(REPO_ROOT, 'target/release'))
-    .filter((f) => /^LingFang-Setup-.*\.exe$/.test(f));
+    .filter((f) => /^QianXia-Setup-.*\.exe$/.test(f));
   if (cands.length === 0) return null;
   return path.join(REPO_ROOT, 'target/release', cands.sort().at(-1));
 }
 
 function findInstallerBin() {
-  for (const name of ['installer.exe', 'lingfang-installer.exe']) {
+  for (const name of ['installer.exe', 'qianxia-installer.exe']) {
     const p = path.join(REPO_ROOT, 'target/release', name);
     if (fs.existsSync(p)) return p;
   }
@@ -108,7 +108,7 @@ function isElevated() {
 }
 
 async function spawnElevated(exe, env) {
-  const taskName = `LingFangE2E_${process.pid}_${Date.now()}`;
+  const taskName = `QianXiaE2E_${process.pid}_${Date.now()}`;
   const launcherPath = path.join(os.tmpdir(), `${taskName}.bat`);
   const bat = [
     '@echo off',
@@ -199,7 +199,7 @@ async function connectPage(port) {
   const page = context.pages().find((p) => /tauri/i.test(p.url())) ?? context.pages()[0];
   assert(page, `CDP 连接成功并找到桌面壳页面 (${port})`);
   if (!page) return null;
-  // LF-18 缺陷 B 诊断：release 未经 tauri CLI 构建会把 devUrl 烘进产物。
+  // QX-18 缺陷 B 诊断：release 未经 tauri CLI 构建会把 devUrl 烘进产物。
   if (/localhost:1420/.test(page.url())) {
     fail(`安装实例指向 dev server localhost:1420——release 构建未经 tauri CLI（${page.url()}）`);
   }
@@ -372,13 +372,13 @@ async function assembleNewSetup(tmpRoot, newMain) {
   if (ar.status !== 0) {
     throw new Error(`Compress-Archive 打包 payload 失败：${ar.stderr}`);
   }
-  // zip 魔数硬门槛（LF-18 缺陷 A 同款防护：绝不拼非 zip payload）。
+  // zip 魔数硬门槛（QX-18 缺陷 A 同款防护：绝不拼非 zip payload）。
   const head = fs.readFileSync(payloadZip).subarray(0, 4);
   if (!head.equals(Buffer.from([0x50, 0x4b, 0x03, 0x04]))) {
     throw new Error(`payload.zip 不是合法 zip（PK 头缺失）：${payloadZip}`);
   }
   const installerBin = findInstallerBin();
-  if (!installerBin) throw new Error('未找到 target/release/installer.exe（请先 cargo build --release -p lingfang-installer）');
+  if (!installerBin) throw new Error('未找到 target/release/installer.exe（请先 cargo build --release -p qianxia-installer）');
   const setup = path.join(tmpRoot, 'work', TEMP_SETUP_NAME);
   fs.copyFileSync(installerBin, setup);
   const payloadBytes = fs.readFileSync(payloadZip);
@@ -401,7 +401,7 @@ async function installOldApp(setupExe, oldInstall) {
   if (r.status !== 0) throw new Error(`旧版安装失败（exit=${r.status}）`);
   const main = path.join(oldInstall, MAIN_EXE);
   if (!fs.existsSync(main)) {
-    throw new Error(`旧版安装 exit=0 但目标目录无主程序（LF-18 缺陷 A 形态）`);
+    throw new Error(`旧版安装 exit=0 但目标目录无主程序（QX-18 缺陷 A 形态）`);
   }
   ok(`旧版实例就绪：${oldInstall}（主程序 + updater 在目录内）`);
 }
@@ -429,7 +429,7 @@ function writeFeedJson(dir, sub, feedPort, sha, size) {
   const isTampered = sub === 'tampered';
   const feed = {
     version: NEW_VERSION,
-    notes: `LF-17 e2e 环回 feed（${isTampered ? '篡改' : '成功'}版）`,
+    notes: `QX-17 e2e 环回 feed（${isTampered ? '篡改' : '成功'}版）`,
     pub_date: new Date().toISOString(),
     setup: {
       url: `http://127.0.0.1:${feedPort}/${isTampered ? 'tampered/' : ''}${TEMP_SETUP_NAME}`,
@@ -443,10 +443,10 @@ function writeFeedJson(dir, sub, feedPort, sha, size) {
 }
 
 async function run() {
-  const tmpRoot = path.join(os.tmpdir(), `lingfang-update-e2e-${Date.now()}`);
+  const tmpRoot = path.join(os.tmpdir(), `qianxia-update-e2e-${Date.now()}`);
   fs.mkdirSync(tmpRoot, { recursive: true });
   // 清理可能残留的下载临时目录（上一次失败运行的半成品会让「临时包已清理」断言假阴性）。
-  fs.rmSync(path.join(os.tmpdir(), 'lingfang-update'), { recursive: true, force: true });
+  fs.rmSync(path.join(os.tmpdir(), 'qianxia-update'), { recursive: true, force: true });
   const oldInstall = path.join(tmpRoot, 'old-install');
   const webviewData = path.join(tmpRoot, 'webview-data');
   let appHandle = null;
@@ -457,7 +457,7 @@ async function run() {
     // 1. 旧版安装实例
     const setupExe = findSetupExe();
     if (!setupExe) {
-      throw new Error('未找到旧版 SFX 安装器（target/release/LingFang-Setup-*.exe）。先跑 LF-18 重建安装器。');
+      throw new Error('未找到旧版 SFX 安装器（target/release/QianXia-Setup-*.exe）。先跑 QX-18 重建安装器。');
     }
     await installOldApp(setupExe, oldInstall);
 
@@ -518,7 +518,7 @@ async function run() {
     assert(tamResult.ok === false, `篡改包被拒绝（err=${tamResult.message}）`);
     assert(/sha256|校验/i.test(tamResult.message ?? ''), `错误信息说明 sha256 失败（${tamResult.message}）`);
 
-    const tmpTemp = path.join(os.tmpdir(), 'lingfang-update', TEMP_SETUP_NAME);
+    const tmpTemp = path.join(os.tmpdir(), 'qianxia-update', TEMP_SETUP_NAME);
     assert(!fs.existsSync(tmpTemp), '篡改失败后临时安装包被清理');
     const afterHash = sha256File(path.join(oldInstall, MAIN_EXE));
     assert(beforeHash === afterHash, '篡改对照：目标 main.exe 未被覆盖（hash 不变）');
@@ -568,7 +568,7 @@ async function run() {
 
     // 7. 让主进程干净退出（quit_app = app.exit(0)），updater 存活继续覆盖。
     //    不用 window.close()：Tauri v2 里 JS 的 window.close() 不触发 close-requested，
-    //    主进程不会退出（LF-17 真机实测，updater 的 30s 等待因此超时）。
+    //    主进程不会退出（QX-17 真机实测，updater 的 30s 等待因此超时）。
     log('退出旧实例（invoke quit_app），等待 updater 接管…');
     await invoke(page, 'quit_app').catch(() => {});
     const exited = await waitProcessExit(appPid, 30_000);
@@ -589,7 +589,7 @@ async function run() {
     page = re.page;
     const vAfter = await appVersion(page);
     assert(vAfter === NEW_VERSION, `重启后实例自报版本=${vAfter}（期望 ${NEW_VERSION}）`);
-    const updaterGone = !fs.existsSync(path.join(os.tmpdir(), 'lingfang-update', TEMP_SETUP_NAME));
+    const updaterGone = !fs.existsSync(path.join(os.tmpdir(), 'qianxia-update', TEMP_SETUP_NAME));
     assert(updaterGone, 'updater 覆盖后删除临时安装包');
 
     await browser.close().catch(() => {});

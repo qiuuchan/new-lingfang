@@ -239,7 +239,7 @@ impl RuntimeResolver {
     /// 按命令名解析运行时绝对路径，缺失时提示安装包损坏。
     pub(crate) fn require_runtime_command(&self, command: &str) -> Result<PathBuf, String> {
         self.resolve_runtime_command(command).ok_or_else(|| {
-            format!("未找到内置运行时命令 {command}。安装包可能不完整，请重新安装灵坊工作台。")
+            format!("未找到内置运行时命令 {command}。安装包可能不完整，请重新安装千匣台。")
         })
     }
 
@@ -354,7 +354,7 @@ fn resolve_bundled(
 }
 
 fn bundled_runtimes_root<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> Option<PathBuf> {
-    if let Some(root) = std::env::var_os("LINGFANG_EMBEDDED_RUNTIME_DIR").map(PathBuf::from) {
+    if let Some(root) = std::env::var_os("QIANXIA_EMBEDDED_RUNTIME_DIR").map(PathBuf::from) {
         if root.is_dir() {
             return Some(root);
         }
@@ -575,7 +575,7 @@ mod tests {
     #[test]
     fn chromium_command_and_playwright_env_use_bundled_root() {
         let root =
-            std::env::temp_dir().join(format!("lf-runtime-resolver-{}", uuid::Uuid::new_v4()));
+            std::env::temp_dir().join(format!("qx-runtime-resolver-{}", uuid::Uuid::new_v4()));
         let chrome = root
             .join("chromium/ms-playwright")
             .join(format!("chromium-{PLAYWRIGHT_CHROMIUM_REVISION}"))
@@ -625,7 +625,7 @@ mod tests {
     fn ffmpeg_dir_in_path_when_configured() {
         // 临时目录建 fake ffmpeg.exe → ffmpeg dir 应进 PATH（关键：插件 shutil.which 命中靠此）。
         let tmp = std::env::temp_dir().join(format!(
-            "lf-ffmpeg-test-{}",
+            "qx-ffmpeg-test-{}",
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
@@ -646,7 +646,7 @@ mod tests {
     fn resolve_ffmpeg_by_name() {
         // 命名归一化：ffmpeg / ffmpeg.exe / FFMPEG 都解析到 ffmpeg 运行时。
         let tmp = std::env::temp_dir().join(format!(
-            "lf-ffmpeg-name-{}",
+            "qx-ffmpeg-name-{}",
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// e2e-actions-verify.mjs — LF-06 action 桥真机闭环验证（IMPROVEMENT_PLAN_3 阶段 I1）。
+// e2e-actions-verify.mjs — QX-06 action 桥真机闭环验证（IMPROVEMENT_PLAN_3 阶段 I1）。
 //
 // 目标：把「进程插件经桥调 /actions/call → 前端执行 client-action handler → 回传真实结果」
 // 这条此前从未真机跑通过的链路，固化为可重复的闭环断言。
@@ -14,7 +14,7 @@
 //      action_dependency_denied）。
 //   3. action-caller 裸 fetch 直连桥调 demo.hello，把真实响应写 result.json。
 //   4. 轮询 result.json（经 Tauri read_plugin_file 读插件目录，规避 materialized 路径不固定），
-//      断言 ok:true 且 greeting 含输入名 "lingfang" —— 即真机拿到了真实结果，而非
+//      断言 ok:true 且 greeting 含输入名 "qianxia" —— 即真机拿到了真实结果，而非
 //      action_dependency_unresolved 占位。
 //
 // 反向稳定对照：clientActionBridge.spec.ts 已断言「handler 未注册 → action_dependency_unresolved」，
@@ -43,7 +43,7 @@ const { chromium } = requireFromDesktop('@playwright/test');
 const DEMO_NAME = 'Action Demo'; // builtin-plugins/action-demo/manifest.json name
 const DEMO_ID = 'builtin.action-demo';
 const CALLER_ID = 'builtin.action-caller';
-const EXE_CANDIDATES = ['lingfang-desktop.exe', '灵坊工作台.exe', 'main.exe'];
+const EXE_CANDIDATES = ['qianxia-desktop.exe', '千匣台.exe', 'main.exe'];
 const OVERALL_TIMEOUT_MS = 6 * 60 * 1000;
 const CALLER_TIMEOUT_MS = 60_000; // 等 action-caller 跑完并落 result.json
 
@@ -209,8 +209,8 @@ async function run() {
       (parsed.result && parsed.result.greeting) ||
       (parsed.result && typeof parsed.result === 'string' ? parsed.result : '');
     assert(
-      typeof greeting === 'string' && greeting.includes('lingfang'),
-      `demo.hello 真实返回 greeting 含输入名「lingfang」：${JSON.stringify(greeting)}`
+      typeof greeting === 'string' && greeting.includes('qianxia'),
+      `demo.hello 真实返回 greeting 含输入名「qianxia」：${JSON.stringify(greeting)}`
     );
 
     log('action 桥真机闭环验证通过 ✅');

@@ -10,17 +10,17 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { publishCommand } from './publish.ts';
 
-/** 快速创建临时目录并写入假的 .lfplugin 文件，返回文件路径 */
+/** 快速创建临时目录并写入假的 .qplugin 文件，返回文件路径 */
 async function setupLfplugin(content?: string | Buffer): Promise<{
   tmpDir: string;
-  lfpluginPath: string;
+  qpluginPath: string;
 }> {
   const tmpDir = await mkdtemp(path.join(tmpdir(), 'publish-test-'));
-  const lfpluginPath = path.join(tmpDir, 'test-plugin.lfplugin');
-  const data = content ?? 'fake-lfplugin-content';
+  const qpluginPath = path.join(tmpDir, 'test-plugin.qplugin');
+  const data = content ?? 'fake-qplugin-content';
   const buf = typeof data === 'string' ? Buffer.from(data) : data;
-  await writeFile(lfpluginPath, buf);
-  return { tmpDir, lfpluginPath };
+  await writeFile(qpluginPath, buf);
+  return { tmpDir, qpluginPath };
 }
 
 /**
@@ -66,7 +66,7 @@ describe('publishCommand', () => {
   // ── 成功场景 ────────────────────────────────────────────────────────
 
   it('should publish successfully (201) with correct headers and raw body', async () => {
-    const { tmpDir, lfpluginPath } = await setupLfplugin('fake-lfplugin-content');
+    const { tmpDir, qpluginPath } = await setupLfplugin('fake-qplugin-content');
 
     const mockJson = vi.fn().mockResolvedValue({
       package: { id: 'pkg-ulid-001', name: 'test-plugin' },
@@ -76,7 +76,7 @@ describe('publishCommand', () => {
     const mockFetch = vi.fn().mockResolvedValue(mockResponse);
     vi.stubGlobal('fetch', mockFetch);
 
-    const code = await publishCommand([lfpluginPath], {
+    const code = await publishCommand([qpluginPath], {
       base: 'http://localhost:3000',
       token: 'test-jwt-token',
     });
@@ -94,13 +94,13 @@ describe('publishCommand', () => {
     });
     // 关键断言：body 必须是 raw Buffer（非 FormData）
     expect(Buffer.isBuffer(init.body)).toBe(true);
-    expect((init.body as Buffer).toString()).toBe('fake-lfplugin-content');
+    expect((init.body as Buffer).toString()).toBe('fake-qplugin-content');
 
     await cleanup(tmpDir);
   });
 
   it('should include all optional headers when provided', async () => {
-    const { tmpDir, lfpluginPath } = await setupLfplugin();
+    const { tmpDir, qpluginPath } = await setupLfplugin();
 
     const mockJson = vi.fn().mockResolvedValue({
       package: { id: 'pkg-001' },
@@ -108,11 +108,11 @@ describe('publishCommand', () => {
     });
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ status: 201, ok: true, json: mockJson }));
 
-    await publishCommand([lfpluginPath], {
+    await publishCommand([qpluginPath], {
       base: 'http://localhost:3000',
       token: 'jwt',
       packageId: 'existing-pkg-id',
-      sourceKind: 'LINGFANG_CREATOR',
+      sourceKind: 'QIANXIA_CREATOR',
       sourceLabel: '我的桌面客户端 v2',
       clientKind: 'desktop',
     });
@@ -120,7 +120,7 @@ describe('publishCommand', () => {
     const [_url, init] = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
     const headers = init.headers as Record<string, string>;
     expect(headers['x-plugin-package-id']).toBe('existing-pkg-id');
-    expect(headers['x-plugin-source-kind']).toBe('LINGFANG_CREATOR');
+    expect(headers['x-plugin-source-kind']).toBe('QIANXIA_CREATOR');
     // sourceLabel 应被 base64url 编码
     expect(headers['x-plugin-source-label-b64']).toBeTypeOf('string');
     expect(headers['x-plugin-source-label-b64']).not.toBe('');
@@ -132,7 +132,7 @@ describe('publishCommand', () => {
   });
 
   it('should handle base URL with trailing slash gracefully', async () => {
-    const { tmpDir, lfpluginPath } = await setupLfplugin();
+    const { tmpDir, qpluginPath } = await setupLfplugin();
 
     const mockJson = vi.fn().mockResolvedValue({
       package: { id: 'pkg-001' },
@@ -142,7 +142,7 @@ describe('publishCommand', () => {
     vi.stubGlobal('fetch', mockFetch);
 
     // base 带尾斜杠
-    await publishCommand([lfpluginPath], {
+    await publishCommand([qpluginPath], {
       base: 'http://localhost:3000/',
       token: 'jwt',
     });
@@ -157,7 +157,7 @@ describe('publishCommand', () => {
   // ── 失败场景 ────────────────────────────────────────────────────────
 
   it('should exit with 1 on authentication failure (401)', async () => {
-    const { tmpDir, lfpluginPath } = await setupLfplugin();
+    const { tmpDir, qpluginPath } = await setupLfplugin();
 
     vi.stubGlobal(
       'fetch',
@@ -168,7 +168,7 @@ describe('publishCommand', () => {
       })
     );
 
-    const code = await publishCommand([lfpluginPath], {
+    const code = await publishCommand([qpluginPath], {
       base: 'http://localhost:3000',
       token: 'expired-jwt',
     });
@@ -178,7 +178,7 @@ describe('publishCommand', () => {
   });
 
   it('should exit with 1 on permission denied (403)', async () => {
-    const { tmpDir, lfpluginPath } = await setupLfplugin();
+    const { tmpDir, qpluginPath } = await setupLfplugin();
 
     vi.stubGlobal(
       'fetch',
@@ -189,7 +189,7 @@ describe('publishCommand', () => {
       })
     );
 
-    const code = await publishCommand([lfpluginPath], {
+    const code = await publishCommand([qpluginPath], {
       base: 'http://localhost:3000',
       token: 'no-permission-jwt',
     });
@@ -199,14 +199,14 @@ describe('publishCommand', () => {
   });
 
   it('should exit with 1 on network error (connection refused)', async () => {
-    const { tmpDir, lfpluginPath } = await setupLfplugin();
+    const { tmpDir, qpluginPath } = await setupLfplugin();
 
     vi.stubGlobal(
       'fetch',
       vi.fn().mockRejectedValue(new Error('fetch failed — connect ECONNREFUSED 127.0.0.1:9999'))
     );
 
-    const code = await publishCommand([lfpluginPath], {
+    const code = await publishCommand([qpluginPath], {
       base: 'http://localhost:9999',
       token: 'jwt',
     });
@@ -219,7 +219,7 @@ describe('publishCommand', () => {
 
   it('should build from workspace then publish (regression: runBuild used to always return null)', async () => {
     // 回归测试：runBuild 曾硬编码 return null，导致从工作区发布时永远失败。
-    // 此用例确保：workspace 目录 → 自动 build → 拿到 .lfplugin → POST 上传。
+    // 此用例确保：workspace 目录 → 自动 build → 拿到 .qplugin → POST 上传。
     const { tmpDir } = await setupWorkspace();
 
     const mockJson = vi.fn().mockResolvedValue({
@@ -284,7 +284,7 @@ describe('publishCommand', () => {
     const mockFetch = vi.fn();
     vi.stubGlobal('fetch', mockFetch);
 
-    const code = await publishCommand([path.join(tmpdir(), 'does-not-exist.lfplugin')], {
+    const code = await publishCommand([path.join(tmpdir(), 'does-not-exist.qplugin')], {
       base: 'http://localhost:3000',
       token: 'jwt',
     });
@@ -295,13 +295,13 @@ describe('publishCommand', () => {
   });
 
   it('should exit with 1 when token is missing (no env, no opts)', async () => {
-    const { tmpDir, lfpluginPath } = await setupLfplugin();
+    const { tmpDir, qpluginPath } = await setupLfplugin();
 
-    const savedToken = process.env['LINGFANG_TOKEN'];
-    delete process.env['LINGFANG_TOKEN'];
+    const savedToken = process.env['QIANXIA_TOKEN'];
+    delete process.env['QIANXIA_TOKEN'];
 
     try {
-      const code = await publishCommand([lfpluginPath], {
+      const code = await publishCommand([qpluginPath], {
         base: 'http://localhost:3000',
         // token 未传
       });
@@ -310,7 +310,7 @@ describe('publishCommand', () => {
     } finally {
       // 恢复环境变量
       if (savedToken !== undefined) {
-        process.env['LINGFANG_TOKEN'] = savedToken;
+        process.env['QIANXIA_TOKEN'] = savedToken;
       }
     }
 
@@ -318,13 +318,13 @@ describe('publishCommand', () => {
   });
 
   it('should exit with 1 when base URL is missing (no env, no opts)', async () => {
-    const { tmpDir, lfpluginPath } = await setupLfplugin();
+    const { tmpDir, qpluginPath } = await setupLfplugin();
 
-    const savedBase = process.env['LINGFANG_API_BASE'];
-    delete process.env['LINGFANG_API_BASE'];
+    const savedBase = process.env['QIANXIA_API_BASE'];
+    delete process.env['QIANXIA_API_BASE'];
 
     try {
-      const code = await publishCommand([lfpluginPath], {
+      const code = await publishCommand([qpluginPath], {
         token: 'jwt',
         // base 未传
       });
@@ -332,7 +332,7 @@ describe('publishCommand', () => {
       expect(code).toBe(1);
     } finally {
       if (savedBase !== undefined) {
-        process.env['LINGFANG_API_BASE'] = savedBase;
+        process.env['QIANXIA_API_BASE'] = savedBase;
       }
     }
 

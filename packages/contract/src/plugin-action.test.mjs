@@ -31,7 +31,7 @@ const imageAction = {
   input_schema: objectSchema,
   output_schema: {
     type: 'object',
-    properties: { image: { $ref: 'lingfang://schemas/artifact-ref/v1' } },
+    properties: { image: { $ref: 'qianxia://schemas/artifact-ref/v1' } },
     required: ['image'],
     additionalProperties: false,
   },

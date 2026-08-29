@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { RuntimeType, Sha256Hex, StrictSemVer, ActionId, ActionInvocationStatus, ActionSchema, ActionTarget } from '@lingfang/contract';
+import { RuntimeType, Sha256Hex, StrictSemVer, ActionId, ActionInvocationStatus, ActionSchema, ActionTarget } from '@qianxia/contract';
 
 export const MarketplaceCategory = z.enum([
   'AI',

@@ -2,16 +2,16 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { PluginActionError, PluginAiError, sdk } from './index';
 
 type TestGlobal = typeof globalThis & {
-  __lingfangInvoke?: (capability: string, args: unknown) => Promise<unknown>;
+  __qianxiaInvoke?: (capability: string, args: unknown) => Promise<unknown>;
   process: { env: Record<string, string | undefined> };
 };
 
 const env = () => (globalThis as TestGlobal).process.env;
 
 afterEach(() => {
-  delete (globalThis as TestGlobal).__lingfangInvoke;
-  delete env().LINGFANG_PLUGIN_BRIDGE_URL;
-  delete env().LINGFANG_PLUGIN_BRIDGE_TOKEN;
+  delete (globalThis as TestGlobal).__qianxiaInvoke;
+  delete env().QIANXIA_PLUGIN_BRIDGE_URL;
+  delete env().QIANXIA_PLUGIN_BRIDGE_TOKEN;
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
@@ -19,7 +19,7 @@ afterEach(() => {
 describe('plugin AI SDK', () => {
   it('defaults chat to fast and keeps bridge credentials out of arguments', async () => {
     const bridge = vi.fn().mockResolvedValue('ok');
-    (globalThis as TestGlobal).__lingfangInvoke = bridge;
+    (globalThis as TestGlobal).__qianxiaInvoke = bridge;
 
     await expect(sdk.llm.chat({ messages: [{ role: 'user', content: 'hello' }] })).resolves.toBe(
       'ok'
@@ -32,7 +32,7 @@ describe('plugin AI SDK', () => {
 
   it('rejects upstream model names before invoking the host', async () => {
     const bridge = vi.fn();
-    (globalThis as TestGlobal).__lingfangInvoke = bridge;
+    (globalThis as TestGlobal).__qianxiaInvoke = bridge;
 
     await expect(
       sdk.llm.chat({
@@ -45,7 +45,7 @@ describe('plugin AI SDK', () => {
 
   it('does not leak timeoutMs into the host bridge arguments', async () => {
     const bridge = vi.fn().mockResolvedValue('ok');
-    (globalThis as TestGlobal).__lingfangInvoke = bridge;
+    (globalThis as TestGlobal).__qianxiaInvoke = bridge;
 
     await sdk.llm.chat({
       messages: [{ role: 'user', content: 'hello' }],
@@ -59,7 +59,7 @@ describe('plugin AI SDK', () => {
 
   it('clamps a too-large timeoutMs down to 180s', async () => {
     const bridge = vi.fn().mockResolvedValue('ok');
-    (globalThis as TestGlobal).__lingfangInvoke = bridge;
+    (globalThis as TestGlobal).__qianxiaInvoke = bridge;
     const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout');
 
     await sdk.image.generate({ prompt: 'demo', timeoutMs: 999_999 });
@@ -69,7 +69,7 @@ describe('plugin AI SDK', () => {
 
   it('clamps a too-small timeoutMs up to 1s', async () => {
     const bridge = vi.fn().mockResolvedValue('ok');
-    (globalThis as TestGlobal).__lingfangInvoke = bridge;
+    (globalThis as TestGlobal).__qianxiaInvoke = bridge;
     const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout');
 
     await sdk.image.generate({ prompt: 'demo', timeoutMs: 10 });
@@ -79,7 +79,7 @@ describe('plugin AI SDK', () => {
 
   it('passes a valid timeoutMs through to the race timer', async () => {
     const bridge = vi.fn().mockResolvedValue('ok');
-    (globalThis as TestGlobal).__lingfangInvoke = bridge;
+    (globalThis as TestGlobal).__qianxiaInvoke = bridge;
     const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout');
 
     await sdk.image.generate({ prompt: 'demo', timeoutMs: 45_000 });
@@ -89,7 +89,7 @@ describe('plugin AI SDK', () => {
 
   it('defaults to the 180s AI timeout when no timeoutMs is given', async () => {
     const bridge = vi.fn().mockResolvedValue('ok');
-    (globalThis as TestGlobal).__lingfangInvoke = bridge;
+    (globalThis as TestGlobal).__qianxiaInvoke = bridge;
     const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout');
 
     await sdk.image.generate({ prompt: 'demo' });
@@ -98,7 +98,7 @@ describe('plugin AI SDK', () => {
   });
 
   it('preserves structured host errors', async () => {
-    (globalThis as TestGlobal).__lingfangInvoke = vi.fn().mockRejectedValue({
+    (globalThis as TestGlobal).__qianxiaInvoke = vi.fn().mockRejectedValue({
       message: '团队额度不足',
       code: 'insufficient_balance',
       status: 402,
@@ -116,8 +116,8 @@ describe('plugin AI SDK', () => {
   });
 
   it('preserves nested OpenAI-compatible errors from the localhost fallback', async () => {
-    env().LINGFANG_PLUGIN_BRIDGE_URL = 'http://127.0.0.1:12345';
-    env().LINGFANG_PLUGIN_BRIDGE_TOKEN = 'session-token';
+    env().QIANXIA_PLUGIN_BRIDGE_URL = 'http://127.0.0.1:12345';
+    env().QIANXIA_PLUGIN_BRIDGE_TOKEN = 'session-token';
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(
         JSON.stringify({
@@ -149,7 +149,7 @@ describe('plugin AI SDK', () => {
     expect(fetchMock).toHaveBeenCalledWith(
       'http://127.0.0.1:12345/llm/chat',
       expect.objectContaining({
-        headers: expect.objectContaining({ 'X-LingFang-Plugin-Token': 'session-token' }),
+        headers: expect.objectContaining({ 'X-QianXia-Plugin-Token': 'session-token' }),
       })
     );
   });
@@ -163,8 +163,8 @@ describe('plugin AI SDK', () => {
   });
 
   it('rejects a non-local bridge URL from the environment', async () => {
-    env().LINGFANG_PLUGIN_BRIDGE_URL = 'https://provider.example/v1';
-    env().LINGFANG_PLUGIN_BRIDGE_TOKEN = 'session-token';
+    env().QIANXIA_PLUGIN_BRIDGE_URL = 'https://provider.example/v1';
+    env().QIANXIA_PLUGIN_BRIDGE_TOKEN = 'session-token';
 
     await expect(
       sdk.llm.chat({ messages: [{ role: 'user', content: 'hello' }] })
@@ -184,7 +184,7 @@ describe('plugin AI SDK', () => {
       charged: true,
       credits: 5,
     });
-    (globalThis as TestGlobal).__lingfangInvoke = bridge;
+    (globalThis as TestGlobal).__qianxiaInvoke = bridge;
 
     await expect(
       sdk.video.generate({
@@ -207,9 +207,9 @@ describe('plugin AI SDK', () => {
   });
 
   it('routes video.generate through the localhost script bridge with tier injection', async () => {
-    // 脚本回退路径（无 __lingfangInvoke）：经 localhost /video/generate，body 注入 model=platformModel。
-    env().LINGFANG_PLUGIN_BRIDGE_URL = 'http://127.0.0.1:12345';
-    env().LINGFANG_PLUGIN_BRIDGE_TOKEN = 'session-token';
+    // 脚本回退路径（无 __qianxiaInvoke）：经 localhost /video/generate，body 注入 model=platformModel。
+    env().QIANXIA_PLUGIN_BRIDGE_URL = 'http://127.0.0.1:12345';
+    env().QIANXIA_PLUGIN_BRIDGE_TOKEN = 'session-token';
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(
         JSON.stringify({
@@ -241,7 +241,7 @@ describe('plugin AI SDK', () => {
       'http://127.0.0.1:12345/video/generate',
       expect.objectContaining({
         method: 'POST',
-        headers: expect.objectContaining({ 'X-LingFang-Plugin-Token': 'session-token' }),
+        headers: expect.objectContaining({ 'X-QianXia-Plugin-Token': 'session-token' }),
         body: JSON.stringify({ image: 'aQ==', video: 'Yg==', seconds: 6, model: 'premium' }),
       })
     );
@@ -253,7 +253,7 @@ describe('plugin shared SDK', () => {
     const bridge = vi
       .fn()
       .mockResolvedValue({ key: 'asset', value: { id: 1 }, schema_version: 1, revision: '2' });
-    (globalThis as TestGlobal).__lingfangInvoke = bridge;
+    (globalThis as TestGlobal).__qianxiaInvoke = bridge;
     await expect(
       sdk.shared.compareAndSet({
         namespace: 'project.assets',
@@ -274,7 +274,7 @@ describe('plugin shared SDK', () => {
 
   it('rejects non-serializable shared values before invoking the host', async () => {
     const bridge = vi.fn();
-    (globalThis as TestGlobal).__lingfangInvoke = bridge;
+    (globalThis as TestGlobal).__qianxiaInvoke = bridge;
     const value: Record<string, unknown> = {};
     value.self = value;
     expect(() =>
@@ -287,7 +287,7 @@ describe('plugin shared SDK', () => {
 describe('plugin action SDK', () => {
   it('sends only the dependency alias, input and opaque effect hint to the trusted host', async () => {
     const bridge = vi.fn().mockResolvedValue({ artifact: 'video-1' });
-    (globalThis as TestGlobal).__lingfangInvoke = bridge;
+    (globalThis as TestGlobal).__qianxiaInvoke = bridge;
 
     await expect(
       sdk.actions.call(
@@ -309,7 +309,7 @@ describe('plugin action SDK', () => {
   });
 
   it('preserves stable host action errors', async () => {
-    (globalThis as TestGlobal).__lingfangInvoke = vi.fn().mockRejectedValue({
+    (globalThis as TestGlobal).__qianxiaInvoke = vi.fn().mockRejectedValue({
       message: '目标 runtime 暂不可用',
       code: 'action_runtime_unavailable',
       status: 503,
@@ -333,7 +333,7 @@ describe('plugin action SDK', () => {
     const bridge = vi.fn();
     const controller = new AbortController();
     controller.abort();
-    (globalThis as TestGlobal).__lingfangInvoke = bridge;
+    (globalThis as TestGlobal).__qianxiaInvoke = bridge;
     await expect(
       sdk.actions.call('video_generator', {}, { signal: controller.signal })
     ).rejects.toMatchObject({
@@ -355,7 +355,7 @@ describe('plugin artifact SDK', () => {
 
   it('sends typed bytes without exposing storage or authorization internals', async () => {
     const bridge = vi.fn().mockResolvedValue(ref);
-    (globalThis as TestGlobal).__lingfangInvoke = bridge;
+    (globalThis as TestGlobal).__qianxiaInvoke = bridge;
     await expect(
       sdk.artifacts.create({ dataBase64: 'UE5H', mediaType: 'image/png' })
     ).resolves.toEqual(ref);
@@ -375,7 +375,7 @@ describe('plugin artifact SDK', () => {
       sizeBytes: 4,
       sha256: 'a'.repeat(64),
     });
-    (globalThis as TestGlobal).__lingfangInvoke = bridge;
+    (globalThis as TestGlobal).__qianxiaInvoke = bridge;
     await sdk.artifacts.materialize(ref);
     expect(bridge).toHaveBeenCalledWith('artifacts.materialize', { artifact_ref: ref });
     expect(() => sdk.artifacts.import({ ...ref, sha256: 'bad' } as never)).toThrow(
@@ -384,8 +384,8 @@ describe('plugin artifact SDK', () => {
   });
 
   it('uses localhost artifact routes without leaking the bridge token into JSON', async () => {
-    env().LINGFANG_PLUGIN_BRIDGE_URL = 'http://127.0.0.1:12345';
-    env().LINGFANG_PLUGIN_BRIDGE_TOKEN = 'session-token';
+    env().QIANXIA_PLUGIN_BRIDGE_URL = 'http://127.0.0.1:12345';
+    env().QIANXIA_PLUGIN_BRIDGE_TOKEN = 'session-token';
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(JSON.stringify(ref), {
         status: 200,
@@ -399,7 +399,7 @@ describe('plugin artifact SDK', () => {
     expect(fetchMock).toHaveBeenCalledWith(
       'http://127.0.0.1:12345/artifacts/create',
       expect.objectContaining({
-        headers: expect.objectContaining({ 'X-LingFang-Plugin-Token': 'session-token' }),
+        headers: expect.objectContaining({ 'X-QianXia-Plugin-Token': 'session-token' }),
         body: JSON.stringify({ data_base64: 'UE5H', media_type: 'image/png' }),
       })
     );
@@ -410,7 +410,7 @@ describe('plugin artifact SDK', () => {
 describe('plugin storage SDK', () => {
   it('routes list to storage.kv op with prefix and returns keys', async () => {
     const bridge = vi.fn().mockResolvedValue({ keys: ['user:alice', 'user:bob'] });
-    (globalThis as TestGlobal).__lingfangInvoke = bridge;
+    (globalThis as TestGlobal).__qianxiaInvoke = bridge;
 
     const keys = await sdk.storage.list('user:');
     expect(keys).toEqual(['user:alice', 'user:bob']);
@@ -419,7 +419,7 @@ describe('plugin storage SDK', () => {
 
   it('omits prefix arg when not provided', async () => {
     const bridge = vi.fn().mockResolvedValue({ keys: [] });
-    (globalThis as TestGlobal).__lingfangInvoke = bridge;
+    (globalThis as TestGlobal).__qianxiaInvoke = bridge;
 
     await sdk.storage.list();
     expect(bridge).toHaveBeenCalledWith('storage.kv', { op: 'list' });
@@ -427,7 +427,7 @@ describe('plugin storage SDK', () => {
 
   it('routes delete and returns deleted flag', async () => {
     const bridge = vi.fn().mockResolvedValue({ deleted: true });
-    (globalThis as TestGlobal).__lingfangInvoke = bridge;
+    (globalThis as TestGlobal).__qianxiaInvoke = bridge;
 
     const res = await sdk.storage.delete('user:alice');
     expect(res).toEqual({ deleted: true });
@@ -436,7 +436,7 @@ describe('plugin storage SDK', () => {
 
   it('routes count and returns the number', async () => {
     const bridge = vi.fn().mockResolvedValue({ count: 3 });
-    (globalThis as TestGlobal).__lingfangInvoke = bridge;
+    (globalThis as TestGlobal).__qianxiaInvoke = bridge;
 
     const count = await sdk.storage.count();
     expect(count).toBe(3);

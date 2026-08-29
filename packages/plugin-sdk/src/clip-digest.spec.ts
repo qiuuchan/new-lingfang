@@ -7,15 +7,15 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { PluginAiError, PluginAiErrorCode, sdk } from './index';
 
 type TestGlobal = typeof globalThis & {
-  __lingfangInvoke?: (capability: string, args: unknown) => Promise<unknown>;
+  __qianxiaInvoke?: (capability: string, args: unknown) => Promise<unknown>;
 };
 
 afterEach(() => {
-  delete (globalThis as TestGlobal).__lingfangInvoke;
+  delete (globalThis as TestGlobal).__qianxiaInvoke;
   vi.restoreAllMocks();
 });
 
-// 复刻 examples/clip-digest/ui/index.html 中的降级判定逻辑（LF-05 / g2-sdk-friction #1：
+// 复刻 examples/clip-digest/ui/index.html 中的降级判定逻辑（QX-05 / g2-sdk-friction #1：
 // code-first，message 前缀兜底旧形态）。
 function isRelayNotConfigured(err: unknown): boolean {
   const e = err as { code?: string; message?: string } | null | undefined;
@@ -28,7 +28,7 @@ function isRelayNotConfigured(err: unknown): boolean {
 describe('clip-digest: clipboard + storage SDK calls', () => {
   it('sdk.clipboard.readText() routes to the clipboard bridge with op=read', async () => {
     const bridge = vi.fn().mockResolvedValue({ content: 'hello clipboard' });
-    (globalThis as TestGlobal).__lingfangInvoke = bridge;
+    (globalThis as TestGlobal).__qianxiaInvoke = bridge;
 
     await expect(sdk.clipboard.readText()).resolves.toBe('hello clipboard');
     expect(bridge).toHaveBeenCalledWith('clipboard', { op: 'read' });
@@ -36,7 +36,7 @@ describe('clip-digest: clipboard + storage SDK calls', () => {
 
   it('sdk.storage.set(key, value) routes to storage.kv with op=set', async () => {
     const bridge = vi.fn().mockResolvedValue(undefined);
-    (globalThis as TestGlobal).__lingfangInvoke = bridge;
+    (globalThis as TestGlobal).__qianxiaInvoke = bridge;
     const value = { text: 'x', summary: null, createdAt: new Date().toISOString() };
 
     await expect(sdk.storage.set('clip-digest:abc', value)).resolves.toBeUndefined();
@@ -46,7 +46,7 @@ describe('clip-digest: clipboard + storage SDK calls', () => {
   it('sdk.storage.get(key) routes to storage.kv with op=get', async () => {
     const stored = { text: 'x', summary: 's', createdAt: 't' };
     const bridge = vi.fn().mockResolvedValue(stored);
-    (globalThis as TestGlobal).__lingfangInvoke = bridge;
+    (globalThis as TestGlobal).__qianxiaInvoke = bridge;
 
     await expect(sdk.storage.get('clip-digest:abc')).resolves.toEqual(stored);
     expect(bridge).toHaveBeenCalledWith('storage.kv', { op: 'get', key: 'clip-digest:abc' });
@@ -56,7 +56,7 @@ describe('clip-digest: clipboard + storage SDK calls', () => {
 describe('clip-digest: llm + ui SDK calls', () => {
   it('sdk.llm.chat({messages}) routes to llm.chat with default model=fast', async () => {
     const bridge = vi.fn().mockResolvedValue('摘要内容');
-    (globalThis as TestGlobal).__lingfangInvoke = bridge;
+    (globalThis as TestGlobal).__qianxiaInvoke = bridge;
     const messages = [
       { role: 'system' as const, content: '你是剪藏摘要助手' },
       { role: 'user' as const, content: '长文本' },
@@ -68,7 +68,7 @@ describe('clip-digest: llm + ui SDK calls', () => {
 
   it('sdk.ui.render(content) routes to ui.view with content', async () => {
     const bridge = vi.fn().mockResolvedValue(undefined);
-    (globalThis as TestGlobal).__lingfangInvoke = bridge;
+    (globalThis as TestGlobal).__qianxiaInvoke = bridge;
     const content = { type: 'markdown', body: '摘要' };
 
     await expect(sdk.ui.render(content)).resolves.toBeUndefined();
@@ -95,7 +95,7 @@ describe('clip-digest: graceful degradation (relay_not_configured)', () => {
   it('sdk.llm.chat 的 relay_not_configured 拒绝现在带稳定 code（不再只有 message 前缀）', async () => {
     // 宿主 Rust 侧以裸前缀字符串 reject（client_ai_proxy.rs ERR_RELAY_NOT_CONFIGURED）。
     const bridge = vi.fn().mockRejectedValue('relay_not_configured: 请先在设置中配置 relay 凭据');
-    (globalThis as TestGlobal).__lingfangInvoke = bridge;
+    (globalThis as TestGlobal).__qianxiaInvoke = bridge;
 
     const error = await sdk.llm
       .chat({ messages: [{ role: 'user', content: 'hi' }] })
@@ -112,7 +112,7 @@ describe('clip-digest: graceful degradation (relay_not_configured)', () => {
 
   it('sdk.llm.chat 的 relay_error 拒绝归一为 relay_error（非 plugin_ai_error）', async () => {
     const bridge = vi.fn().mockRejectedValue('relay_error: 上游 500');
-    (globalThis as TestGlobal).__lingfangInvoke = bridge;
+    (globalThis as TestGlobal).__qianxiaInvoke = bridge;
 
     const error = await sdk.llm
       .chat({ messages: [{ role: 'user', content: 'hi' }] })
@@ -124,7 +124,7 @@ describe('clip-digest: graceful degradation (relay_not_configured)', () => {
 
   it('a relay_not_configured flow degrades gracefully without throwing', async () => {
     const bridge = vi.fn().mockRejectedValue(new Error('relay_not_configured'));
-    (globalThis as TestGlobal).__lingfangInvoke = bridge;
+    (globalThis as TestGlobal).__qianxiaInvoke = bridge;
 
     let degraded = false;
     const text = '剪贴板原文';
@@ -167,7 +167,7 @@ describe('clip-digest: graceful degradation (relay_not_configured)', () => {
     const bridge = vi.fn()
       .mockResolvedValueOnce(summary) // llm.chat
       .mockResolvedValueOnce(undefined); // storage.set (持久化摘要)
-    (globalThis as TestGlobal).__lingfangInvoke = bridge;
+    (globalThis as TestGlobal).__qianxiaInvoke = bridge;
 
     let degraded = false;
     const text = '剪贴板原文';
@@ -207,7 +207,7 @@ describe('clip-digest: graceful degradation (relay_not_configured)', () => {
 describe('clip-digest: llm.chat timeout is wrapped as PluginAiError', () => {
   it('wraps a capability 调用超时: llm.chat rejection as PluginAiError code=request_timeout', async () => {
     const bridge = vi.fn().mockRejectedValue(new Error('capability 调用超时: llm.chat'));
-    (globalThis as TestGlobal).__lingfangInvoke = bridge;
+    (globalThis as TestGlobal).__qianxiaInvoke = bridge;
 
     const error = await sdk.llm
       .chat({ messages: [{ role: 'user', content: 'hi' }] })
@@ -218,7 +218,7 @@ describe('clip-digest: llm.chat timeout is wrapped as PluginAiError', () => {
   });
 });
 
-// LF-13 自修：复刻 examples/clip-digest/ui/index.html 的 persistRecord（LRU 淘汰，不再静默 localStorage）。
+// QX-13 自修：复刻 examples/clip-digest/ui/index.html 的 persistRecord（LRU 淘汰，不再静默 localStorage）。
 const CD_PREFIX = 'clip-digest:';
 
 function cdIsQuotaError(err: unknown): boolean {
@@ -252,7 +252,7 @@ async function cdPersistRecord(record: unknown) {
   throw new Error('单条剪藏超过 256KB 上限，无法存档（已为你生成摘要，但原文未保存）');
 }
 
-describe('clip-digest: LRU eviction replaces silent localStorage fallback (LF-13)', () => {
+describe('clip-digest: LRU eviction replaces silent localStorage fallback (QX-13)', () => {
   it('evicts the oldest entry then retries on kv_quota_exceeded', async () => {
     const calls: Array<{ cap: string; op?: string }> = [];
     const bridge = vi.fn().mockImplementation(async (cap: string, args: unknown) => {
@@ -269,7 +269,7 @@ describe('clip-digest: LRU eviction replaces silent localStorage fallback (LF-13
       }
       return undefined;
     });
-    (globalThis as TestGlobal).__lingfangInvoke = bridge;
+    (globalThis as TestGlobal).__qianxiaInvoke = bridge;
 
     await expect(cdPersistRecord({ text: 'x', summary: null })).resolves.toBeUndefined();
 
@@ -282,10 +282,10 @@ describe('clip-digest: LRU eviction replaces silent localStorage fallback (LF-13
   });
 
   it('does NOT silently swallow non-quota storage errors (no localStorage fallback)', async () => {
-    // LF-13 自修核心：原实现会在 storage.set 抛错时静默落到 localStorage；
+    // QX-13 自修核心：原实现会在 storage.set 抛错时静默落到 localStorage；
     // 新实现只对配额类错误做 LRU 淘汰，其它错误必须原样抛出，不得掩盖。
     const bridge = vi.fn().mockRejectedValue(new Error('磁盘 IO 故障'));
-    (globalThis as TestGlobal).__lingfangInvoke = bridge;
+    (globalThis as TestGlobal).__qianxiaInvoke = bridge;
 
     await expect(cdPersistRecord({ text: 'x', summary: null })).rejects.toThrow('磁盘 IO 故障');
   });
@@ -301,7 +301,7 @@ describe('clip-digest: LRU eviction replaces silent localStorage fallback (LF-13
       }
       return undefined;
     });
-    (globalThis as TestGlobal).__lingfangInvoke = bridge;
+    (globalThis as TestGlobal).__qianxiaInvoke = bridge;
 
     await expect(cdPersistRecord({ text: 'x', summary: null })).rejects.toThrow(/256KB/);
   });

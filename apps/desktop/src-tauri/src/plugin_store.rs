@@ -4,7 +4,7 @@
 //! `<plugins_root>/<plugin_id>/`，每个插件独立文件夹，重启软件后仍在。
 //!
 //! 本模块职责（组A 范围）：
-//! - `PluginStore`：插件根目录配置读写（app_data/plugins/.lingfang/config.json，原子写）+ 目录定位。
+//! - `PluginStore`：插件根目录配置读写（app_data/plugins/.qianxia/config.json，原子写）+ 目录定位。
 //! - `get_plugins_root` / `set_plugins_root` / `read_local_plugin_file` 命令。
 //! - `scan_plugin_status` 命令：扫描 plugins_root 下全部子目录，解析 manifest.json 判定
 //!   动态状态（ready/incomplete/error），并合并组B 的 PluginProcessTable 判定 running/stopped 态。
@@ -18,7 +18,7 @@
 //! 目录布局（PRD 需求 6）：
 //! ```text
 //! app_data/plugins/                      ← plugins_root（默认；设置页可配置）
-//! ├── .lingfang/                         ← PluginStore 配置（隐藏，扫描跳过）
+//! ├── .qianxia/                         ← PluginStore 配置（隐藏，扫描跳过）
 //! │   └── config.json                    ← pluginsRootPath 用户自定义路径
 //! ├── <plugin_id>/                       ← 各插件独立文件夹
 //! │   ├── manifest.json
@@ -30,7 +30,7 @@
 //! ```
 //!
 //! 安全：plugin_id 走段级白名单（[A-Za-z0-9_-]，与 plugin_script/plugin_runner 同款），
-//! canonicalize 前缀断言防路径穿越，扫描跳过隐藏目录（.lingfang 等）与非白名单目录名。
+//! canonicalize 前缀断言防路径穿越，扫描跳过隐藏目录（.qianxia 等）与非白名单目录名。
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -50,11 +50,11 @@ fn lock_or_recover<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
 ///
 /// 存放 config.json（用户自定义路径）+ runtime/（预留）。以 `.` 开头确保 scan 时被
 /// sanitize_plugin_id 拒绝（隐藏段）从而跳过，不误判为插件目录。
-const META_DIR: &str = ".lingfang";
+const META_DIR: &str = ".qianxia";
 
 /// 插件根目录配置（plugins_root 路径，None = 用默认 app_data/plugins/）。
 ///
-/// 落盘到 plugins_root/.lingfang/config.json。default 保证旧配置缺失时不报错。
+/// 落盘到 plugins_root/.qianxia/config.json。default 保证旧配置缺失时不报错。
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct PluginStoreConfig {
     /// 用户自定义的插件根目录绝对路径。None 表示使用默认 app_data/plugins/（首次启动）。
@@ -163,7 +163,7 @@ pub struct PluginStore {
     /// app_data_dir/plugins（默认 plugins_root + 元数据目录均在此）。
     ///
     /// 注意：用户可在设置页把 pluginsRootPath 改为任意路径，此时插件落在自定义路径下，
-    /// 但 PluginStore 的元数据（config.json）始终落在 app_data_dir/plugins/.lingfang/（固定锚点），
+    /// 但 PluginStore 的元数据（config.json）始终落在 app_data_dir/plugins/.qianxia/（固定锚点），
     /// 否则改了 plugins_root 后就找不到 config.json 自身（鸡生蛋问题）。
     anchor_root: PathBuf,
     file_lock: Arc<Mutex<()>>,
@@ -179,7 +179,7 @@ impl PluginStore {
     pub fn new(app_data_dir: &Path) -> Result<Self, String> {
         let anchor_root = app_data_dir.join("plugins");
         fs::create_dir_all(&anchor_root).map_err(|e| format!("创建插件目录失败：{e}"))?;
-        // 元数据目录（.lingfang/config.json）固定锚点：不随 plugins_root 自定义路径变，
+        // 元数据目录（.qianxia/config.json）固定锚点：不随 plugins_root 自定义路径变，
         // 否则改了 plugins_root 后找不到 config 自身。plugins_root 默认即 anchor_root。
         fs::create_dir_all(anchor_root.join(META_DIR))
             .map_err(|e| format!("创建插件元数据目录失败：{e}"))?;
@@ -225,7 +225,7 @@ impl PluginStore {
         }
     }
 
-    /// 配置文件路径（固定锚点：app_data/plugins/.lingfang/config.json）。
+    /// 配置文件路径（固定锚点：app_data/plugins/.qianxia/config.json）。
     ///
     /// 不随 plugins_root 自定义路径变（否则改了 plugins_root 后找不到 config 自身）。
     fn config_path(&self) -> PathBuf {
@@ -357,7 +357,7 @@ impl PluginStore {
     ///
     /// 流程：
     /// 1. plugins_root 不存在或读取失败 → 返回空 Vec（前端降级为空状态引导，不报错）。
-    /// 2. 每个子目录：目录名通过 sanitize_plugin_id（跳过 .lingfang 等隐藏目录 + 非白名单目录名）。
+    /// 2. 每个子目录：目录名通过 sanitize_plugin_id（跳过 .qianxia 等隐藏目录 + 非白名单目录名）。
     /// 3. 解析 manifest.json 判定 ready/incomplete/error（scan_one_plugin）。
     /// 4. 按 name（缺失按 id）字典序排序（前端列表稳定）。
     pub fn list_plugins(&self) -> Vec<PluginMeta> {
@@ -372,19 +372,19 @@ impl PluginStore {
             if !path.is_dir() {
                 continue;
             }
-            // 目录名作为 plugin_id（仅处理通过 sanitize 的合法目录名，跳过 .lingfang 等隐藏目录）。
+            // 目录名作为 plugin_id（仅处理通过 sanitize 的合法目录名，跳过 .qianxia 等隐藏目录）。
             let dir_name = match path.file_name().and_then(|n| n.to_str()) {
                 Some(n) => n.to_string(),
                 None => continue,
             };
             if matches!(
                 dir_name.as_str(),
-                "installed" | "cache" | "workspaces" | ".lingfang-staging"
+                "installed" | "cache" | "workspaces" | ".qianxia-staging"
             ) {
                 continue;
             }
             if sanitize_plugin_id(&dir_name).is_err() {
-                // 隐藏目录（.lingfang）/含非法字符目录名：跳过，避免误解析。
+                // 隐藏目录（.qianxia）/含非法字符目录名：跳过，避免误解析。
                 continue;
             }
             metas.push(scan_one_plugin(&path, &dir_name));
@@ -456,7 +456,7 @@ impl PluginStore {
 
     /// 写单个文件的**字节**（二进制文件，如字体/图片/音频）。
     /// 与 write_files 同款 path 白名单，仅 content 是 &[u8] 而非 &str。
-    /// .lfplugin v3 导入路径：二进制文件经前端 base64 解码后走此方法（见 write_plugin_file_bytes 命令）。
+    /// .qplugin v3 导入路径：二进制文件经前端 base64 解码后走此方法（见 write_plugin_file_bytes 命令）。
     pub fn write_file_bytes(
         &self,
         plugin_id: &str,
@@ -473,7 +473,7 @@ impl PluginStore {
     }
 
     /// 读取插件目录下指定文件的**字节**（base64 编码返回），对称于 read_plugin_file。
-    /// 用于 .lfplugin 导出：二进制文件需读真实字节而非占位标记。
+    /// 用于 .qplugin 导出：二进制文件需读真实字节而非占位标记。
     pub fn read_plugin_file_bytes(&self, plugin_id: &str, file: &str) -> Result<String, String> {
         let file = file.trim();
         if file.is_empty() {
@@ -1087,7 +1087,7 @@ pub fn read_local_plugin_file(
 }
 
 /// 命令：读取本地插件文件的**字节**（base64 编码返回），对称于 read_local_plugin_file。
-/// .lfplugin v3 导出路径用：二进制文件（字体/图片/音频）需读真实字节而非占位标记。
+/// .qplugin v3 导出路径用：二进制文件（字体/图片/音频）需读真实字节而非占位标记。
 #[tauri::command]
 pub fn read_local_plugin_file_bytes(
     state: tauri::State<'_, PluginStore>,
@@ -1116,7 +1116,7 @@ pub fn write_plugin_files(
     state.write_files(&plugin_id, &pairs)
 }
 
-/// 命令：写单个**二进制**文件到 plugins_root/<plugin_id>/（.lfplugin v3 导入路径用）。
+/// 命令：写单个**二进制**文件到 plugins_root/<plugin_id>/（.qplugin v3 导入路径用）。
 /// content_base64 为标准 base64 编码的字节，解码后走 write_file_bytes（与 write_files 同款 path 白名单）。
 #[tauri::command]
 pub fn write_plugin_file_bytes(

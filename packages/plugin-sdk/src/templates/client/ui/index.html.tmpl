@@ -8,8 +8,8 @@
     body {
       font-family: system-ui, sans-serif;
       margin: 24px;
-      background: var(--lf-bg, #fff);
-      color: var(--lf-fg, #111);
+      background: var(--qx-bg, #fff);
+      color: var(--qx-fg, #111);
     }
     button { padding: 8px 16px; cursor: pointer; }
   </style>
@@ -21,7 +21,7 @@
   <pre id="out"></pre>
   <script>
     // client 插件：window.sdk 由宿主在 iframe 加载前注入。
-    // TS 用户可：import type { ClientPluginEntry } from '@lingfang/plugin-sdk/types/client-entry'
+    // TS 用户可：import type { ClientPluginEntry } from '@qianxia/plugin-sdk/types/client-entry'
     //          然后声明：declare const sdk: ClientPluginEntry
     /** @type {any} */
     const sdk = window.sdk;
@@ -31,7 +31,7 @@
         return;
       }
       const reply = await sdk.llm.chat({
-        messages: [{ role: 'user', content: '你好，请用一句话介绍 LingFang 平台。' }],
+        messages: [{ role: 'user', content: '你好，请用一句话介绍 QianXia 平台。' }],
       });
       document.getElementById('out').textContent = reply;
     });

@@ -1,24 +1,24 @@
 #!/usr/bin/env node
-// e2e-relay-verify.mjs — LF-04a 真实凭据实操 harness（G1 notes AI 摘要闭环）。
+// e2e-relay-verify.mjs — QX-04a 真实凭据实操 harness（G1 notes AI 摘要闭环）。
 //
 // 与 e2e-desktop-smoke.mjs 同一驱动手法（tauri debug 产物 + WebView2 远程调试 + Playwright
 // connectOverCDP），但目标不同：在**已注入真实 relay 凭据**的前提下，打开内置 notes 并触发
 // llm.chat，断言返回**真实 LLM 输出**（非 relay_not_configured、非 mock）。
 //
 // 凭据注入（满足「凭据不进仓库 / 不进设置 UI / 不落盘」验收）：
-//   - 经环境变量 LINGFANG_RELAY_API_BASE / LINGFANG_RELAY_TOKEN 传入本脚本；
+//   - 经环境变量 QIANXIA_RELAY_API_BASE / QIANXIA_RELAY_TOKEN 传入本脚本；
 //   - 本脚本把它们透传进桌面进程 env（Rust 侧 client_ai_proxy::require_relay 的 env-var fallback 读取）；
 //   - 完全不走 set_relay_settings / 磁盘 config.json / SettingsPanel。
 //
-// 假阳性防护（LF-04a 验收硬要求）：凭据缺失时**立即明确提示并以 exit 2 退出**，绝不假装通过。
+// 假阳性防护（QX-04a 验收硬要求）：凭据缺失时**立即明确提示并以 exit 2 退出**，绝不假装通过。
 //
 // 退出码约定：
 //   0  = 真实闭环跑通（有凭据且 notes AI 摘要返回真实输出）
-//   2  = 凭据缺失，跳过真实闭环（预期行为，非失败；供 LF-04b 待凭据）
+//   2  = 凭据缺失，跳过真实闭环（预期行为，非失败；供 QX-04b 待凭据）
 //   1  = 真实闭环执行失败（有凭据但断言未通过 / 上游 relay_error / 启动超时等）
 //
 // 用法（cwd = 仓库根）：
-//   LINGFANG_RELAY_API_BASE=https://relay.example.com/v1 LINGFANG_RELAY_TOKEN=xxx \
+//   QIANXIA_RELAY_API_BASE=https://relay.example.com/v1 QIANXIA_RELAY_TOKEN=xxx \
 //     node scripts/e2e-relay-verify.mjs
 //   E2E_SKIP_BUILD=1 node scripts/e2e-relay-verify.mjs   # 复用已有 target/debug 产物
 
@@ -37,7 +37,7 @@ const requireFromDesktop = createRequire(path.join(desktopDir, 'package.json'));
 const { chromium } = requireFromDesktop('@playwright/test');
 
 const NOTES_NAME = 'Markdown 笔记'; // builtin-plugins/notes/manifest.json name
-const EXE_CANDIDATES = ['lingfang-desktop.exe', '灵坊工作台.exe', 'main.exe'];
+const EXE_CANDIDATES = ['qianxia-desktop.exe', '千匣台.exe', 'main.exe'];
 const OVERALL_TIMEOUT_MS = 5 * 60 * 1000;
 
 function log(msg) {
@@ -105,22 +105,22 @@ function assert(cond, label) {
 
 async function run() {
   // ── 凭据缺失：明确跳过，绝不假阳性（exit 2） ──
-  const apiBase = process.env.LINGFANG_RELAY_API_BASE?.trim();
-  const token = process.env.LINGFANG_RELAY_TOKEN?.trim();
+  const apiBase = process.env.QIANXIA_RELAY_API_BASE?.trim();
+  const token = process.env.QIANXIA_RELAY_TOKEN?.trim();
   if (!apiBase || !token) {
     console.error(
-      '[e2e-relay] ⚠ 缺少 relay 凭据环境变量，跳过真实闭环（LF-04b 待凭据）。\n' +
+      '[e2e-relay] ⚠ 缺少 relay 凭据环境变量，跳过真实闭环（QX-04b 待凭据）。\n' +
         '            这是预期行为，非失败。提供后重跑即可：\n' +
-        '            LINGFANG_RELAY_API_BASE=https://<relay>/v1 LINGFANG_RELAY_TOKEN=<token> \\\n' +
+        '            QIANXIA_RELAY_API_BASE=https://<relay>/v1 QIANXIA_RELAY_TOKEN=<token> \\\n' +
         '              node scripts/e2e-relay-verify.mjs',
     );
     process.exit(2);
   }
   // 与 Rust require_relay 的 is_allowed_api_base 保持一致：https 恒允许；
-  // 明文 http 仅限环回地址（LF-04b 本地适配器路径）。
+  // 明文 http 仅限环回地址（QX-04b 本地适配器路径）。
   const loopbackHttp = /^http:\/\/(127\.0\.0\.1|localhost)(:\d+)?($|\/)/i.test(apiBase);
   if (!/^https:\/\//i.test(apiBase) && !loopbackHttp) {
-    console.error(`[e2e-relay] ✗ LINGFANG_RELAY_API_BASE 必须是 https 地址（或环回 http，当前：${apiBase}）`);
+    console.error(`[e2e-relay] ✗ QIANXIA_RELAY_API_BASE 必须是 https 地址（或环回 http，当前：${apiBase}）`);
     process.exit(1);
   }
   log('检测到 relay 凭据环境变量，开始真实闭环验证（凭据仅存于进程环境，不落盘/不进仓库）');
@@ -141,8 +141,8 @@ async function run() {
     env: {
       ...process.env,
       // 透传凭据到桌面进程（Rust require_relay 的 env-var fallback 读取）—— 不经设置 UI / 磁盘。
-      LINGFANG_RELAY_API_BASE: apiBase,
-      LINGFANG_RELAY_TOKEN: token,
+      QIANXIA_RELAY_API_BASE: apiBase,
+      QIANXIA_RELAY_TOKEN: token,
       WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${port}`,
     },
     stdio: 'ignore',
@@ -230,7 +230,7 @@ async function run() {
 
     // 5. image.generate / video.generate 网关 gate 负向证明：notes 未声明这些 kind，
     //    应被 capability 网关拒绝（capability_not_declared）。正向 4-kind 真机闭环
-    //    （需声明这些 kind 的插件 + 真实/适配器 relay）列入 LF-12 未验证项。
+    //    （需声明这些 kind 的插件 + 真实/适配器 relay）列入 QX-12 未验证项。
     const gated = await inFrame(async () => {
       const out = {};
       for (const kind of ['image.generate', 'video.generate']) {

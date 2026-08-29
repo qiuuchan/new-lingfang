@@ -5,7 +5,7 @@ import {
   inferMarketplaceCategory,
   MARKETPLACE_QUALITY_POLICY_V1,
 } from './marketplace-discovery.ts';
-import { PluginCatalogItem } from '@lingfang/contract';
+import { PluginCatalogItem } from '@qianxia/contract';
 import { MarketplaceCategory, MarketplaceQualityTier } from './web-plugin-center.ts';
 
 test('quality/category enums expose only the public three-tier and nine-category vocabulary', () => {

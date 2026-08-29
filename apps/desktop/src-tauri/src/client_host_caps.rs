@@ -46,7 +46,7 @@ fn err_kv(msg: impl Into<String>) -> String {
     format!("kv_error:{}", msg.into())
 }
 
-/// LF-05 / g2-sdk-friction #5：配额类错误用独立可识别前缀（kv_value_too_large /
+/// QX-05 / g2-sdk-friction #5：配额类错误用独立可识别前缀（kv_value_too_large /
 /// kv_quota_exceeded），宿主 normalizeCapabilityError 与文档据此给稳定 code，
 /// 插件才能可靠地提示「已达上限」而非静默降级掩盖真实错误。
 fn err_kv_code(code: &str, msg: impl Into<String>) -> String {
@@ -174,7 +174,7 @@ pub fn client_storage_kv(
     let data_dir = resolve_data_dir(&manager, &plugin_id)?;
     let mut map = load_kv_map(&data_dir)?;
     let out = kv_apply(&mut map, &args)?;
-    // 落盘条件：set 与 delete 都会改变持久状态（LF-07 修正——原仅 set 落盘，
+    // 落盘条件：set 与 delete 都会改变持久状态（QX-07 修正——原仅 set 落盘，
     // delete 后重启应用会复活已删条目）。get/list/count 为只读，不落盘。
     let op = args.get("op").and_then(|v| v.as_str()).unwrap_or("");
     if op == "set" || op == "delete" {
@@ -333,7 +333,7 @@ mod tests {
         assert!(load_kv_map(dir.path()).is_err());
     }
 
-    // --- LF-07：管理 API op ---
+    // --- QX-07：管理 API op ---
 
     #[test]
     fn list_prefix_filter() {

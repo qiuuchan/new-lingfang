@@ -134,7 +134,7 @@ mod tests {
     #[test]
     fn parse_manifest_exports_runtime_type() {
         let dir = std::env::temp_dir().join(format!(
-            "lf-builtin-plugin-runtime-{}",
+            "qx-builtin-plugin-runtime-{}",
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()

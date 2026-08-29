@@ -1,4 +1,4 @@
-//! LingFang 桌面壳（Tauri 2，见 ADR-0001 / ADR-0004）。
+//! QianXia 桌面壳（Tauri 2，见 ADR-0001 / ADR-0004）。
 //! 极简工作台 + 插件加载器 + capability 权限网关。
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
@@ -75,7 +75,7 @@ fn resolve_host_addrs(host: &str) -> Result<Vec<std::net::IpAddr>, ()> {
     Ok(addrs.map(|a| a.ip()).collect())
 }
 
-/// 注入式 SSRF 判定（LF-19：真实域名 DNS fail-closed 的稳定单测由此可控 resolver 提供）。
+/// 注入式 SSRF 判定（QX-19：真实域名 DNS fail-closed 的稳定单测由此可控 resolver 提供）。
 /// 语义与 `is_blocked_host` 完全一致，仅解析实现可替换：
 /// - 字面 IP / localhost：纯判定，不触网；
 /// - 域名：解析结果逐地址检查，**解析失败一律拦截**（fail-closed——宁可误拦不可放行）。
@@ -156,7 +156,7 @@ async fn start_builtin_plugin(
     let bridge = bridge.inner().clone();
     let manager = manager.inner().clone();
     let plugin_id_for_runner = plugin_id.clone();
-    // LF-06：action_invocation=true 时，以「action invocation」会话启动内置进程插件，
+    // QX-06：action_invocation=true 时，以「action invocation」会话启动内置进程插件，
     // 武装 action_invocation_id + action_context（经 register_action_session），
     // 使其能合法调用桥路由 /actions/call（验证 client-action 桥真机闭环）。
     // 否则维持原有 start_plugin_from_dir（register_session，无 action 上下文）。
@@ -229,7 +229,7 @@ async fn plugin_net_fetch(
     // 2) 构建请求（reqwest 从 Rust 进程发，不受 webview CORS 约束）。
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(30))
-        .user_agent("LingFang-Desktop-Plugin")
+        .user_agent("QianXia-Desktop-Plugin")
         // SSRF 兜底：跟随重定向时再次校验目标主机，阻断「公网跳转内网」绕过。
         .redirect(reqwest::redirect::Policy::custom(|attempt| {
             let host = extract_host(attempt.url().as_str()).unwrap_or_default();
@@ -358,7 +358,7 @@ fn setup_tray(app: &tauri::App) -> Result<(), tauri::Error> {
     let menu = Menu::with_items(app, &[&show_item, &sep, &quit_item])?;
     TrayIconBuilder::with_id("main-tray")
         .icon(app.default_window_icon().unwrap().clone())
-        .tooltip("灵坊")
+        .tooltip("千匣")
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_menu_event(|app, event| match event.id.as_ref() {
@@ -395,7 +395,7 @@ fn main() {
             // task 06-16 组A：插件持久化目录存储（plugins_root 配置 + 目录定位 + 状态扫描）。
             // 组B 的 start_plugin/stop_plugin 经此 State 的 ensure_plugin_dir 解析插件目录，
             // scan_plugin_status 据此扫文件系统判 ready/incomplete/error + 合并组B 内存进程表判 running。
-            // 配置落 app_data_dir/plugins/.lingfang/config.json（原子写），默认 plugins_root = app_data_dir/plugins。
+            // 配置落 app_data_dir/plugins/.qianxia/config.json（原子写），默认 plugins_root = app_data_dir/plugins。
             let plugin_store = plugin_store::PluginStore::new(
                 &app.path().app_data_dir().map_err(|e| e.to_string())?,
             )?;
@@ -557,8 +557,8 @@ fn main() {
             plugin_package_manager::commands::mark_draft_workspace_published,
             plugin_package_manager::commands::delete_draft_workspace,
             plugin_package_manager::commands::sync_draft_workspace_metadata,
-            plugin_package_manager::commands::inspect_lfplugin_v4,
-            plugin_package_manager::commands::sha256_lfplugin,
+            plugin_package_manager::commands::inspect_qplugin_v4,
+            plugin_package_manager::commands::sha256_qplugin,
             plugin_package_manager::network::install_plugin_from_url,
             plugin_security::verify_plugin_signature_command,
             plugin_security::check_plugin_recall_command,
@@ -568,7 +568,7 @@ fn main() {
             update::apply_update
         ])
         .run(tauri::generate_context!())
-        .expect("启动 LingFang 桌面壳失败");
+        .expect("启动 QianXia 桌面壳失败");
 }
 
 #[cfg(test)]
@@ -664,7 +664,7 @@ mod tests {
         assert!(!is_blocked_host("8.8.8.8"));
     }
 
-    // ── LF-19：真实域名 DNS fail-closed 稳定化——可控 resolver 注入（不触真实 DNS） ──
+    // ── QX-19：真实域名 DNS fail-closed 稳定化——可控 resolver 注入（不触真实 DNS） ──
     /// 公网域名 → 解析出公网地址 → 放行。
     #[test]
     fn is_blocked_host_with_public_domain_allowed() {

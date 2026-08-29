@@ -1,4 +1,4 @@
-//! e2e-kb-station-verify.mjs — LF-23 R1 真用插件（知识库工作站）真机闭环。
+//! e2e-kb-station-verify.mjs — QX-23 R1 真用插件（知识库工作站）真机闭环。
 //!
 //! CDP 驱动 kb-station iframe 内 `window.__kb` 钩子（与按钮同路径），走
 //! 导入 → 列表 → 持久化 → 检索 → LLM 问答 全链：
@@ -22,9 +22,9 @@ const requireFromDesktop = createRequire(path.resolve('apps/desktop/package.json
 const { chromium } = requireFromDesktop('@playwright/test');
 
 const REPO_ROOT = process.cwd();
-const MAIN_EXE = 'lingfang-desktop.exe';
-const PLUGIN = { id: 'com.lingfang.kb-station', name: '知识库工作站' };
-const KB_ARTIFACT = path.join(REPO_ROOT, 'packages/plugin-sdk', 'com.lingfang.kb-station-0.1.0.lfplugin');
+const MAIN_EXE = 'qianxia-desktop.exe';
+const PLUGIN = { id: 'com.qianxia.kb-station', name: '知识库工作站' };
+const KB_ARTIFACT = path.join(REPO_ROOT, 'packages/plugin-sdk', 'com.qianxia.kb-station-0.1.0.qplugin');
 
 let failed = 0;
 const log = (msg) => console.log(`[e2e-kb] ${msg}`);
@@ -55,7 +55,7 @@ function isElevated() {
 }
 
 async function spawnElevated(exe, env) {
-  const taskName = `LingFangE2E_${process.pid}_${Date.now()}`;
+  const taskName = `QianXiaE2E_${process.pid}_${Date.now()}`;
   const launcherPath = path.join(os.tmpdir(), `${taskName}.bat`);
   const bat = [
     '@echo off',
@@ -169,13 +169,13 @@ function killTree(pid) {
 // ── 主流程 ───────────────────────────────────────────────────────────────
 
 async function run() {
-  const tmpRoot = path.join(os.tmpdir(), `lingfang-kb-e2e-${Date.now()}`);
+  const tmpRoot = path.join(os.tmpdir(), `qianxia-kb-e2e-${Date.now()}`);
   fs.mkdirSync(tmpRoot, { recursive: true });
   const webviewData = path.join(tmpRoot, 'webview-data');
   let appHandle = null;
   let adapter = null;
   const port = await freePort();
-  const KB_DOC = '灵坊工作台是一个零服务器的 Tauri v2 桌面插件平台。' +
+  const KB_DOC = '千匣台是一个零服务器的 Tauri v2 桌面插件平台。' +
     '它运行第三方插件，所有特权调用都经过能力网关检查。' +
     '客户端插件在沙箱 iframe 中运行，nodejs 与 python 插件是普通操作系统进程。' +
     '插件的安全模型分三档：iframe 沙箱、进程生命周期围栏、安装时信任。';
@@ -197,8 +197,8 @@ async function run() {
     const exe = path.join(REPO_ROOT, 'target/release', MAIN_EXE);
     if (!fs.existsSync(exe)) throw new Error(`未找到 release 桌面壳：${exe}`);
     appHandle = spawnShell(exe, port, webviewData, {
-      LINGFANG_RELAY_API_BASE: `http://127.0.0.1:${adapterPort}`,
-      LINGFANG_RELAY_TOKEN: 'mock-token',
+      QIANXIA_RELAY_API_BASE: `http://127.0.0.1:${adapterPort}`,
+      QIANXIA_RELAY_TOKEN: 'mock-token',
     });
     await waitForCdp(port, 90_000);
     const { browser, page } = await connectPage(port);
@@ -245,7 +245,7 @@ async function run() {
     await row.getByRole('button', { name: '运行', exact: true }).click();
     await page.locator('iframe[sandbox="allow-scripts"]', { hasTitle: '知识库工作站' }).waitFor({ state: 'visible', timeout: 30_000 });
     // ⚠️ 用 frame.evaluate（page 同款参数语义）；locator.evaluate 会把数组参数
-    // 序列化成空对象（LF-23 实测：['a','b'] → {} → 解构报 object is not iterable）。
+    // 序列化成空对象（QX-23 实测：['a','b'] → {} → 解构报 object is not iterable）。
     // frame 定位按「嵌套 iframe」取（srcdoc 的 url 在 Playwright 里是 about:srcdoc）。
     const kbFrame = page.frames().find((f) => f.parentFrame() !== null);
     assert(kbFrame, '找到 kb-station iframe');
@@ -256,11 +256,11 @@ async function run() {
     const importResult = await kbEval(async ([title, text]) => {
       const r = await window.__kb.importText(title, text);
       return { id: r.id, chunks: r.chunks };
-    }, ['e2e-灵坊安全模型', KB_DOC]);
+    }, ['e2e-千匣安全模型', KB_DOC]);
     assert(importResult.chunks >= 1, `粘贴导入生成 ${importResult.chunks} 个切片`);
 
     const docs = await kbEval(() => window.__kb.listDocs());
-    const found = docs.find((d) => d.title === 'e2e-灵坊安全模型');
+    const found = docs.find((d) => d.title === 'e2e-千匣安全模型');
     assert(Boolean(found), `listDocs 包含导入文档（${docs.length} 篇，标题=${found?.title}）`);
 
     // 5. 关键词检索（客户端 JS 打分）
@@ -294,7 +294,7 @@ async function run() {
 
     // 7. fs.read 白名单闭环：$HOME/Documents 下建测试文件并读取导入
     const docFile = path.join(os.homedir(), 'Documents', 'kb-e2e-note.md');
-    fs.writeFileSync(docFile, '灵坊工作台的 fs.read 能力要求路径白名单声明。\n本文件用于 LF-23 e2e 验证。', 'utf8');
+    fs.writeFileSync(docFile, '千匣台的 fs.read 能力要求路径白名单声明。\n本文件用于 QX-23 e2e 验证。', 'utf8');
     const fsRead = await kbEval(async (p) => {
       try {
         const content = await window.sdk.fs.read(p);
@@ -341,7 +341,7 @@ async function run() {
     const docsAfter = await kbEval2(() => window.__kb.listDocs());
     const titles = docsAfter.map((d) => d.title);
     assert(
-      titles.includes('e2e-灵坊安全模型') && titles.includes('e2e-文件导入'),
+      titles.includes('e2e-千匣安全模型') && titles.includes('e2e-文件导入'),
       `reload 后文档持久化（${titles.join(' / ')}）`,
     );
 

@@ -410,7 +410,7 @@ mod tests {
     /// resolve_cwd 的 starts_with 断言依赖 plugin_dir 已 canonicalize（否则 \\?\ 前缀不一致）。
     fn temp_plugin_dir() -> PathBuf {
         let dir = std::env::temp_dir().join(format!(
-            "lf-shell-test-{}",
+            "qx-shell-test-{}",
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()

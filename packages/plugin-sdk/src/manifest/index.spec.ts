@@ -13,7 +13,7 @@ import {
   ruleDuplicateCapability,
   ruleUnsafeEntryPath,
 } from './rules.ts';
-import type { PluginManifest } from '@lingfang/contract';
+import type { PluginManifest } from '@qianxia/contract';
 
 // 现有插件（内置出厂 3 个）的 manifest.json（静态 import，vitest 直接支持）
 import game2048Manifest from '../../../../apps/desktop/builtin-plugins/game-2048/manifest.json';

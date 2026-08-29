@@ -1,7 +1,7 @@
 // PluginRunner.tsx — 插件运行器（零服务器架构）。
 //
 // - client 运行时：在 sandbox iframe 内渲染 entry HTML（经 read_plugin_file 读取，防穿越），
-//   注入 window.sdk / window.__lingfangInvoke，把插件的能力调用经 invokeRuntime 接到 Rust 网关。
+//   注入 window.sdk / window.__qianxiaInvoke，把插件的能力调用经 invokeRuntime 接到 Rust 网关。
 // - nodejs/python 运行时：以独立进程运行（GUI 自行弹窗），本页仅展示运行状态占位。
 // - cloud/workflow 运行时：本地桌面壳不支持，渲染明确占位（需平台云）。
 import { useEffect, useRef, useState, useCallback } from 'react';
@@ -13,7 +13,7 @@ import { CLIENT_SDK_BOOTSTRAP } from '@/lib/clientSdkBootstrap';
 import { initClientActionBridge } from '@/lib/clientActionBridge';
 import { registerClientActionsForPlugin } from '@/lib/clientActionRegistry';
 // @ts-ignore - vite/client 提供 *.css?inline 的类型；无类型时仍由 Vite 构建期解析。
-import uiTokensCss from '@lingfang/ui-tokens/tokens.css?inline';
+import uiTokensCss from '@qianxia/ui-tokens/tokens.css?inline';
 
 const UI_TOKENS_STYLE = `<style>${uiTokensCss}</style>`;
 

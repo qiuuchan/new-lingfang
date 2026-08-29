@@ -1,6 +1,6 @@
 # 插件开发说明（Plugin Development）
 
-本说明面向 **LingFang 插件**（`灵坊工作台`）的作者。该工作台是一个 **Tauri v2 桌面插件平台**，
+本说明面向 **QianXia 插件**（`千匣台`）的作者。该工作台是一个 **Tauri v2 桌面插件平台**，
 采用 **零服务端模型（zero-server）**：仓库内没有后端，所有插件执行、能力鉴权、文件/网络访问
 都通过 Tauri 命令、本地文件系统和随应用打包的语言运行时（Node / Python / Chromium / ffmpeg）完成。
 
@@ -43,7 +43,7 @@
 - `actions[]`：插件对外暴露的动作。
 - `shared_namespaces[]`：共享状态命名空间。
 
-完整类型以 `@lingfang/contract` 包为准（该包是 host↔plugin 类型的**唯一事实来源**）。
+完整类型以 `@qianxia/contract` 包为准（该包是 host↔plugin 类型的**唯一事实来源**）。
 
 ---
 
@@ -70,9 +70,9 @@
 因此，**插件作者必须如实声明每一项用到的能力**，未声明的 kind 调用会被网关直接拒绝
 （`capability_not_declared`）。
 
-**fs.read / fs.write 的 paths 白名单（LF-23 起强制）**：这两个能力必须在 capability 里声明
+**fs.read / fs.write 的 paths 白名单（QX-23 起强制）**：这两个能力必须在 capability 里声明
 `paths` 数组（支持 `$HOME` 模板，如 `["$HOME/Documents"]`），白名单外的路径一律拒绝
-（`capability_out_of_scope`）。从 LF-23 起 `lingfang-plugin validate` 会拒绝「声明了
+（`capability_out_of_scope`）。从 QX-23 起 `qianxia-plugin validate` 会拒绝「声明了
 fs.read/fs.write 却没有 paths」的 manifest（规则 `fs_scope_requires_paths`）——空白名单意味着
 该能力恒被拒，是配置错误而非运行时报错。
 
@@ -88,21 +88,21 @@ fs.read/fs.write 却没有 paths」的 manifest（规则 `fs_scope_requires_path
 目录返回 `{ entries, truncated }`（4096 条目上限）；`fs.write` 校验**父目录**在白名单内
 （支持新建文件）。
 
-进程隔离：插件进程运行于 Windows Job Object 沙箱中；`.lfplugin` 包通过 minisign 签名校验，
+进程隔离：插件进程运行于 Windows Job Object 沙箱中；`.qplugin` 包通过 minisign 签名校验，
 并对照召回（recall）列表检查。
 
 ---
 
-## 4. 本地开发工作流（lingfang-plugin CLI）
+## 4. 本地开发工作流（qianxia-plugin CLI）
 
-SDK 提供 `lingfang-plugin` 命令，覆盖插件全生命周期：
+SDK 提供 `qianxia-plugin` 命令，覆盖插件全生命周期：
 
 ```bash
-lingfang-plugin create      # 从 client / nodejs / python 模板脚手架，生成 manifest.json、入口与 README
-lingfang-plugin validate    # Zod schema + 业务规则双层校验；cloud/workflow 会提示非阻塞警告
-lingfang-plugin build       # 通过 archive.ts 打包为 .lfplugin v4（请勿手动 zip）
-lingfang-plugin publish     # 上传至插件注册中心
-lingfang-plugin dev <dir>   # 把插件目录注册为 dev 安装（免打包直读，v1 仅 client 运行时；v2 改文件自动重载）
+qianxia-plugin create      # 从 client / nodejs / python 模板脚手架，生成 manifest.json、入口与 README
+qianxia-plugin validate    # Zod schema + 业务规则双层校验；cloud/workflow 会提示非阻塞警告
+qianxia-plugin build       # 通过 archive.ts 打包为 .qplugin v4（请勿手动 zip）
+qianxia-plugin publish     # 上传至插件注册中心
+qianxia-plugin dev <dir>   # 把插件目录注册为 dev 安装（免打包直读，v1 仅 client 运行时；v2 改文件自动重载）
 ```
 
 校验（`validate`）的退出码约定：**存在阻塞性错误 → 退出码 1**；仅存在警告 → 退出码 0（校验通过）。
@@ -110,7 +110,7 @@ lingfang-plugin dev <dir>   # 把插件目录注册为 dev 安装（免打包直
 
 ### dev 安装（免打包直读）
 
-`lingfang-plugin dev <dir>` 把开发中的插件目录直接注册为 **dev 安装**（origin=`dev`），
+`qianxia-plugin dev <dir>` 把开发中的插件目录直接注册为 **dev 安装**（origin=`dev`），
 跳过 `build` 的打包环节：宿主直接读取 `<dir>` 下的 `manifest.json` 与入口文件。
 
 - **v1（当前）**：仅支持 `client` 运行时。这与本地导入三方插件仅限 client 的政策一致
@@ -125,14 +125,14 @@ lingfang-plugin dev <dir>   # 把插件目录注册为 dev 安装（免打包直
 
 ### CLI 命令形态（本仓库内开发）
 
-仓库内推荐用以下形态运行 CLI（`bin` 链接可能未建立，`pnpm exec lingfang-plugin` 会报
+仓库内推荐用以下形态运行 CLI（`bin` 链接可能未建立，`pnpm exec qianxia-plugin` 会报
 `Command not found`）：
 
 ```bash
 # 相对 packages/plugin-sdk 的短路径
 pnpm -C packages/plugin-sdk cli:dev -- validate examples/clip-digest
 pnpm -C packages/plugin-sdk cli:dev -- build   examples/clip-digest
-# 也接受仓库根相对路径（LF-05 起自动归一化，不再二次拼接）
+# 也接受仓库根相对路径（QX-05 起自动归一化，不再二次拼接）
 pnpm -C packages/plugin-sdk cli:dev -- validate packages/plugin-sdk/examples/clip-digest
 # 或根 package.json 脚本（底层仍是同一 CLI）
 pnpm plugin:validate
@@ -143,10 +143,10 @@ CLI 的路径参数（`validate` / `build` / `publish` / `dev`）解析规则：
 相对路径先按当前工作目录、再按仓库（pnpm 工作区）根解析——两种相对写法都可用，
 不再有「传错相对基准导致路径翻倍」的坑。
 
-#### `--quiet` 机器可读输出（LF-08 / J3）
+#### `--quiet` 机器可读输出（QX-08 / J3）
 
 `validate` / `build` / `publish` / `dev` 支持 `--quiet` 标志：人类可读的多行日志被抑制，
-**仅逐行输出错误 `code`**，便于脚本解析（如 `lingfang-plugin validate . --quiet | while read code; do ...`）。
+**仅逐行输出错误 `code`**，便于脚本解析（如 `qianxia-plugin validate . --quiet | while read code; do ...`）。
 `--json` 保持不变（结构化输出优先）。`build` 的错误对象已与 `validate` 对齐，新增 `path` 字段
 （`{ code, path, message }`）。
 
@@ -156,7 +156,7 @@ CLI 的路径参数（`validate` / `build` / `publish` / `dev`）解析规则：
 ### 零服务端模型要点（回顾）
 
 1. 没有后端服务；所有能力由桌面宿主在本地执行。
-2. 插件通过宿主注入的桥接（`window.__lingfangInvoke` 或本地 HTTP 桥）调用特权能力，不直连外部。
+2. 插件通过宿主注入的桥接（`window.__qianxiaInvoke` 或本地 HTTP 桥）调用特权能力，不直连外部。
 3. 语言运行时由 `RuntimeResolver` 统一解析，**只读取随应用打包的 `runtimes/`**，不查系统 PATH，
    并注入国内镜像（Tsinghua PyPI / npmmirror npm）。
 
@@ -166,18 +166,18 @@ CLI 的路径参数（`validate` / `build` / `publish` / `dev`）解析规则：
 
 **统一以 `code` 判断错误，不要解析中文文案或 message 前缀。**
 
-插件拿到能力错误时，不同运行形态下结构已对齐（LF-05 / g2-sdk-friction #1）：
+插件拿到能力错误时，不同运行形态下结构已对齐（QX-05 / g2-sdk-friction #1）：
 
 - **client 插件（iframe 内 `window.sdk`）**：宿主 `plugins-runtime.ts` 归一化，
   错误对象带稳定 `code` 字段。
-- **nodejs / python 插件（npm 包 `@lingfang/plugin-sdk`）**：`sdk.llm.*` 类 AI 调用
+- **nodejs / python 插件（npm 包 `@qianxia/plugin-sdk`）**：`sdk.llm.*` 类 AI 调用
   统一抛出 `PluginAiError`，`code` 与 client 形态一致；其余能力错误为裸字符串
   `前缀: 中文文案` 形态，`code` 即前缀本身。
 
 标准降级范式（relay 凭据未配置时优雅降级，不崩溃不白屏）：
 
 ```ts
-import { sdk, PluginAiErrorCode } from '@lingfang/plugin-sdk';
+import { sdk, PluginAiErrorCode } from '@qianxia/plugin-sdk';
 
 try {
   const summary = await sdk.llm.chat({ messages: [{ role: 'user', content: text }] });
@@ -219,7 +219,7 @@ try {
 SDK 与宿主**各有一层超时计时，取先到者**——不要依赖单侧等待时间。AI 长文摘要
 （约 3 分钟档位）够用；调用级覆盖见下。
 
-#### 调用级 timeoutMs 覆盖（LF-08）
+#### 调用级 timeoutMs 覆盖（QX-08）
 
 四个 AI 输入型（`llm.chat` / `image.generate` / `image.edit` / `video.generate`）
 支持可选的 `timeoutMs?: number`：
@@ -268,7 +268,7 @@ await sdk.ui.render({ type: 'json', body: { ok: true, count: 3 } });
 超限时 `set` 会 reject 稳定码 `kv_value_too_large` / `kv_quota_exceeded`——**不要**静默
 降级到其他存储（如 localStorage）掩盖真实错误，应提示用户或实现淘汰策略。
 
-### storage.kv 管理 API（LF-07）
+### storage.kv 管理 API（QX-07）
 
 除 `get` / `set` 外，宿主还提供三个管理 op（同样走 `storage.kv` 网关，受 `storage.kv`
 能力声明与 30s 超时约束）：
@@ -322,6 +322,6 @@ async function setWithEviction(key: string, value: unknown) {
 
 ## 6. 参考
 
-- 类型与契约：`packages/contract`（`@lingfang/contract`）
-- 插件 SDK 与 CLI：`packages/plugin-sdk`（`@lingfang/plugin-sdk`）
+- 类型与契约：`packages/contract`（`@qianxia/contract`）
+- 插件 SDK 与 CLI：`packages/plugin-sdk`（`@qianxia/plugin-sdk`）
 - 桌面壳与 Rust 引擎：`apps/desktop`（Tauri v2）

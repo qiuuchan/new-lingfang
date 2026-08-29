@@ -1,4 +1,4 @@
-# 灵坊工作台 实施计划(基于代码核实 · 二次修订;三次修订为执行回填)
+# 千匣台 实施计划(基于代码核实 · 二次修订;三次修订为执行回填)
 
 > 本文档经两轮代码核实。第二轮结论:**证伪一处断言**(`../../scripts/` 路径 bug 不存在,
 > 实测可正常加载脚本)、**反转一处建议**(锁文件不应移入 gitignored 的 `runtimes/`)、
@@ -18,7 +18,7 @@
 |---|---|---|
 | runtime 物料 | 锁文件存在但路径错位 | **属实**。锁在 `apps/desktop/runtime-lock.json`(83 行,已入库);两脚本(`materialize-bundled-runtimes.mjs:20`、`verify-bundled-runtimes.mjs:11`)按 `runtimes/runtime-lock.json` 找。实测 `cd apps/desktop && node ../../scripts/materialize-bundled-runtimes.mjs` → `missing lock file: ...\apps\desktop\runtimes\runtime-lock.json`。`runtime-parts/` 缺失属实。 |
 | ~~脚本路径 bug~~ | `../../scripts/` 会解析到 `apps/scripts/` | **证伪,撤销**。从 `apps/desktop` 出发 `../../` 即仓库根,`../../scripts/` 存在;上面那条实测命令证明 node 成功加载并运行了脚本,失败点是锁路径而非模块解析。`apps/desktop/package.json:11-12` 无 bug。 |
-| client 桥接收端 | adapter 完整但无调用方 | **属实**。`executeClientActionAdapter`(`:142`)、`onMessage`(`:189`)、`__lingfangInvoke` 注入(`:118`)、`__lf_client_action_call` 监听齐全;但全仓仅 `plugin-action-client-adapter.spec.ts` 引用,生产代码零调用方。`PluginRunner.tsx` 纯占位(38 行,无 iframe、无 adapter 调用)。且模板 `index.html.tmpl:27` 期望宿主注入完整 `window.sdk` 外观对象。 |
+| client 桥接收端 | adapter 完整但无调用方 | **属实**。`executeClientActionAdapter`(`:142`)、`onMessage`(`:189`)、`__qianxiaInvoke` 注入(`:118`)、`__lf_client_action_call` 监听齐全;但全仓仅 `plugin-action-client-adapter.spec.ts` 引用,生产代码零调用方。`PluginRunner.tsx` 纯占位(38 行,无 iframe、无 adapter 调用)。且模板 `index.html.tmpl:27` 期望宿主注入完整 `window.sdk` 外观对象。 |
 | action 桥事件链 | 未提及 | **新增缺口**。Rust 侧 `/actions/call` 路由会 `emit("plugin-action-bridge-call")`(`plugin_llm_bridge.rs:609`),前端处理后由 `respond_plugin_action_bridge` 命令(`:352`)回传结果——这才是 `executeClientActionAdapter` 的设计调用方。前端对该事件的监听 **grep 为空**,链路断在最后一环。 |
 | 能力注册表覆盖面 | 未提及 | **新增缺口**。`registry.register` 全仓仅 `plugins.rs:99` 一处,只被 `main.rs:371` 以**内置插件** release 目录调用。市场安装/本地插件从不注册 → `invoke_capability` 对它们恒返回 `NotDeclared`。即 A 阶段打通后,内置插件可用,安装插件的能力调用仍全灭。 |
 | 网关 5/17 | 其余 NotSupported,TS 无落点 | **属实**。`capability.rs:107-118` 仅分派 fs.read / fs.write / system.info / clipboard / system.screenshot。指向不存在的 `plugins-runtime.ts` 的注释共 **三处**:`capability.rs:113-116`、`capability.rs:251-252`(原清单漏)、`plugin-sdk/src/index.ts:140,353`。 |
@@ -26,11 +26,11 @@
 
 ### 关键架构补充:client 侧两套桥 + 一条断链
 
-client HTML 模板 `index.html.tmpl:27` 声明 `const sdk = window.sdk;` —— client 插件期望宿主注入**完整的 `sdk` 外观对象**,而非仅 `window.__lingfangInvoke`。目前 `PluginRunner` 两者都没做。
+client HTML 模板 `index.html.tmpl:27` 声明 `const sdk = window.sdk;` —— client 插件期望宿主注入**完整的 `sdk` 外观对象**,而非仅 `window.__qianxiaInvoke`。目前 `PluginRunner` 两者都没做。
 
 存在**两套独立的 client 桥机制**:
-1. **纯 client HTML 插件**(`entry` 为 `.html`):需宿主在 iframe 内注入 `window.sdk`(底层可走 `__lingfangInvoke` 原语),其方法最终转发到能力网关。
-2. **client-action 导出**(`.ts/.js` 模块的 handler):由 `executeClientActionAdapter` 处理——它自行创建 iframe、注入 `__lingfangInvoke`(adapter:118)、监听 `__lf_client_action_call`(adapter:108-122)并回传。该 adapter 完整,但**无调用方**。
+1. **纯 client HTML 插件**(`entry` 为 `.html`):需宿主在 iframe 内注入 `window.sdk`(底层可走 `__qianxiaInvoke` 原语),其方法最终转发到能力网关。
+2. **client-action 导出**(`.ts/.js` 模块的 handler):由 `executeClientActionAdapter` 处理——它自行创建 iframe、注入 `__qianxiaInvoke`(adapter:118)、监听 `__lf_client_action_call`(adapter:108-122)并回传。该 adapter 完整,但**无调用方**。
 
 外加**一条断链**:nodejs/python 进程经 localhost 桥调 `/actions/call` 时,Rust emit `plugin-action-bridge-call` 事件期望前端执行 action 并经 `respond_plugin_action_bridge` 回传;前端无监听 → 进程端 hang 到超时。
 
@@ -59,7 +59,7 @@ client HTML 模板 `index.html.tmpl:27` 声明 `const sdk = window.sdk;` —— 
 - 关键落点核对:
   - `apps/desktop/src/lib/plugins-runtime.ts`:`net.fetch` 直连 `plugin_net_fetch`,其余 kind 走 `invoke_capability`;错误按文案归一化为 5 类 code。
   - `apps/desktop/src/lib/clientActionBridge.ts`:监听 `plugin-action-bridge-call` → `executeClientActionAdapter` → `respond_plugin_action_bridge` 回传;未注册 action 显式回 `action_dependency_unresolved`(进程端不再静默挂起)。
-  - `apps/desktop/src/pages/plugins/PluginRunner.tsx`(38 行占位 → 214 行实现):`srcdoc` + `sandbox="allow-scripts"`(未开 `allow-same-origin`),origin `'null'` 校验,注入 `window.sdk` / `__lingfangInvoke` 与 ui-tokens CSS,cloud/workflow 显式占位。
+  - `apps/desktop/src/pages/plugins/PluginRunner.tsx`(38 行占位 → 214 行实现):`srcdoc` + `sandbox="allow-scripts"`(未开 `allow-same-origin`),origin `'null'` 校验,注入 `window.sdk` / `__qianxiaInvoke` 与 ui-tokens CSS,cloud/workflow 显式占位。
   - `plugin-action-client-adapter.ts`(client-action 放行白名单):白名单 4 → 6 kind(新增 `ui.view`、`storage.kv`)。
   - `plugin_runner.rs` 的 `parse_manifest` 保留 fs.* 的 `paths`;插件 start 时 `registry.register`。
   - `scripts/materialize-bundled-runtimes.mjs` 的 `lockPath` 指向 `apps/desktop/runtime-lock.json`。
@@ -94,14 +94,14 @@ client HTML 模板 `index.html.tmpl:27` 声明 `const sdk = window.sdk;` —— 
 ### A2. 宿主向 client iframe 注入 `window.sdk`(`PluginRunner.tsx`) ✅
 对 `runtime_type === 'client'`(`entry` 为 `.html`):
 - 渲染 `<iframe sandbox="allow-scripts">` + **`srcdoc`**(entry 内容经 `read_plugin_file`(`main.rs`)读取,已带插件目录防穿越;该命令当前前端零调用方)。**不建议** `allow-same-origin`:与 `plugin-action-client-adapter.ts` 的 `clientActionMessageFromFrame`(校验 `event.origin === 'null'`)安全姿态保持一致。若 entry 有相对资源引用,需注入 `<base>` 或改自定义协议,另行评估。
-- 注入分两层:先注入原语 `window.__lingfangInvoke(kind, args)`(SDK 的 typed `sdk` 对象也走它,见 `plugin-sdk/src/index.ts` 的 `__lingfangInvoke` 注入),再在其上构建模板期望的 `window.sdk` 外观(`fs.read/write`、`net.fetch`、`clipboard`、`llm.chat`、`image.*`、`storage.kv`、`system.*`、`ui.view`、`plugin.*`),每个方法最终调 A1 的 `invokeRuntime`。
+- 注入分两层:先注入原语 `window.__qianxiaInvoke(kind, args)`(SDK 的 typed `sdk` 对象也走它,见 `plugin-sdk/src/index.ts` 的 `__qianxiaInvoke` 注入),再在其上构建模板期望的 `window.sdk` 外观(`fs.read/write`、`net.fetch`、`clipboard`、`llm.chat`、`image.*`、`storage.kv`、`system.*`、`ui.view`、`plugin.*`),每个方法最终调 A1 的 `invokeRuntime`。
 - 注入/调用协议:宿主页监听 `window` 的 `message` 事件(校验 `event.source === iframe.contentWindow` 且 `event.origin === 'null'`);iframe 内通过 `parent.postMessage({ __lf_host_call })` 请求能力,宿主回 `postMessage({ __lf_host_reply })`。**协议命名与 client-action 的 `__lf_client_action_*` 区分开**,避免两套消息互相干扰。
-- 顺带:按 CODEBUDDY.md 的架构描述,宿主应向每个插件 iframe 注入 `@lingfang/ui-tokens` 的 CSS 变量(模板 `:root` 使用 `var(--lf-bg)` 等);目前无任何代码做这件事,一并补上。
+- 顺带:按 CODEBUDDY.md 的架构描述,宿主应向每个插件 iframe 注入 `@qianxia/ui-tokens` 的 CSS 变量(模板 `:root` 使用 `var(--qx-bg)` 等);目前无任何代码做这件事,一并补上。
 
 ### A3. client-action 导出路径接入(补全 adapter 调用方) ✅
 - `executeClientActionAdapter` 已完整但无人调用。**设计调用方**是 `plugin-action-bridge-call` 事件的监听器:用 `tauriListen` 监听该事件(`plugin_llm_bridge.rs` 的 `emit("plugin-action-bridge-call")` 处),按 caller 信息执行对应 action——client 导出走 `executeClientActionAdapter`,注入 `onCapability` = A1 的 `invokeRuntime`;结果经 `tauriInvoke('respond_plugin_action_bridge', { requestId, result | error })`(`plugin_llm_bridge.rs` 的 `respond_plugin_action_bridge`)回传。
 - **扩展放行白名单**:`plugin-action-client-adapter.ts`(client-action 放行白名单)当前仅放行 `actions.call / artifacts.create / artifacts.materialize / artifacts.import` 四个 kind。按契约 `CapabilityKind` 中 client 可合法声明的子集补齐(至少 `ui.view`、`storage.kv`),避免合法 kind 被 `action_dependency_denied` 卡死。
-- 至此两条 client 路径(client HTML 的 `window.sdk` ↔ client-action 的 `__lingfangInvoke`)都接到同一网关。
+- 至此两条 client 路径(client HTML 的 `window.sdk` ↔ client-action 的 `__qianxiaInvoke`)都接到同一网关。
 
 ### A4. 能力注册表补齐(非内置插件) ✅
 - 现状:`registry.register` 仅 `plugins.rs` 一处,只服务内置插件(`main.rs` 的内置注册调用)。
@@ -204,7 +204,7 @@ client HTML 模板 `index.html.tmpl:27` 声明 `const sdk = window.sdk;` —— 
 - `apps/desktop/runtime-lock.json` 存在(83 行,未 gitignore);`apps/desktop/runtimes/` 为空且被根 `.gitignore:12` 忽略;`apps/desktop/runtime-parts/` 不存在(未被忽略,设计意图为分片入库)。
 - 实测 `cd apps/desktop && node ../../scripts/materialize-bundled-runtimes.mjs` → `[runtimes] missing lock file: D:\work\w1-lf\my-treasure\apps\desktop\runtimes\runtime-lock.json`(同时证明 `../../scripts/` 路径无 bug)。
 - `scripts/materialize-bundled-runtimes.mjs:20`、`scripts/verify-bundled-runtimes.mjs:11`:锁路径写死 `runtimeRoot/runtime-lock.json`。
-- `apps/desktop/src/lib/plugin-action-client-adapter.ts`:`executeClientActionAdapter`(`:142`)、`onMessage`(`:189`)、`__lingfangInvoke` 注入(`:118`)、白名单 4 kind(`:213-218`);生产代码零调用方(仅 spec 引用)。
+- `apps/desktop/src/lib/plugin-action-client-adapter.ts`:`executeClientActionAdapter`(`:142`)、`onMessage`(`:189`)、`__qianxiaInvoke` 注入(`:118`)、白名单 4 kind(`:213-218`);生产代码零调用方(仅 spec 引用)。
 - `plugin_llm_bridge.rs:609` emit `plugin-action-bridge-call`、`:352` `respond_plugin_action_bridge` 命令;前端无对应监听(grep 为空)。
 - `apps/desktop/src/pages/plugins/PluginRunner.tsx`:纯占位(38 行);`App.tsx:336` 渲染,`onBack` 仅设前端状态,不触达任何 Tauri 命令(三次修订更正:prop 名原误写 `onRun`)。
 - `apps/desktop/src-tauri/src/capability.rs:107-118`:`invoke()` 仅分派 5 种;`:113-116` 与 `:251-252` 注释指向 `plugins-runtime.ts`;`:318+` 完整测试模块。
@@ -213,6 +213,6 @@ client HTML 模板 `index.html.tmpl:27` 声明 `const sdk = window.sdk;` —— 
 - `plugin_llm_bridge.rs:675` `route_llm_chat`、`:1191` `route_audio_generate`(audio 有桥实现);`:157` `register_session` 按 `BridgeSession` 键控并注入 relay 凭据。
 - `packages/contract/src/plugin.ts:21-39`:`CapabilityKind` 17 种枚举(不含 `system.requestPermission`)。
 - `packages/plugin-sdk/src/templates/client/ui/index.html.tmpl:27`:`const sdk = window.sdk;`;`builtin-plugins/notes/manifest.json`:client 运行时,声明 `storage.kv` + `llm.chat`。
-- `packages/plugin-sdk/src/index.ts:140,353`:注释引用 `plugins-runtime.ts`;`:360-362` SDK 桥原语为 `__lingfangInvoke`。
+- `packages/plugin-sdk/src/index.ts:140,353`:注释引用 `plugins-runtime.ts`;`:360-362` SDK 桥原语为 `__qianxiaInvoke`。
 - `apps/desktop/src/lib/types.ts:41`:`runtime_type` 联合类型含 `'cloud'|'workflow'`;`manifest/rules.ts:87` 已对 cloud entry 做 URL 校验。
 - `packages/plugin-sdk/README.md:3` 死链 `../../docs/plugin-development.md`(仓内无 `docs/`)。

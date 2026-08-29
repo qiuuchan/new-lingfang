@@ -165,7 +165,7 @@ pub(crate) fn python_venv_dir(plugin_dir: &std::path::Path) -> PathBuf {
         let base = std::env::var_os("LOCALAPPDATA")
             .map(PathBuf::from)
             .unwrap_or_else(std::env::temp_dir);
-        base.join("LingFang")
+        base.join("QianXia")
             .join("python-venvs")
             .join(format!("venv-{:016x}", stable_path_hash(plugin_dir)))
     }
@@ -181,15 +181,15 @@ pub(crate) fn python_venv_dir(plugin_dir: &std::path::Path) -> PathBuf {
 /// - `pip-cache/`：pip 下载的 wheel 缓存（PIP_CACHE_DIR），多个插件装同一包时复用。
 /// - `pnpm-store/`：pnpm 内容寻址 store（--config.store-dir），多插件共享同一物理包。
 ///
-/// 路径选择与 `python_venv_dir` 对齐（Windows: LOCALAPPDATA/LingFang，Unix: ~/.cache/lingfang），
-/// 确保卸载即清（删 LingFang 目录即回收全部缓存）。
+/// 路径选择与 `python_venv_dir` 对齐（Windows: LOCALAPPDATA/QianXia，Unix: ~/.cache/qianxia），
+/// 确保卸载即清（删 QianXia 目录即回收全部缓存）。
 pub(crate) fn global_cache_dir() -> PathBuf {
     #[cfg(windows)]
     {
         let base = std::env::var_os("LOCALAPPDATA")
             .map(PathBuf::from)
             .unwrap_or_else(std::env::temp_dir);
-        base.join("LingFang").join("cache")
+        base.join("QianXia").join("cache")
     }
     #[cfg(not(windows))]
     {
@@ -197,7 +197,7 @@ pub(crate) fn global_cache_dir() -> PathBuf {
             .map(PathBuf::from)
             .unwrap_or_else(std::env::temp_dir)
             .join(".cache")
-            .join("lingfang")
+            .join("qianxia")
     }
 }
 
@@ -642,7 +642,7 @@ fn smoke_test_venv(
     }
     let script = build_smoke_script(&import_names);
     // 写入 venv 内临时文件（venv 目录可写），运行后删除。
-    let script_path = venv_dir.join(".lf-smoke.py");
+    let script_path = venv_dir.join(".qx-smoke.py");
     if let Err(_e) = std::fs::write(&script_path, &script) {
         // 写脚本失败（venv 只读？）不当坏包，放过。
         return Ok(true);
@@ -901,7 +901,7 @@ pub(crate) fn minimal_env() -> Vec<(OsString, OsString)> {
 
 // === Node pnpm 管理 ===
 
-const NODE_DEPS_READY_MARKER: &str = ".lingfang-deps-ready";
+const NODE_DEPS_READY_MARKER: &str = ".qianxia-deps-ready";
 
 /// 探测 Node 插件是否需要 pnpm install（首次慢，node_modules 已在则 ensure 秒过）。
 /// 用于 start_plugin 发「安装依赖」阶段事件。与 ensure_node_dependencies 的「已装跳过」逻辑对齐：
@@ -1274,7 +1274,7 @@ pub(crate) fn peek_runtime_type(plugin_dir: &std::path::Path) -> String {
     }
 }
 
-/// client dev-reload 节流判定（LF-08 / J4）。
+/// client dev-reload 节流判定（QX-08 / J4）。
 ///
 /// 维护上次 emit 时刻；若距离上次不足 300ms 则跳过（返回 false），
 /// 否则更新时间戳并返回 true（leading-edge 节流，合并保存风暴里的高频
@@ -1315,7 +1315,7 @@ pub(crate) fn watch_dev_dir(
 
     let app_for_cb = app.clone();
     let dir_for_restart = dir.to_path_buf();
-    // LF-08 / J4：client 分支 300ms 节流，避免编辑器保存时的高频 notify 事件连发
+    // QX-08 / J4：client 分支 300ms 节流，避免编辑器保存时的高频 notify 事件连发
     // plugin:dev-reload（对齐 nodejs 分支 :1322 的 300ms 语义）。窗口内只发一次。
     let last_client_emit: Arc<Mutex<Option<std::time::Instant>>> = Arc::new(Mutex::new(None));
     let handler = move |res: notify::Result<notify::Event>| {
@@ -1541,7 +1541,7 @@ fn write_crash_dump(
     }
     let now = chrono::Local::now().format("%Y-%m-%d %H:%M:%S%.3f");
     let mut content = String::new();
-    content.push_str(&format!("# 灵坊插件崩溃转储（{now}）\n"));
+    content.push_str(&format!("# 千匣插件崩溃转储（{now}）\n"));
     content.push_str("# 本文件在插件 800ms 内秒退时自动生成，含完整诊断信息。\n");
     content.push_str("# 如需手动复现，在 PowerShell/cmd 中执行下方「复现命令」。\n\n");
     content.push_str(&format!("## 插件目录\n{cwd}\n\n"));
@@ -1672,11 +1672,11 @@ fn spawn_plugin_tail(
     let bridge_token = bridge_env.as_ref().map(|env| env.token.clone());
     if let Some(bridge_env) = bridge_env {
         env.push((
-            OsString::from("LINGFANG_PLUGIN_BRIDGE_URL"),
+            OsString::from("QIANXIA_PLUGIN_BRIDGE_URL"),
             OsString::from(bridge_env.url),
         ));
         env.push((
-            OsString::from("LINGFANG_PLUGIN_BRIDGE_TOKEN"),
+            OsString::from("QIANXIA_PLUGIN_BRIDGE_TOKEN"),
             OsString::from(bridge_env.token),
         ));
     }
@@ -2008,7 +2008,7 @@ struct PreparedLaunch {
     stream_ctx: StreamCtx,
 }
 
-/// LF-06：以「action invocation」会话启动内置进程插件，使其能合法调用桥路由 /actions/call。
+/// QX-06：以「action invocation」会话启动内置进程插件，使其能合法调用桥路由 /actions/call。
 ///
 /// 与普通启动的唯一区别：桥会话经 `register_action_session` 武装了 `action_invocation_id`
 /// + `action_context`（package_id/release_id/sha256 取自该内置插件的 active release），
@@ -2033,8 +2033,8 @@ pub(crate) fn start_builtin_action_invocation(
     let release = installation.active_release;
     // action invocation 不需要真实 relay 凭据（路由不依赖其值，仅守卫判非空），
     // 传入占位非空串绕过 register_action_session 的空值守卫。
-    let placeholder_base = "https://localhost/lf-action".to_string();
-    let placeholder_token = "lf-action-invocation".to_string();
+    let placeholder_base = "https://localhost/qx-action".to_string();
+    let placeholder_token = "qx-action-invocation".to_string();
     let invocation_id = uuid::Uuid::new_v4().to_string();
     let bridge_env = bridge
         .register_action_session(
@@ -2230,11 +2230,11 @@ pub(crate) fn start_plugin_from_dir(
     let bridge_token = bridge_env.as_ref().map(|env| env.token.clone());
     if let Some(bridge_env) = bridge_env {
         env.push((
-            OsString::from("LINGFANG_PLUGIN_BRIDGE_URL"),
+            OsString::from("QIANXIA_PLUGIN_BRIDGE_URL"),
             OsString::from(bridge_env.url),
         ));
         env.push((
-            OsString::from("LINGFANG_PLUGIN_BRIDGE_TOKEN"),
+            OsString::from("QIANXIA_PLUGIN_BRIDGE_TOKEN"),
             OsString::from(bridge_env.token),
         ));
     }

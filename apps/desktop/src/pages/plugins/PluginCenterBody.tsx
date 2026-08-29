@@ -301,7 +301,7 @@ export function PluginCenterBody({
                 市场功能即将上线，敬请期待。
               </p>
               <p className="mt-4 text-xs text-muted-foreground">
-                当前版本支持通过「导入本地插件」按钮安装 .lfplugin 文件。
+                当前版本支持通过「导入本地插件」按钮安装 .qplugin 文件。
               </p>
             </div>
           </TabsContent>

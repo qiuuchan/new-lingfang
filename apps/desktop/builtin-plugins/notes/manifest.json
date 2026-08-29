@@ -2,7 +2,7 @@
   "id": "builtin.notes",
   "name": "Markdown 笔记",
   "version": "0.1.0",
-  "description": "轻量 Markdown 笔记插件，支持分类/标签、全文搜索、AI 智能总结（使用灵坊平台 LLM）",
+  "description": "轻量 Markdown 笔记插件，支持分类/标签、全文搜索、AI 智能总结（使用千匣平台 LLM）",
   "runtime_type": "client",
   "entry": "index.html",
   "capabilities": [
@@ -14,7 +14,7 @@
     },
     {
       "kind": "llm.chat",
-      "reason": "通过灵坊平台 LLM 生成笔记摘要",
+      "reason": "通过千匣平台 LLM 生成笔记摘要",
       "risk": "medium",
       "requires_admin": false
     }

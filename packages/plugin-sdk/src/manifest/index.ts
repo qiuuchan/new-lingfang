@@ -1,8 +1,8 @@
 // manifest 校验入口：Zod schema + 业务规则双层校验。
 // 导出 validateManifest 函数和 ManifestError / ManifestResult 类型。
-// 同时透传 @lingfang/contract 的类型，让插件作者只需 import 这一个入口。
-import { PluginManifest as PluginManifestSchema } from '@lingfang/contract';
-import type { PluginManifest } from '@lingfang/contract';
+// 同时透传 @qianxia/contract 的类型，让插件作者只需 import 这一个入口。
+import { PluginManifest as PluginManifestSchema } from '@qianxia/contract';
+import type { PluginManifest } from '@qianxia/contract';
 import { RULES, type ManifestError } from './rules.ts';
 
 export type { ManifestError } from './rules.ts';
@@ -11,7 +11,7 @@ export type {
   PluginCapability,
   CapabilityKind,
   RuntimeType,
-} from '@lingfang/contract';
+} from '@qianxia/contract';
 
 export type ManifestResult =
   | { success: true; manifest: PluginManifest; warnings: ManifestError[] }

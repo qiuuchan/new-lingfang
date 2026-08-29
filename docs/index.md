@@ -1,6 +1,6 @@
-# 灵坊工作台 · 文档索引
+# 千匣台 · 文档索引
 
-> 本页是全部文档的入口（LF-22 文档门面）。先按身份选路，3 跳内必达：**装机 → 用插件 → 开发插件**。
+> 本页是全部文档的入口（QX-22 文档门面）。先按身份选路，3 跳内必达：**装机 → 用插件 → 开发插件**。
 > 产品定位与演示见仓库根 [`README.md`](../README.md)（本地优先的 AI 知识库工作站，零服务器）。
 
 ## 按身份选路
@@ -26,13 +26,13 @@
 
 ## 维护者
 
-- [`release-runbook.md`](./release-runbook.md) — 发版 Runbook（LF-16）：前置检查、构建、更新 feed、验签
+- [`release-runbook.md`](./release-runbook.md) — 发版 Runbook（QX-16）：前置检查、构建、更新 feed、验签
 - [`verify-a5-client-plugin-e2e.md`](./verify-a5-client-plugin-e2e.md) — client 插件端到端验证 Runbook
 - [`DECISION-REQUEST.md`](./DECISION-REQUEST.md) — 产品决策请求摘要（架构评审 → 产品拍板）
 
 ## 决策与过程
 
-- [`decisions/index.md`](./decisions/index.md) — **ADR 索引**：全部关键决策记录（B3 / C2 / H2 / LF-06 / 更新 feed）
+- [`decisions/index.md`](./decisions/index.md) — **ADR 索引**：全部关键决策记录（B3 / C2 / H2 / QX-06 / 更新 feed）
 - [`WORK_ORDERS.md`](./WORK_ORDERS.md) — 工单池（每张工单含验收标准）
 - [`g2-sdk-friction.md`](./g2-sdk-friction.md) — SDK 使用摩擦记录（真用插件实证反哺）
 - 各轮计划：根目录 `IMPLEMENTATION_PLAN.md` → `IMPROVEMENT_PLAN.md` → `IMPROVEMENT_PLAN_3/4/5.md`

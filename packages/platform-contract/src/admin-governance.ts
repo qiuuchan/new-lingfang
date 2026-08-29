@@ -1,7 +1,7 @@
 import { z } from 'zod';
-import { AdminPaginationMetadata, createAdminPageSchema, AdminUserSummary } from '@lingfang/contract';
+import { AdminPaginationMetadata, createAdminPageSchema, AdminUserSummary } from '@qianxia/contract';
 
-export { AdminPaginationMetadata, createAdminPageSchema, AdminUserSummary } from '@lingfang/contract';
+export { AdminPaginationMetadata, createAdminPageSchema, AdminUserSummary } from '@qianxia/contract';
 
 export const TeamAdminApplicationStatus = z.enum(['PENDING', 'APPROVED', 'REJECTED']);
 export type TeamAdminApplicationStatus = z.infer<typeof TeamAdminApplicationStatus>;

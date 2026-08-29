@@ -1,16 +1,16 @@
-# LingFang Plugin SDK
+# QianXia Plugin SDK
 
-用于创建、校验、构建和发布 LingFang 插件。详细约定见[插件开发说明](../../docs/plugin-development.md)。
+用于创建、校验、构建和发布 QianXia 插件。详细约定见[插件开发说明](../../docs/plugin-development.md)。
 
 ## 快速开始
 
 ```bash
-lingfang-plugin create
+qianxia-plugin create
 cd <plugin-directory>
-lingfang-plugin validate
-lingfang-plugin build
-lingfang-plugin publish
-lingfang-plugin dev <dir>   # 把插件目录注册为 dev 安装（免打包直读；v1 仅 client 运行时）
+qianxia-plugin validate
+qianxia-plugin build
+qianxia-plugin publish
+qianxia-plugin dev <dir>   # 把插件目录注册为 dev 安装（免打包直读；v1 仅 client 运行时）
 ```
 
 `create` 支持 `client`、`nodejs` 和 `python` 模板，并生成 `manifest.json`、运行时入口和可直接修改的 `README.md`。
@@ -36,8 +36,8 @@ lingfang-plugin dev <dir>   # 把插件目录注册为 dev 安装（免打包直
 > 详见仓库 `IMPROVEMENT_PLAN.md` F2 与 `CODEBUDDY.md` Security model）。
 > CLI 的 `create` / `validate` / `build` 不受影响。
 
-插件使用的能力必须在 `manifest.capabilities` 中声明。代码通过 `@lingfang/plugin-sdk` 调用宿主能力，不直接读取平台密钥或桥接令牌；README 应解释每项能力的用途、访问的数据和隐私影响。
+插件使用的能力必须在 `manifest.capabilities` 中声明。代码通过 `@qianxia/plugin-sdk` 调用宿主能力，不直接读取平台密钥或桥接令牌；README 应解释每项能力的用途、访问的数据和隐私影响。
 
 ## CLI 门禁
 
-`validate` 和 `build` 使用相同的 manifest、入口与 README 边界。README 超限或不是 UTF-8 时，`build` 会在生成 `.lfplugin` 前失败。`.lfplugin` 必须由 `lingfang-plugin build` 生成，不要手工压缩 ZIP。
+`validate` 和 `build` 使用相同的 manifest、入口与 README 边界。README 超限或不是 UTF-8 时，`build` 会在生成 `.qplugin` 前失败。`.qplugin` 必须由 `qianxia-plugin build` 生成，不要手工压缩 ZIP。

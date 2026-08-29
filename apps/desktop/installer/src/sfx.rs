@@ -248,7 +248,7 @@ mod tests {
             let mut zw = zip::ZipWriter::new(cursor);
             let opts =
                 SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
-            zw.start_file("lingfang-desktop.exe", opts).unwrap();
+            zw.start_file("qianxia-desktop.exe", opts).unwrap();
             zw.write_all(b"FAKE-MAIN-EXE").unwrap();
             zw.start_file("runtimes/python/marker.txt", opts).unwrap();
             zw.write_all(b"py-runtime").unwrap();
@@ -256,7 +256,7 @@ mod tests {
         }
 
         // 2) 拼 [假exe前缀][zip][trailer] 写临时文件。
-        let dir = std::env::temp_dir().join("lingfang-sfx-e2e");
+        let dir = std::env::temp_dir().join("qianxia-sfx-e2e");
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let fake_exe = dir.join("setup.exe");
@@ -276,7 +276,7 @@ mod tests {
         let count = extract_payload(&fake_exe, &out).unwrap();
         assert_eq!(count, 2, "应解出 2 个文件");
         assert_eq!(
-            std::fs::read_to_string(out.join("lingfang-desktop.exe")).unwrap(),
+            std::fs::read_to_string(out.join("qianxia-desktop.exe")).unwrap(),
             "FAKE-MAIN-EXE"
         );
         assert_eq!(
@@ -292,7 +292,7 @@ mod tests {
     fn locate_payload_none_for_bare_exe() {
         use std::io::Write;
         let dir = std::env::temp_dir();
-        let bare = dir.join("lingfang-sfx-bare.exe");
+        let bare = dir.join("qianxia-sfx-bare.exe");
         {
             let mut f = File::create(&bare).unwrap();
             f.write_all(b"just an exe, no trailer here at all").unwrap();
@@ -320,7 +320,7 @@ mod tests {
         raw.extend_from_slice(b"PREFIX");
         raw.extend_from_slice(b"PAYLOAD");
         raw.extend_from_slice(b"TAIL");
-        let path = temp_file("lingfang-sfx-segment.bin", &raw);
+        let path = temp_file("qianxia-sfx-segment.bin", &raw);
 
         let f = File::open(&path).unwrap();
         let mut seg = SegmentReader::new(f, 6, 7);
@@ -336,7 +336,7 @@ mod tests {
     #[test]
     fn segment_reader_seek_clamps_and_rejects() {
         use std::io::{Seek, SeekFrom};
-        let path = temp_file("lingfang-sfx-seek.bin", b"0123456789");
+        let path = temp_file("qianxia-sfx-seek.bin", b"0123456789");
         let f = File::open(&path).unwrap();
         let mut seg = SegmentReader::new(f, 2, 5); // 可见区间 b"23456"
 
@@ -357,7 +357,7 @@ mod tests {
         raw.extend_from_slice(b"MZ-FAKE-PE-HEADER-PREFIX"); // exe 前缀
         raw.extend_from_slice(b"\x50\x4b\x03\x04zip-bytes-here"); // zip 首部特征
         raw.extend_from_slice(&[0u8; 64]);
-        let path = temp_file("lingfang-sfx-compare.bin", &raw);
+        let path = temp_file("qianxia-sfx-compare.bin", &raw);
         let base = 25u64; // 前缀长度
         let len = raw.len() as u64 - base;
 

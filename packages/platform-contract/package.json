@@ -1,5 +1,5 @@
 {
-  "name": "@lingfang/platform-contract",
+  "name": "@qianxia/platform-contract",
   "version": "0.0.1",
   "type": "module",
   "main": "src/index.ts",
@@ -9,7 +9,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@lingfang/contract": "workspace:*",
+    "@qianxia/contract": "workspace:*",
     "zod": "^3"
   },
   "devDependencies": {

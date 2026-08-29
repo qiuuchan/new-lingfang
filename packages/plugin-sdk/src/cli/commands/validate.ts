@@ -4,7 +4,7 @@
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { validateManifest, type ManifestResult } from '../../manifest/index.ts';
-import type { PluginManifest } from '@lingfang/contract';
+import type { PluginManifest } from '@qianxia/contract';
 import { validateRootReadme } from '../util/readme.ts';
 import { resolvePluginPath } from '../util/resolvePath.ts';
 
@@ -35,7 +35,7 @@ export interface ValidateResult {
  * @returns     退出码：0 表示通过，1 表示有错误
  */
 export async function validateCommand(_argv: string[], opts?: ValidateOptions): Promise<number> {
-  // LF-05 / g2-sdk-friction #2：路径归一化防二次拼接（cwd 固定为 packages/plugin-sdk 时，
+  // QX-05 / g2-sdk-friction #2：路径归一化防二次拼接（cwd 固定为 packages/plugin-sdk 时，
   // 仓库根相对路径会被叠加）。绝对路径原样，相对路径先按 cwd、再按工作区根解析。
   const pluginPath = resolvePluginPath(opts?.path ?? process.cwd());
   const manifestPath = path.join(pluginPath, 'manifest.json');
@@ -203,7 +203,7 @@ function printResult(
     return;
   }
 
-  // LF-08 / J3：--quiet 模式仅逐行输出错误 code（脚本可解析），成功不输出。
+  // QX-08 / J3：--quiet 模式仅逐行输出错误 code（脚本可解析），成功不输出。
   if (quiet) {
     for (const e of errors) {
       process.stdout.write(e.code + '\n');

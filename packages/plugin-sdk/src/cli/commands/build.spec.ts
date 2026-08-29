@@ -60,9 +60,9 @@ async function runBuild(
 // ── 合法插件构建成功 ─────────────────────────────────────────────────
 
 describe('buildCommand — notes 打包成功', () => {
-  it('notes 内置插件打包为 .lfplugin', async () => {
+  it('notes 内置插件打包为 .qplugin', async () => {
     const outDir = await tempDir();
-    const outFile = path.join(outDir, 'notes.lfplugin');
+    const outFile = path.join(outDir, 'notes.qplugin');
 
     const { exitCode, result } = await runBuild(notesPath, { out: outFile });
 
@@ -83,7 +83,7 @@ describe('buildCommand — notes 打包成功', () => {
     const metaFile = zip.file('_meta.json');
     expect(metaFile).not.toBeNull();
     const metaContent = await metaFile!.async('string');
-    expect(metaContent).toBe('{"format":"lingfang-plugin","formatVersion":4}');
+    expect(metaContent).toBe('{"format":"qianxia-plugin","formatVersion":4}');
 
     // manifest.json 存在
     const manifestFile = zip.file('manifest.json');
@@ -99,7 +99,7 @@ describe('buildCommand — notes 打包成功', () => {
 describe('buildCommand — --out 自定义输出', () => {
   it('--out 自定义输出路径生效', async () => {
     const outDir = await tempDir();
-    const customOut = path.join(outDir, 'custom.lfplugin');
+    const customOut = path.join(outDir, 'custom.qplugin');
 
     const { exitCode, result } = await runBuild(notesPath, { out: customOut });
 
@@ -221,9 +221,9 @@ describe('buildCommand — README.md contract', () => {
   });
 });
 
-// ── LF-08 / J3：BuildError 与 ValidateError 形状对齐（含 path 字段） ──
+// ── QX-08 / J3：BuildError 与 ValidateError 形状对齐（含 path 字段） ──
 
-describe('buildCommand — BuildError.path 对齐 (LF-08)', () => {
+describe('buildCommand — BuildError.path 对齐 (QX-08)', () => {
   it('错误对象含 path 字段（与 validate 的 ValidateError 对齐）', async () => {
     const dir = await tempDir();
     await writeFile(path.join(dir, 'manifest.json'), '{ bad json }');
@@ -234,12 +234,12 @@ describe('buildCommand — BuildError.path 对齐 (LF-08)', () => {
   });
 });
 
-// ── LF-08 / J3：--quiet 输出形状 ──────────────────────────────────────
+// ── QX-08 / J3：--quiet 输出形状 ──────────────────────────────────────
 
-describe('buildCommand — --quiet 模式 (LF-08)', () => {
+describe('buildCommand — --quiet 模式 (QX-08)', () => {
   it('成功构建在 --quiet 下不输出任何内容', async () => {
     const outDir = await tempDir();
-    const outFile = path.join(outDir, 'notes.lfplugin');
+    const outFile = path.join(outDir, 'notes.qplugin');
     const { exitCode, raw } = await runBuild(notesPath, { out: outFile, quiet: true });
     expect(exitCode).toBe(0);
     expect(raw).toBe('');

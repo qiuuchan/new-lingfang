@@ -1,4 +1,4 @@
-// build 命令：校验插件工作区 → 打包为 .lfplugin v4 产物（见 design.md §2.3）。
+// build 命令：校验插件工作区 → 打包为 .qplugin v4 产物（见 design.md §2.3）。
 // 调用 validateManifest 校验 manifest，然后通过 archive.ts 的 packWorkspace 生成 ZIP。
 import { existsSync, readFileSync } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
@@ -12,15 +12,15 @@ import { resolvePluginPath } from '../util/resolvePath.ts';
 
 export interface BuildOptions {
   path?: string; // 默认 process.cwd()
-  out?: string; // 默认 <id>-<version>.lfplugin 在 cwd
+  out?: string; // 默认 <id>-<version>.qplugin 在 cwd
   json?: boolean; // JSON 输出模式
-  quiet?: boolean; // LF-08：仅逐行输出错误 code
+  quiet?: boolean; // QX-08：仅逐行输出错误 code
 }
 
 export interface BuildError {
   code: string;
   message: string;
-  path: string; // LF-08：对齐 validate 的 ValidateError shape
+  path: string; // QX-08：对齐 validate 的 ValidateError shape
 }
 
 export interface BuildResult {
@@ -42,7 +42,7 @@ export interface BuildResult {
 export async function buildCommand(argv: string[], opts?: BuildOptions): Promise<number> {
   const parsed = parseArgs(argv);
 
-  // 1. 解析插件路径（LF-05 / g2-sdk-friction #2：防 cwd 固定导致的二次拼接）
+  // 1. 解析插件路径（QX-05 / g2-sdk-friction #2：防 cwd 固定导致的二次拼接）
   const pluginPath = resolvePluginPath(parsed.positional[0] ?? opts?.path ?? process.cwd());
 
   // 2. 读取 manifest.json
@@ -161,7 +161,7 @@ export async function buildCommand(argv: string[], opts?: BuildOptions): Promise
     };
     process.stdout.write(JSON.stringify(result, null, 2) + '\n');
   } else if (quiet) {
-    // LF-08：--quiet 成功不输出（退出码 0 即成功）。
+    // QX-08：--quiet 成功不输出（退出码 0 即成功）。
   } else {
     log.success(`已打包：${outputPath}`);
     log.raw(`  大小：${packResult.buffer.length} 字节`);

@@ -287,7 +287,7 @@ describe('validateCommand — JSON 输出', () => {
   });
 });
 
-// ── LF-08 / J3：--quiet 输出形状 ───────────────────────────────────
+// ── QX-08 / J3：--quiet 输出形状 ───────────────────────────────────
 
 async function runValidateRaw(dir: string, quiet: boolean): Promise<string> {
   const originalStdout = process.stdout.write;
@@ -305,7 +305,7 @@ async function runValidateRaw(dir: string, quiet: boolean): Promise<string> {
   return captured;
 }
 
-describe('validateCommand — --quiet 模式 (LF-08)', () => {
+describe('validateCommand — --quiet 模式 (QX-08)', () => {
   it('合法插件在 --quiet 下不输出任何内容', async () => {
     const out = await runValidateRaw(notesPath, true);
     expect(out).toBe('');

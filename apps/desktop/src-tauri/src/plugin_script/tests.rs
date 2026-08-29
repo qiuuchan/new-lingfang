@@ -78,7 +78,7 @@ fn sanitize_rejects_traversal_and_hidden() {
 #[test]
 fn materialize_writes_files_and_detects_escape() {
     let tmp = std::env::temp_dir().join(format!(
-        "lf-plugin-script-test-{}",
+        "qx-plugin-script-test-{}",
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
@@ -158,7 +158,7 @@ fn run_node_hello_script_if_available() {
     };
     // 在临时 sandbox 写一个 console.log 脚本直接运行（不走 run_plugin_script 的 app handle 依赖）。
     let tmp = std::env::temp_dir().join(format!(
-        "lf-node-run-test-{}",
+        "qx-node-run-test-{}",
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
@@ -191,7 +191,7 @@ fn run_python_hello_script_if_available() {
         }
     };
     let tmp = std::env::temp_dir().join(format!(
-        "lf-py-run-test-{}",
+        "qx-py-run-test-{}",
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
@@ -225,7 +225,7 @@ fn timeout_kills_infinite_loop() {
         }
     };
     let tmp = std::env::temp_dir().join(format!(
-        "lf-timeout-test-{}",
+        "qx-timeout-test-{}",
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
@@ -254,7 +254,7 @@ fn timeout_kills_infinite_loop() {
 #[test]
 fn sandbox_lru_keeps_recent_and_removes_old() {
     let tmp = std::env::temp_dir().join(format!(
-        "lf-sandbox-lru-test-{}",
+        "qx-sandbox-lru-test-{}",
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
@@ -316,7 +316,7 @@ fn timeout_kills_grandchild_process_tree() {
         }
     };
     let tmp = std::env::temp_dir().join(format!(
-        "lf-timeout-grandchild-test-{}",
+        "qx-timeout-grandchild-test-{}",
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
@@ -371,7 +371,7 @@ fn node_plugin_chinese_output_and_structured() {
         }
     };
     let tmp = std::env::temp_dir().join(format!(
-        "lf-node-plugin-test-{}",
+        "qx-node-plugin-test-{}",
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
@@ -424,7 +424,7 @@ fn python_plugin_chinese_and_cross_dir_import() {
         }
     };
     let tmp = std::env::temp_dir().join(format!(
-        "lf-py-plugin-test-{}",
+        "qx-py-plugin-test-{}",
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
@@ -485,7 +485,7 @@ sys.stderr.write("诊断：Python stderr\n")
 fn html_plugin_materialize_and_readable() {
     // HTML 插件：materialize_sandbox 落盘 + 文件可读（iframe srcDoc 渲染前置条件）。
     let tmp = std::env::temp_dir().join(format!(
-        "lf-html-plugin-test-{}",
+        "qx-html-plugin-test-{}",
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()

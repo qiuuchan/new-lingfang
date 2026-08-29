@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// lingfang-plugin CLI — 插件开发工具链入口。
+// qianxia-plugin CLI — 插件开发工具链入口。
 // 子命令：create / validate / build / publish / --help / --version
 
 import { parseArgs } from './parser.ts';
@@ -23,10 +23,10 @@ async function getVersion(): Promise<string> {
 
 function printHelp(): void {
   log.raw(`
-lingfang-plugin — 灵方插件开发工具
+qianxia-plugin — 灵方插件开发工具
 
 用法:
-  lingfang-plugin <命令> [参数]
+  qianxia-plugin <命令> [参数]
 
 命令:
   create <name>       创建新插件工程
@@ -41,13 +41,13 @@ lingfang-plugin — 灵方插件开发工具
   validate [path]    校验插件合法性（默认当前目录）
      --json            输出 JSON 格式（用于程序消费）
      --quiet           仅逐行输出错误 code（脚本可解析）
-  build [path]       打包 .lfplugin 制品
+  build [path]       打包 .qplugin 制品
      --out <file>     自定义输出文件名
      --json           输出 JSON 格式
      --quiet          仅逐行输出错误 code
   publish [path]     发布到插件注册中心
-     --base <url>     API 地址（或 env LINGFANG_API_BASE）
-     --token <jwt>    认证 token（或 env LINGFANG_TOKEN）
+     --base <url>     API 地址（或 env QIANXIA_API_BASE）
+     --token <jwt>    认证 token（或 env QIANXIA_TOKEN）
      --package-id <id>     发布到现有 package
      --source-kind <kind>  来源类型
      --source-label <text> 来源标签（自动 base64url）
@@ -73,7 +73,7 @@ async function main(): Promise<number> {
   }
   if (args.flags['version']) {
     const ver = await getVersion();
-    log.raw(`lingfang-plugin v${ver}`);
+    log.raw(`qianxia-plugin v${ver}`);
     return 0;
   }
 

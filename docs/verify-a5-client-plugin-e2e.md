@@ -56,7 +56,7 @@ pnpm dev:desktop            # = pnpm -C apps/desktop dev   = tauri dev（开发�
    - 断言：iframe 渲染 notes 界面（`sandbox="allow-scripts"`、opaque origin），无脚本注入报错。
 2. 在 notes 内触发 `storage.kv` 与 `llm.chat` 调用（或通过控制台调用 `window.sdk.storage.set('k','v')` / `window.sdk.llm.chat({...})`）。
    - 断言：调用**明确 reject**，错误 `code === 'capability_not_supported'`（文案含「暂未实现」），**而非静默无响应或挂起**——验证网关错误归一化（`plugins-runtime.ts:29` `normalizeCapabilityError`）生效。
-3. 断言 `read_plugin_file` 成功解析内置插件目录（`PluginRunner.tsx:118` 读取 `entry` HTML 成功，无 `loadError`）；且 iframe 内 ui-tokens CSS 已注入（可查 DOM `<style>` 含 `--lf-color-primary` 等变量），`window.sdk` 已定义。
+3. 断言 `read_plugin_file` 成功解析内置插件目录（`PluginRunner.tsx:118` 读取 `entry` HTML 成功，无 `loadError`）；且 iframe 内 ui-tokens CSS 已注入（可查 DOM `<style>` 含 `--qx-color-primary` 等变量），`window.sdk` 已定义。
 
 ---
 
@@ -64,10 +64,10 @@ pnpm dev:desktop            # = pnpm -C apps/desktop dev   = tauri dev（开发�
 
 1. 生成并打包一个 client 插件：
    ```bash
-   pnpm plugin:create      # = lingfang-plugin create，选 client 模板
-   pnpm plugin:build       # = lingfang-plugin build，产出 .lfplugin v4
+   pnpm plugin:create      # = qianxia-plugin create，选 client 模板
+   pnpm plugin:build       # = qianxia-plugin build，产出 .qplugin v4
    ```
-   在桌面壳中安装该 `.lfplugin` 并运行。
+   在桌面壳中安装该 `.qplugin` 并运行。
 2. 在安装的插件内触发一个**已声明**能力（如 `system.info` / `clipboard`）。
    - 断言：调用正常返回（或按网关实现返回对应结果），**不再报 `capability_not_declared`**——证明 A4 注册路径已接通（安装插件经 `plugin-registry.ts` 登记能力）。
 3. （进阶）若该插件 `manifest.actions` 声明了含 client `handler.entry`（`.ts/.js/.mjs/.cjs`）的 action，并由某 nodejs/python 插件 `sdk.actions.call(action_id)` 调用：
@@ -91,19 +91,19 @@ pnpm dev:desktop            # = pnpm -C apps/desktop dev   = tauri dev（开发�
 
 ---
 
-## LF-04a · 自动化 harness（凭据环境变量注入）
+## QX-04a · 自动化 harness（凭据环境变量注入）
 
-> 工单 `docs/WORK_ORDERS.md` LF-04（G1 notes AI 摘要真实凭据实操）被标记为「需用户介入，暂缓派发」。
-> 其中 **LF-04a（Agent 可做）** 已交付：**以环境变量注入真实 relay 凭据、驱动桌面壳走 notes AI 摘要闭环、凭据缺失时明确跳过而非假阳性**。
-> **LF-04b（真实闭环 + 执行记录节 + 截图）仍阻塞于真实凭据（`api_base` + token），由你提供后单独派发。**
+> 工单 `docs/WORK_ORDERS.md` QX-04（G1 notes AI 摘要真实凭据实操）被标记为「需用户介入，暂缓派发」。
+> 其中 **QX-04a（Agent 可做）** 已交付：**以环境变量注入真实 relay 凭据、驱动桌面壳走 notes AI 摘要闭环、凭据缺失时明确跳过而非假阳性**。
+> **QX-04b（真实闭环 + 执行记录节 + 截图）仍阻塞于真实凭据（`api_base` + token），由你提供后单独派发。**
 
 ### 凭据注入 seam（Rust）
 `apps/desktop/src-tauri/src/client_ai_proxy.rs` 的 `require_relay` 现在按以下优先级解析凭据：
 1. 用户设置（磁盘 `config.json`，经 `SettingsPanel` 录入）；
-2. 环境变量 `LINGFANG_RELAY_API_BASE` / `LINGFANG_RELAY_TOKEN`（仅当设置未配置时回退）。
+2. 环境变量 `QIANXIA_RELAY_API_BASE` / `QIANXIA_RELAY_TOKEN`（仅当设置未配置时回退）。
 
 两条来源解析出的 `api_base` 都必须是 **https**（F5 防御在 Rust 侧兜底，环境变量路径不再绕过前端校验）。
-凭据**仅存在于进程环境**，不进仓库、不进设置 UI、不落盘 `config.json`、不进日志——满足 LF-04 验收「凭据不落地」。
+凭据**仅存在于进程环境**，不进仓库、不进设置 UI、不落盘 `config.json`、不进日志——满足 QX-04 验收「凭据不落地」。
 
 ### 自动化 harness
 `scripts/e2e-relay-verify.mjs`（复用 `e2e-desktop-smoke.mjs` 的 CDP 驱动手法）：
@@ -114,21 +114,21 @@ pnpm dev:desktop            # = pnpm -C apps/desktop dev   = tauri dev（开发�
 
 运行（cwd = 仓库根），需先有 `target/debug` 产物（或 `E2E_SKIP_BUILD=1` 复用）：
 ```bash
-LINGFANG_RELAY_API_BASE=https://<relay>/v1 LINGFANG_RELAY_TOKEN=<token> \
+QIANXIA_RELAY_API_BASE=https://<relay>/v1 QIANXIA_RELAY_TOKEN=<token> \
   node scripts/e2e-relay-verify.mjs
 # 经由 apps/desktop 脚本：
-LINGFANG_RELAY_API_BASE=... LINGFANG_RELAY_TOKEN=... pnpm -C apps/desktop test:relay
+QIANXIA_RELAY_API_BASE=... QIANXIA_RELAY_TOKEN=... pnpm -C apps/desktop test:relay
 ```
 
-### 待 LF-04b（你提供凭据后）
-提供 `LINGFANG_RELAY_API_BASE` + `LINGFANG_RELAY_TOKEN`（或确认可用测试凭据），即可跑通真实闭环，
+### 待 QX-04b（你提供凭据后）
+提供 `QIANXIA_RELAY_API_BASE` + `QIANXIA_RELAY_TOKEN`（或确认可用测试凭据），即可跑通真实闭环，
 并在本文件新增「执行记录」节，附真实输出片段与截图；如有失败项如实标注。
 
 ---
 
-## LF-04b · 真实凭据闭环（✅ 2026-08-24 已跑通，经官方模型商直连）
+## QX-04b · 真实凭据闭环（✅ 2026-08-24 已跑通，经官方模型商直连）
 
-> 阻塞解除方式（用户拍板）：不用灵坊平台 relay，改用**官方模型商**（DeepSeek）+ 本机**本地 relay 适配器**。
+> 阻塞解除方式（用户拍板）：不用千匣平台 relay，改用**官方模型商**（DeepSeek）+ 本机**本地 relay 适配器**。
 > 链路：桌面壳 `client_llm_chat` → 本地适配器（模拟平台 relay 协议）→ DeepSeek API 直连 → 回传 notes。
 
 ### 本地 relay 适配器（`scripts/relay-adapter.mjs`，零依赖）
@@ -141,17 +141,17 @@ LINGFANG_RELAY_API_BASE=... LINGFANG_RELAY_TOKEN=... pnpm -C apps/desktop test:r
 - 支持 `HTTPS_PROXY` 环境变量走 CONNECT 隧道（手写实现，无 npm 依赖）；`RELAY_ADAPTER_MOCK=1` 时返回带
   标识的假响应（无 key/无网时验证链路用）。
 
-### Rust 侧安全例外（LF-04b 配套，F5 收紧的受控放宽）
+### Rust 侧安全例外（QX-04b 配套，F5 收紧的受控放宽）
 `client_ai_proxy.rs::is_allowed_api_base`：https 恒允许；**明文 http 仅限环回地址**
 （`127.0.0.1` / `localhost`）——凭据只发往本机适配器进程、不跨网络，无泄露风险；其余 http 一律拒绝。
-配套单测 3 个（`cargo test -p lingfang-desktop client_ai_proxy` 全绿）。
+配套单测 3 个（`cargo test -p qianxia-desktop client_ai_proxy` 全绿）。
 
 ### 执行记录（2026-08-24 实测，harness `scripts/e2e-relay-verify.mjs` exit 0）
 ```
 RELAY_ADAPTER_UPSTREAM_KEY=<DeepSeek key 环境变量> \
   node scripts/relay-adapter.mjs                      # 监听 http://127.0.0.1:8787
-LINGFANG_RELAY_API_BASE=http://127.0.0.1:8787 \
-LINGFANG_RELAY_TOKEN=<任意非空> \
+QIANXIA_RELAY_API_BASE=http://127.0.0.1:8787 \
+QIANXIA_RELAY_TOKEN=<任意非空> \
   E2E_SKIP_BUILD=1 node scripts/e2e-relay-verify.mjs
 ```
 断言全部通过：CDP 连接 → 插件中心渲染 → notes iframe 打开 → `window.sdk` 注入 →
@@ -165,19 +165,19 @@ LINGFANG_RELAY_TOKEN=<任意非空> \
 - 本机直连 `api.deepseek.com` 实际可用（此前 `HEAD` 探测超时属误判，`POST` 正常）；若上游不可达，
   可给 adapter 设 `HTTPS_PROXY` 走代理。
 - 桌面壳要求 `api_base` 为 https 或环回 http——本地适配器走环回例外；若后续要远程 relay，必须是 https。
-- 首次运行 harness 若残留 `lingfang-desktop.exe` 进程（WebView2 目录锁），先 `taskkill /T /F` 清理再跑。
+- 首次运行 harness 若残留 `qianxia-desktop.exe` 进程（WebView2 目录锁），先 `taskkill /T /F` 清理再跑。
 
 ---
 
-## I1 · action 桥真机闭环（LF-06，2026-08-25 实测 `scripts/e2e-actions-verify.mjs` exit 0）
+## I1 · action 桥真机闭环（QX-06，2026-08-25 实测 `scripts/e2e-actions-verify.mjs` exit 0）
 
-> 对应 LF-06 阶段 I1：把「进程插件经桥调 `/actions/call` → 前端执行 client-action handler → 回传真实结果」
+> 对应 QX-06 阶段 I1：把「进程插件经桥调 `/actions/call` → 前端执行 client-action handler → 回传真实结果」
 > 这条此前从未真机跑通过的链路，固化为可重复闭环断言。
 
 **链路**：打开内置 client 插件 `action-demo`（声明 `demo.hello`，注册其 client handler 进
 `clientActionBridge` registry）→ 以 action invocation 会话启动内置进程插件 `action-caller`
 （`start_builtin_plugin actionInvocation=true`，会话武装 `action_invocation_id`+`action_context`）
-→ caller 裸 fetch 直连桥 `/actions/call`（带 `X-LingFang-Plugin-Token`）→ Rust `route_action_call` emit
+→ caller 裸 fetch 直连桥 `/actions/call`（带 `X-QianXia-Plugin-Token`）→ Rust `route_action_call` emit
 `plugin-action-bridge-call` → 前端 `clientActionBridge` 取 handler → `plugin-action-client-adapter`
 在 sandbox iframe 内执行 handler → `respond_plugin_action_bridge` 回传 → caller 写 `result.json`。
 
@@ -188,9 +188,9 @@ cd apps/desktop && E2E_SKIP_BUILD=1 node ../../scripts/e2e-actions-verify.mjs
 断言全部通过：CDP 连接 → 插件中心渲染（含「Action Demo」）→ 打开 demo（注册 `demo.hello`）
 → 启动 caller（一次性脚本秒退被 spawn 监视误报，已吞掉）→ 轮询 `result.json`：
 ```
-{"ok":true,"result":{"greeting":"hello lingfang"}}
+{"ok":true,"result":{"greeting":"hello qianxia"}}
 ```
-即真机拿到了 client handler 的**真实执行结果**（greeting 含输入名 `lingfang`），而非
+即真机拿到了 client handler 的**真实执行结果**（greeting 含输入名 `qianxia`），而非
 `action_dependency_unresolved` / `action_execution_failed` 占位。
 
 ### client-action 沙箱执行的关键约束（曾三次踩坑）
@@ -217,7 +217,7 @@ session / 无 handler 即失败」的稳态；`plugin_llm_bridge.rs` 新增 `rou
   拦下 → `action_dependency_denied`）。
 
 
-## U1 · 更新链路真机闭环（LF-17，2026-08-28 实测 `scripts/e2e-update-verify.mjs` 双向断言全绿 exit 0）
+## U1 · 更新链路真机闭环（QX-17，2026-08-28 实测 `scripts/e2e-update-verify.mjs` 双向断言全绿 exit 0）
 
 ### 闭环形态（首跑即暴露集成缺陷，修后复跑全绿）
 
@@ -234,7 +234,7 @@ session / 无 handler 即失败」的稳态；`plugin_llm_bridge.rs` 新增 `rou
 ### 双向断言（全部 ✅）
 
 **篡改对照**：篡改包被 `download_update` 拒绝（错误信息含 sha256 期望/实际值）、临时安装包被清理、
-目标 `lingfang-desktop.exe` hash 不变（未被覆盖）、实例仍报 0.1.11。
+目标 `qianxia-desktop.exe` hash 不变（未被覆盖）、实例仍报 0.1.11。
 **成功闭环**：check_update 返回 0.1.12 → download 落盘（sha256 匹配）→ apply 拉起 updater →
 主进程退出 → updater 覆盖 → 新版实例重启 → CDP 重连后 `get_app_version` 自报 **0.1.12**；
 updater 覆盖后删除临时安装包。
@@ -254,17 +254,17 @@ updater 覆盖后删除临时安装包。
 （`Execution context was destroyed`）——connectPage 等页面稳定后再取。
 
 ### 环境与产物
-- 旧版实例：`LingFang-Setup-0.1.11.exe --silent --target`（LF-18 重建安装器产物）
-- 新版主程序：临时改 `tauri.conf.json` version=0.1.12 → `tauri build --no-bundle`（LF-18 缺陷 B 后
+- 旧版实例：`QianXia-Setup-0.1.11.exe --silent --target`（QX-18 重建安装器产物）
+- 新版主程序：临时改 `tauri.conf.json` version=0.1.12 → `tauri build --no-bundle`（QX-18 缺陷 B 后
   的正确构建路径）→ 恢复；复用开关 `E2E_UPDATE_NEW_MAIN`
 - 新版 setup：`installer.exe + payload.zip(新 main) + 12 字节 SFX trailer`（`LFSFX\0\0\0` + payload_len u32 LE，
   缺失 trailer 时 `locate_payload` 返回 None → 报「本安装包不含内嵌 payload」）
 
 
-## U2 · 能力面观察项闭环（LF-19，2026-08-28 实测 `scripts/e2e-cap-closure-verify.mjs` 全绿 exit 0）
+## U2 · 能力面观察项闭环（QX-19，2026-08-28 实测 `scripts/e2e-cap-closure-verify.mjs` 全绿 exit 0）
 
 ### 断言清单（全部 ✅）
-1. **双插件 + 探针导入**：clip-digest / web-clip / relay-probe 三个 `.lfplugin` 经
+1. **双插件 + 探针导入**：clip-digest / web-clip / relay-probe 三个 `.qplugin` 经
    `install_plugin_artifact`（origin=local）导入；F3 来源徽标「本地导入」+ 插件详情
    「⚠ 插件未附带签名（manifest.sig 缺失）」警示 ×3 全部展示。
 2. **clipboard 正向往返**：web-clip iframe 内 `sdk.clipboard.writeText → readText`
@@ -279,7 +279,7 @@ updater 覆盖后删除临时安装包。
 宿主 `clipboard_op` 返回 `{ content }`（与 storage.kv `{ value }` 同构），但 npm SDK 与
 iframe bootstrap 的 `readText` 均未解包、TS 类型谎称 string——真机 readText 拿到对象。
 修复：`packages/plugin-sdk/src/index.ts` 与 `apps/desktop/src/lib/clientSdkBootstrap.ts`
-双双解包 `.content`（对齐 LF-07「双门面须同步」纪律）；spec mock 形状改为 `{ content }`。
+双双解包 `.content`（对齐 QX-07「双门面须同步」纪律）；spec mock 形状改为 `{ content }`。
 回归：plugin-sdk 163 / desktop 69 全绿。
 
 ### 排障实录（e2e 脚本侧）
@@ -291,7 +291,7 @@ iframe bootstrap 的 `readText` 均未解包、TS 类型谎称 string——真�
 - base-ui Dialog 无 `role="dialog"`；签名警示文案是 reason（「未附带签名」）而非「未签名」。
 
 
-## U3 · R1 真用插件 kb-station 真机闭环（LF-23，2026-08-28 实测 `scripts/e2e-kb-station-verify.mjs` 全绿 exit 0）
+## U3 · R1 真用插件 kb-station 真机闭环（QX-23，2026-08-28 实测 `scripts/e2e-kb-station-verify.mjs` 全绿 exit 0）
 
 ### 断言清单（全部 ✅）
 1. 粘贴导入 → 切片（chunkText 空行分段 + 超长截断）；
@@ -313,4 +313,4 @@ iframe bootstrap 的 `readText` 均未解包、TS 类型谎称 string——真�
 
 ### e2e 侧笔记
 - Playwright `locator.evaluate` 会把数组参数序列化成空对象（`['a','b']` → `{}`），
-  参数化 evaluate 必须走 `frame.evaluate` / `page.evaluate`（LF-23 实测）。
+  参数化 evaluate 必须走 `frame.evaluate` / `page.evaluate`（QX-23 实测）。

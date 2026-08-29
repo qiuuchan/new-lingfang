@@ -538,7 +538,7 @@ fn route_request(inner: &Arc<BridgeState>, request: HttpRequest) -> BridgeResult
     .ok_or_else(|| BridgeError::new(401, "unauthorized", "插件桥 token 无效或已过期"))?;
 
     match path_only {
-        // 灵坊自有形状（SDK 内部用）：返回 {content} / {images} 包装。
+        // 千匣自有形状（SDK 内部用）：返回 {content} / {images} 包装。
         "/llm/chat" => route_llm_chat(&session, request.body).map(BridgeResponse::Json),
         "/image/generate" => route_image_generate(&session, request.body).map(BridgeResponse::Json),
         "/image/edit" => route_image_edit(&session, request.body).map(BridgeResponse::Json),
@@ -889,7 +889,7 @@ pub fn build_image_edit_multipart(
     n: u32,
     size: &str,
 ) -> (Vec<u8>, String) {
-    let boundary = "lfImgEdit7Q2v9sL3p0aZ";
+    let boundary = "qxImgEdit7Q2v9sL3p0aZ";
     let mut body = Vec::new();
     push_text_part(&mut body, boundary, "prompt", prompt);
     for (filename, mime, data) in images {
@@ -1014,7 +1014,7 @@ fn build_rbflow_multipart(
     video_bytes: &[u8],
     callback_url: Option<&str>,
 ) -> (Vec<u8>, String) {
-    let boundary = "lfVideoGenerate8k2m7xQ1";
+    let boundary = "qxVideoGenerate8k2m7xQ1";
     let mut body = Vec::new();
     push_file_part_named(
         &mut body,
@@ -1182,7 +1182,7 @@ fn route_video_generate(session: &BridgeSession, body_bytes: Vec<u8>) -> BridgeR
     let callback_url = body.get("callback_url").and_then(Value::as_str);
 
     // relay 接管：后端读取 PlatformSetting.rbflowUrl/rbflowApiKey，先扣费再代理 RBFLow。
-    // 桥只转发插件素材和本地 session，不读任何 LINGFANG_RBFLOW_* 环境变量。
+    // 桥只转发插件素材和本地 session，不读任何 QIANXIA_RBFLOW_* 环境变量。
     let mut relay_body = json!({
         "image": image_b64,
         "video": video_b64,
@@ -2020,7 +2020,7 @@ fn plugin_safe_message(code: &str, message: &str) -> String {
 }
 
 fn extract_token(headers: &HashMap<String, String>) -> Option<String> {
-    if let Some(value) = headers.get("x-lingfang-plugin-token") {
+    if let Some(value) = headers.get("x-qianxia-plugin-token") {
         return Some(value.trim().to_string());
     }
     headers
@@ -2103,7 +2103,7 @@ mod tests {
     use std::sync::mpsc;
     use std::sync::Mutex;
 
-    // 视频测试会读写进程 env（LINGFANG_RBFLOW_*），Rust 默认并行跑测试会互相踩。
+    // 视频测试会读写进程 env（QIANXIA_RBFLOW_*），Rust 默认并行跑测试会互相踩。
     // 用此锁串行化所有依赖 RBFLow env 的测试，保证 env 状态可见性。
     static RBFLOW_ENV_GUARD: Mutex<()> = Mutex::new(());
 
@@ -2141,7 +2141,7 @@ mod tests {
         headers.insert("authorization".to_string(), "Bearer abc".to_string());
         assert_eq!(extract_token(&headers).as_deref(), Some("abc"));
         headers.clear();
-        headers.insert("x-lingfang-plugin-token".to_string(), "xyz".to_string());
+        headers.insert("x-qianxia-plugin-token".to_string(), "xyz".to_string());
         assert_eq!(extract_token(&headers).as_deref(), Some("xyz"));
     }
 
@@ -2509,7 +2509,7 @@ mod tests {
         let bridge = PluginLlmBridge::new();
         let token = insert_test_session(&bridge, allow_llm, allow_image, allow_video);
         let mut headers = HashMap::new();
-        headers.insert("x-lingfang-plugin-token".to_string(), token);
+        headers.insert("x-qianxia-plugin-token".to_string(), token);
         let request = HttpRequest {
             method: method.to_string(),
             path: path.to_string(),
@@ -2585,7 +2585,7 @@ mod tests {
             .expect("测试 session 应存在")
             .api_base = endpoint;
         let mut headers = HashMap::new();
-        headers.insert("x-lingfang-plugin-token".to_string(), token);
+        headers.insert("x-qianxia-plugin-token".to_string(), token);
         let result = route_request(
             &bridge.inner,
             HttpRequest {
@@ -2616,7 +2616,7 @@ mod tests {
         let bridge = PluginLlmBridge::new();
         let token = insert_test_session(&bridge, false, false, false);
         let mut headers = HashMap::new();
-        headers.insert("x-lingfang-plugin-token".to_string(), token);
+        headers.insert("x-qianxia-plugin-token".to_string(), token);
         let request = HttpRequest {
             method: "POST".to_string(),
             path: "/v1/chat/completions".to_string(),
@@ -2637,7 +2637,7 @@ mod tests {
         let bridge = PluginLlmBridge::new();
         let token = insert_test_session(&bridge, true, false, false);
         let mut headers = HashMap::new();
-        headers.insert("x-lingfang-plugin-token".to_string(), token);
+        headers.insert("x-qianxia-plugin-token".to_string(), token);
         let request = HttpRequest {
             method: "POST".to_string(),
             path: "/v1/images/generations".to_string(),
@@ -2842,7 +2842,7 @@ mod tests {
         let bridge = PluginLlmBridge::new();
         let token = insert_test_session(&bridge, false, false, false);
         let mut headers = HashMap::new();
-        headers.insert("x-lingfang-plugin-token".to_string(), token);
+        headers.insert("x-qianxia-plugin-token".to_string(), token);
         let request = HttpRequest {
             method: "POST".to_string(),
             path: "/video/generate".to_string(),
@@ -2979,22 +2979,22 @@ mod tests {
 
     #[test]
     fn plugin_env_whitelist_never_includes_rbflow_credentials() {
-        // 防绕过审计：minimal_env() 是插件进程 env 白名单，断言不含 LINGFANG_RBFLOW_*，
+        // 防绕过审计：minimal_env() 是插件进程 env 白名单，断言不含 QIANXIA_RBFLOW_*，
         // 也不含任何 TOKEN/KEY 类宿主密钥。即使桌面进程设置了这些 env，env_clear 也会清掉。
         // （minimal_env 是 plugin_runner.rs 的白名单；plugin_script.rs 复用同一函数。）
         // 注意：RBFLow 凭证现已从后台管理 PlatformSetting 读取（relay rbflow-config 端点），
-        // 桌面进程 env 也不再有 LINGFANG_RBFLOW_*，但本测试仍断言白名单不包含它们（双保险）。
+        // 桌面进程 env 也不再有 QIANXIA_RBFLOW_*，但本测试仍断言白名单不包含它们（双保险）。
         let _guard = RBFLOW_ENV_GUARD.lock().unwrap();
         // 设置一个「宿主」RBFLow env，确认它不进白名单。
-        std::env::set_var("LINGFANG_RBFLOW_URL", "http://rbflow.internal");
-        std::env::set_var("LINGFANG_RBFLOW_API_KEY", "host-secret");
+        std::env::set_var("QIANXIA_RBFLOW_URL", "http://rbflow.internal");
+        std::env::set_var("QIANXIA_RBFLOW_API_KEY", "host-secret");
         let env = crate::plugin_runner::minimal_env();
-        std::env::remove_var("LINGFANG_RBFLOW_URL");
-        std::env::remove_var("LINGFANG_RBFLOW_API_KEY");
+        std::env::remove_var("QIANXIA_RBFLOW_URL");
+        std::env::remove_var("QIANXIA_RBFLOW_API_KEY");
         for (key, _value) in &env {
             let key = key.to_string_lossy();
             assert!(
-                !key.starts_with("LINGFANG_RBFLOW"),
+                !key.starts_with("QIANXIA_RBFLOW"),
                 "插件 env 白名单绝不应包含 RBFLow 凭证，但发现：{key}"
             );
             assert!(
@@ -3017,7 +3017,7 @@ mod tests {
         let bridge = PluginLlmBridge::new();
         let token = insert_test_session(&bridge, false, false, false);
         let mut headers = HashMap::new();
-        headers.insert("x-lingfang-plugin-token".to_string(), token);
+        headers.insert("x-qianxia-plugin-token".to_string(), token);
         let request = HttpRequest {
             method: "GET".to_string(),
             path: "/video/stream?task_id=abc".to_string(),
@@ -3035,7 +3035,7 @@ mod tests {
         let bridge = PluginLlmBridge::new();
         let token = insert_test_session(&bridge, false, false, true);
         let mut headers = HashMap::new();
-        headers.insert("x-lingfang-plugin-token".to_string(), token);
+        headers.insert("x-qianxia-plugin-token".to_string(), token);
         for path in ["/video/stream", "/video/download"] {
             let request = HttpRequest {
                 method: "POST".to_string(),
@@ -3079,7 +3079,7 @@ mod tests {
         assert!(text.contains("img-bytes"));
         assert!(text.contains("vid-bytes"));
         assert!(text.contains("name=\"callback_url\""));
-        assert!(content_type.starts_with("multipart/form-data; boundary=lfVideoGenerate"));
+        assert!(content_type.starts_with("multipart/form-data; boundary=qxVideoGenerate"));
     }
 
     #[test]
@@ -3107,7 +3107,7 @@ mod tests {
         assert!(query_first("/video/stream?other=y", "task_id").is_none());
     }
 
-    // LF-06：/actions/call 守卫测试。route_action_call 仅在 armed session
+    // QX-06：/actions/call 守卫测试。route_action_call 仅在 armed session
     // （action_invocation_id = Some）下才放行；否则返回 action_dependency_denied。
     fn action_session(invocation_id: Option<&str>) -> BridgeSession {
         BridgeSession {
@@ -3129,7 +3129,7 @@ mod tests {
     #[test]
     fn route_action_call_denied_without_action_invocation() {
         // 普通 session（action_invocation_id = None）→ 403 action_dependency_denied。
-        // 这正是 LF-06 修复前所有真实启动路径的状态（register_session 硬置 None），
+        // 这正是 QX-06 修复前所有真实启动路径的状态（register_session 硬置 None），
         // 导致进程插件永远调不了 /actions/call。修复靠 register_action_session 武装会话。
         let inner = Arc::new(BridgeState {
             endpoint: Mutex::new(Some("http://127.0.0.1:0".to_string())),

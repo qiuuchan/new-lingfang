@@ -1,10 +1,10 @@
 {
-  "name": "@lingfang/plugin-sdk",
+  "name": "@qianxia/plugin-sdk",
   "version": "0.1.0",
   "type": "module",
   "main": "src/index.ts",
   "bin": {
-    "lingfang-plugin": "src/cli/index.ts"
+    "qianxia-plugin": "src/cli/index.ts"
   },
   "exports": {
     ".": "./src/index.ts",
@@ -19,7 +19,7 @@
     "cli:dev": "tsx src/cli/index.ts"
   },
   "dependencies": {
-    "@lingfang/contract": "workspace:*",
+    "@qianxia/contract": "workspace:*",
     "jszip": "^3.10.1"
   },
   "devDependencies": {

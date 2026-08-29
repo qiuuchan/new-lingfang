@@ -18,11 +18,11 @@ import { dragRegionProps } from '@/lib/window-drag';
 interface TitleBarProps {
   sidebarOpen?: boolean;
   onToggleSidebar?: () => void;
-  /** 标题栏文案（默认 '灵坊工作台'）。登录态等无侧边栏场景可传平台名展示。 */
+  /** 标题栏文案（默认 '千匣台'）。登录态等无侧边栏场景可传平台名展示。 */
   label?: string;
 }
 
-export function TitleBar({ sidebarOpen, onToggleSidebar, label = '灵坊工作台' }: TitleBarProps) {
+export function TitleBar({ sidebarOpen, onToggleSidebar, label = '千匣台' }: TitleBarProps) {
   const hasTauri =
     typeof window !== 'undefined' &&
     Boolean((window as unknown as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__);

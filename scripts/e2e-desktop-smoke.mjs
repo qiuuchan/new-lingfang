@@ -9,7 +9,7 @@
 // 断言（caps 落地后的当前预期，见 runbook「当前预期」段）：
 //   1. 应用启动、插件中心可加载；
 //   2. 内置 notes（Markdown 笔记）可打开，iframe sandbox="allow-scripts" 渲染；
-//   3. window.sdk 已注入；ui-tokens CSS 变量（--lf-color-primary）生效；
+//   3. window.sdk 已注入；ui-tokens CSS 变量（--qx-color-primary）生效；
 //   4. storage.kv set/get 真实成功（caps 后新预期，走 client_storage_kv 落盘）；
 //   5. 未声明 kind（system.info）reject capability_not_declared；
 //   6. llm.chat（凭据未配置）reject relay_not_configured。
@@ -38,7 +38,7 @@ const requireFromDesktop = createRequire(path.join(desktopDir, 'package.json'));
 const { chromium } = requireFromDesktop('@playwright/test');
 
 const NOTES_NAME = 'Markdown 笔记'; // builtin-plugins/notes/manifest.json name
-const EXE_CANDIDATES = ['lingfang-desktop.exe', '灵坊工作台.exe', 'main.exe'];
+const EXE_CANDIDATES = ['qianxia-desktop.exe', '千匣台.exe', 'main.exe'];
 const OVERALL_TIMEOUT_MS = 5 * 60 * 1000; // 连接+断言阶段总时限（不含构建）
 
 function log(msg) {
@@ -128,7 +128,7 @@ function isElevated() {
 // 不继承当前进程环境，仅 WebView2_* 两项是降权进程真正需要的）。
 async function spawnElevated(exe, env) {
   log('检测到 elevated 上下文，降权（Task Scheduler RunLevel=Limited）启动桌面壳…');
-  const taskName = `LingFangE2E_${process.pid}_${Date.now()}`;
+  const taskName = `QianXiaE2E_${process.pid}_${Date.now()}`;
   const launcherPath = path.join(os.tmpdir(), `${taskName}.bat`);
   // app stdout/stderr 前台重定向到日志：诊断盲区修复——之前 `start ""` 异步
   // 启动，进程崩溃原因完全不可见（CI 日志 tail 恒为空）。
@@ -290,12 +290,12 @@ async function run() {
 
   const port = await freePort();
   // WebView2 用户数据目录：必须放在降权（medium IL）进程可写的目录。
-  // 之前放 repo 根（D:\a\new-lingfang\...），GitHub Actions runner 的 admin
+  // 之前放 repo 根（D:\a\new-qianxia\...），GitHub Actions runner 的 admin
   // token 创建该目录后，降权进程无写权限 → WebView2 初始化失败 → app 启动即退
   // （nightly e2e 连续 6 次失败，2026-08-29 定位）。os.tmpdir() 对降权进程可写。
   const webviewDataDir = path.join(
     os.tmpdir(),
-    `lf-e2e-webview2-${process.pid}-${Date.now()}`,
+    `qx-e2e-webview2-${process.pid}-${Date.now()}`,
   );
 
   const child = spawnShell(exe, port, webviewDataDir);
@@ -346,7 +346,7 @@ async function run() {
         try {
           return spawnSync('tasklist', ['/FI', `PID eq ${child.pid}`], {
             stdio: ['ignore', 'pipe', 'ignore'],
-          }).stdout.toString().includes('lingfang');
+          }).stdout.toString().includes('qianxia');
         } catch {
           return 'unknown';
         }
@@ -454,10 +454,10 @@ async function run() {
     );
     assert(
       await inFrame(() => {
-        const v = getComputedStyle(document.documentElement).getPropertyValue('--lf-color-primary');
+        const v = getComputedStyle(document.documentElement).getPropertyValue('--qx-color-primary');
         return typeof v === 'string' && v.trim().length > 0;
       }),
-      'ui-tokens CSS 变量生效（--lf-color-primary）',
+      'ui-tokens CSS 变量生效（--qx-color-primary）',
     );
 
     // 4. storage.kv 真实成功（caps 后新预期）
@@ -474,7 +474,7 @@ async function run() {
       'storage.kv set/get 真实成功（经 client_storage_kv 落盘）',
     );
 
-    // 4b. storage.kv 管理 API 真机往返（LF-07 落地）：list / delete / count
+    // 4b. storage.kv 管理 API 真机往返（QX-07 落地）：list / delete / count
     const mgmt = await inFrame(async () => {
       const toCount = (c) => (typeof c === 'number') ? c : (c && c.count);
       // 形状兜底：宿主 shim 已解包为数组；npm SDK 旧形态回传 {keys}。
@@ -540,7 +540,7 @@ async function run() {
     );
 
     // 7. clipboard 网关 gate 负向证明：notes 未声明 clipboard，应被拒绝
-    //    （clipboard 正向往返 writeText→readText 需声明 clipboard 的插件，列入 LF-12 未验证项）
+    //    （clipboard 正向往返 writeText→readText 需声明 clipboard 的插件，列入 QX-12 未验证项）
     assert(
       (await inFrame(async () => {
         try {
@@ -567,7 +567,7 @@ async function run() {
       '未声明的 net.fetch 拒绝 capability_not_declared（网关 gate 生效）',
     );
 
-    // 9. 重启不复活证明（LF-07 落盘修正）：写入后 delete，重启应用，删除的键不应复活。
+    // 9. 重启不复活证明（QX-07 落盘修正）：写入后 delete，重启应用，删除的键不应复活。
     const restartKey = `lf12_restart_${Date.now()}`;
     await inFrame(async (k) => {
       await window.sdk.storage.set(k, 'v');

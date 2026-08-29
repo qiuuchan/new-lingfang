@@ -73,7 +73,7 @@ export function SettingsPanel({ onClose }: { onClose?: () => void }) {
   const apiBaseError = validateRelayApiBase(apiBase);
   const tokenHint = relayTokenHint(authToken);
 
-  // LF-10：应用侧更新触发链路（手动触发，v1 不做后台静默下载）。
+  // QX-10：应用侧更新触发链路（手动触发，v1 不做后台静默下载）。
   // 流程：check_update →（有更新）download_update → apply_update（拉起 updater.exe 覆盖重启）。
   const onCheckUpdate = useCallback(async () => {
     if (downloadingRef.current) return;
@@ -138,7 +138,7 @@ export function SettingsPanel({ onClose }: { onClose?: () => void }) {
 
   return (
     <div className="space-y-5">
-      {/* LF-10：更新检查入口（手动触发）。 */}
+      {/* QX-10：更新检查入口（手动触发）。 */}
       <div className="space-y-2 rounded-md border p-3">
         <div className="flex items-center justify-between">
           <div className="space-y-0.5">

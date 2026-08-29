@@ -1,4 +1,4 @@
-// action-caller/main.js — LF-06 内置 fixture（runtime_type: nodejs）。
+// action-caller/main.js — QX-06 内置 fixture（runtime_type: nodejs）。
 //
 // 由桌面壳以「action invocation」会话启动（start_builtin_plugin 的 actionInvocation=true），
 // 该会话经 register_action_session 武装了 action_invocation_id + action_context，
@@ -11,8 +11,8 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 
-const BRIDGE_URL = process.env.LINGFANG_PLUGIN_BRIDGE_URL || '';
-const BRIDGE_TOKEN = process.env.LINGFANG_PLUGIN_BRIDGE_TOKEN || '';
+const BRIDGE_URL = process.env.QIANXIA_PLUGIN_BRIDGE_URL || '';
+const BRIDGE_TOKEN = process.env.QIANXIA_PLUGIN_BRIDGE_TOKEN || '';
 // 用自身模块目录定位 result.json（cwd 也是插件目录，但显式取模块目录更稳）。
 const RESULT_PATH = path.join(__dirname, 'result.json');
 
@@ -34,7 +34,7 @@ if (!BRIDGE_URL || !BRIDGE_TOKEN) {
   fail('action_runtime_unavailable', '缺少桥 URL/Token 环境变量（未以 action invocation 会话启动）');
 }
 
-const body = JSON.stringify({ dependency_id: 'demo.hello', input: { name: 'lingfang' } });
+const body = JSON.stringify({ dependency_id: 'demo.hello', input: { name: 'qianxia' } });
 const url = new URL(BRIDGE_URL);
 const reqPath = '/actions/call';
 
@@ -48,7 +48,7 @@ const req = http.request(
     headers: {
       'Content-Type': 'application/json',
       'Content-Length': Buffer.byteLength(body),
-      'X-LingFang-Plugin-Token': BRIDGE_TOKEN,
+      'X-QianXia-Plugin-Token': BRIDGE_TOKEN,
     },
   },
   (res) => {

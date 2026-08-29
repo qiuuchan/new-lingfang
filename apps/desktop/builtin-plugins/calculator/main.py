@@ -3,7 +3,7 @@
 # 计算器插件入口（runtime_type: python）
 # -----------------------------------------------------------------------------
 # PySide6 (Qt6) 实现的桌面计算器。由桌面壳 start_plugin 命令在
-# %LOCALAPPDATA%/LingFang/python-venvs 下创建 venv（首次会从清华镜像 pip install
+# %LOCALAPPDATA%/QianXia/python-venvs 下创建 venv（首次会从清华镜像 pip install
 # PySide6，约 80MB，几十秒；之后幂等跳过）后 detached 运行 `python -u main.py`。
 #
 # 界面在进程自己弹出的独立窗口（平台对 python/nodejs 插件只做启动器 + 进程监视），

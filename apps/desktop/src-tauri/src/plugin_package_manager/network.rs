@@ -43,7 +43,7 @@ fn artifact_upload_headers(
     let mut headers = HeaderMap::new();
     headers.insert(
         CONTENT_TYPE,
-        HeaderValue::from_static("application/vnd.lingfang.plugin+zip"),
+        HeaderValue::from_static("application/vnd.qianxia.plugin+zip"),
     );
     headers.insert(
         CONTENT_LENGTH,
@@ -151,7 +151,7 @@ fn prepare_local_artifact(
 ) -> Result<(PathBuf, InspectedArtifact, ReleaseProvenance), String> {
     let path = PathBuf::from(input.artifact_path.trim());
     if path.as_os_str().is_empty() {
-        return Err("请选择要发布的 .lfplugin 制品".to_string());
+        return Err("请选择要发布的 .qplugin 制品".to_string());
     }
     let inspected = inspect_artifact(&path)?;
     let provenance = resolve_provenance(
@@ -238,7 +238,7 @@ pub(crate) async fn download_plugin_release(
         .staging_root()
         .join(format!("download-{}", Uuid::new_v4()));
     fs::create_dir_all(&staging).map_err(|error| format!("创建下载暂存目录失败：{error}"))?;
-    let artifact_path = staging.join("artifact.lfplugin");
+    let artifact_path = staging.join("artifact.qplugin");
     let mut output = fs::File::create(&artifact_path)
         .map_err(|error| format!("创建下载暂存文件失败：{error}"))?;
     let mut stream = response.bytes_stream();
@@ -324,7 +324,7 @@ pub(crate) async fn install_plugin_from_url(
         .staging_root()
         .join(format!("download-{}", Uuid::new_v4()));
     fs::create_dir_all(&staging).map_err(|error| format!("创建下载暂存目录失败：{error}"))?;
-    let artifact_path = staging.join("artifact.lfplugin");
+    let artifact_path = staging.join("artifact.qplugin");
     let mut output = fs::File::create(&artifact_path)
         .map_err(|error| format!("创建下载暂存文件失败：{error}"))?;
     let mut stream = response.bytes_stream();
@@ -380,7 +380,7 @@ pub(crate) async fn publish_draft_workspace(
     )?;
     let _ = on_event.send(PackageTransferEvent::Stage {
         stage: "packing".to_string(),
-        message: "正在生成 .lfplugin v4 制品".to_string(),
+        message: "正在生成 .qplugin v4 制品".to_string(),
     });
     let packed = manager.pack_workspace(&input.workspace_id, None)?;
     let version = packed
@@ -433,7 +433,7 @@ pub(crate) async fn publish_local_artifact(
 ) -> Result<Value, String> {
     let _ = on_event.send(PackageTransferEvent::Stage {
         stage: "verifying".to_string(),
-        message: "正在校验 .lfplugin v4 制品".to_string(),
+        message: "正在校验 .qplugin v4 制品".to_string(),
     });
     let (path, _, provenance) = prepare_local_artifact(&input)?;
     let _ = on_event.send(PackageTransferEvent::Stage {
@@ -460,7 +460,7 @@ mod tests {
     use reqwest::StatusCode;
 
     fn temp(name: &str) -> PathBuf {
-        std::env::temp_dir().join(format!("lingfang-network-{name}-{}", Uuid::new_v4()))
+        std::env::temp_dir().join(format!("qianxia-network-{name}-{}", Uuid::new_v4()))
     }
 
     #[test]
@@ -491,7 +491,7 @@ mod tests {
         )
         .unwrap();
         fs::write(workspace.join("index.html"), "<p>direct</p>").unwrap();
-        let artifact_path = root.join("direct.lfplugin");
+        let artifact_path = root.join("direct.qplugin");
         let artifact = package_workspace(&workspace, &artifact_path).unwrap();
         let input = PublishLocalArtifactInput {
             api_base: "http://localhost:8787".to_string(),

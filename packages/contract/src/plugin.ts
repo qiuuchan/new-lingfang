@@ -49,7 +49,7 @@ export const PluginCapability = z.object({
   risk: CapabilityRisk.default('low'),
   requires_admin: z.boolean().default(false),
   // fs.read / fs.write 的路径白名单模板（$HOME 等由宿主展开）。
-  // LF-23 缺陷修复：此前缺失导致 validate/build 往返把 paths 剥离，
+  // QX-23 缺陷修复：此前缺失导致 validate/build 往返把 paths 剥离，
   // 安装后 fs.read 恒 OutOfScope（fail-closed 但功能断裂）。
   paths: z.array(z.string()).default([]),
   scope: z.record(z.unknown()).optional(),

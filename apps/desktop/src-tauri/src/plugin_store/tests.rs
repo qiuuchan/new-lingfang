@@ -3,7 +3,7 @@ use super::*;
 /// 构造临时 PluginStore（anchor_root 在 temp_dir 下，隔离测试）。
 fn temp_store(name: &str) -> PluginStore {
     let root = std::env::temp_dir().join(format!(
-        "lingfang-plugin-store-{}-{name}",
+        "qianxia-plugin-store-{}-{name}",
         std::process::id()
     ));
     let _ = fs::remove_dir_all(&root);
@@ -21,8 +21,8 @@ fn sanitize_plugin_id_rejects_traversal() {
     assert!(sanitize_plugin_id("C:\\win").is_err());
     assert!(sanitize_plugin_id("").is_err());
     assert!(sanitize_plugin_id("   ").is_err());
-    // 隐藏段（. 开头，如 .lingfang）被拒（scan 据此跳过元数据目录）。
-    assert!(sanitize_plugin_id(".lingfang").is_err());
+    // 隐藏段（. 开头，如 .qianxia）被拒（scan 据此跳过元数据目录）。
+    assert!(sanitize_plugin_id(".qianxia").is_err());
     assert!(sanitize_plugin_id(".env").is_err());
     // 中文目录名被拒（仅允许 ASCII 字母数字下划线短横线）。
     assert!(sanitize_plugin_id("我的插件").is_err());
@@ -162,7 +162,7 @@ fn rename_and_title_rejects_existing_target() {
 #[test]
 fn scan_incomplete_when_manifest_missing() {
     let store = temp_store("scan-no-manifest");
-    let dir = store.plugins_root().join("half-baked");
+    let dir = store.plugins_root().join("haqx-baked");
     fs::create_dir_all(&dir).unwrap();
     // 仅写了 entry 文件，无 manifest.json。
     fs::create_dir_all(dir.join("ui")).unwrap();
@@ -277,15 +277,15 @@ fn scan_parses_runtime_types() {
 #[test]
 fn scan_skips_hidden_and_invalid_directory_names() {
     let store = temp_store("scan-skip-invalid");
-    // .lingfang 元数据目录（PluginStore 构造时已创建）应被跳过。
+    // .qianxia 元数据目录（PluginStore 构造时已创建）应被跳过。
     // 含空格的目录名应被跳过。
     let dir = store.plugins_root().join("has space");
     fs::create_dir_all(&dir).unwrap();
     fs::write(dir.join("manifest.json"), r#"{"id":"x","name":"x"}"#).unwrap();
     let metas = store.list_plugins();
-    // 仅 .lingfang 被跳过 + has space 被跳过 → 应为 0 个插件。
+    // 仅 .qianxia 被跳过 + has space 被跳过 → 应为 0 个插件。
     assert!(metas.iter().all(|m| m.id != "has space"));
-    assert!(metas.iter().all(|m| m.id != ".lingfang"));
+    assert!(metas.iter().all(|m| m.id != ".qianxia"));
 }
 
 #[test]
@@ -322,7 +322,7 @@ fn config_roundtrip_custom_root() {
     assert_eq!(store.plugins_root(), store.anchor_root);
     // 设置自定义路径。
     let custom =
-        std::env::temp_dir().join(format!("lingfang-plugin-custom-{}", std::process::id()));
+        std::env::temp_dir().join(format!("qianxia-plugin-custom-{}", std::process::id()));
     let _ = fs::remove_dir_all(&custom);
     store
         .write_config(&PluginStoreConfig {
@@ -480,7 +480,7 @@ fn write_files_rejects_absolute_path() {
     assert!(err.contains("非法"));
 }
 
-// === 二进制读写（.lfplugin v3 导入/导出路径）===
+// === 二进制读写（.qplugin v3 导入/导出路径）===
 
 #[test]
 fn write_file_bytes_writes_binary_content() {

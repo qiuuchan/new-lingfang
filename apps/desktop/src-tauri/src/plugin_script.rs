@@ -100,10 +100,10 @@ pub struct RunResult {
 fn install_hint(runtime: ScriptRuntime) -> String {
     match runtime {
         ScriptRuntime::Nodejs => {
-            "未检测到软件内置 Node.js。安装包可能不完整，请重新安装灵坊工作台。".to_string()
+            "未检测到软件内置 Node.js。安装包可能不完整，请重新安装千匣台。".to_string()
         }
         ScriptRuntime::Python => {
-            "未检测到软件内置 Python。安装包可能不完整，请重新安装灵坊工作台。".to_string()
+            "未检测到软件内置 Python。安装包可能不完整，请重新安装千匣台。".to_string()
         }
     }
 }
@@ -603,11 +603,11 @@ pub fn run_plugin_script(
     let _bridge_guard = bridge.revoke_on_drop(bridge_token);
     if let Some(bridge_env) = bridge_env {
         env.push((
-            OsString::from("LINGFANG_PLUGIN_BRIDGE_URL"),
+            OsString::from("QIANXIA_PLUGIN_BRIDGE_URL"),
             OsString::from(bridge_env.url),
         ));
         env.push((
-            OsString::from("LINGFANG_PLUGIN_BRIDGE_TOKEN"),
+            OsString::from("QIANXIA_PLUGIN_BRIDGE_TOKEN"),
             OsString::from(bridge_env.token),
         ));
     }

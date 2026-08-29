@@ -1,7 +1,7 @@
 # H2: 平台范围——v1 仅支持 Windows
 
 > 状态：✅ 已拍板（2026-08-24）。代码与文档现状均与「v1 = Windows-only」一致；跨平台为明确推迟项。
-> 范围：灵坊工作台（my-treasure）Tauri v2 桌面端 `apps/desktop` 及其安装器 `apps/desktop/installer`
+> 范围：千匣台（my-treasure）Tauri v2 桌面端 `apps/desktop` 及其安装器 `apps/desktop/installer`
 > 关联决策：B3（bundled runtime 物料来源）、IMPLEMENTATION_PLAN / IMPROVEMENT_PLAN 中 H2 条目
 
 ---
@@ -27,7 +27,7 @@ v1 明确**只支持 Windows**，暂不提供 macOS / Linux 构建与分发。�
 
 ## 未能核实 / 需复核项（供主 agent 二次确认）
 
-- **任务描述称 SFX 安装器含「minisign 签名」**：实际核对后，`minisign` 验签**不在 installer 子 crate**，而在主桌面壳 `apps/desktop/src-tauri/src/plugin_security.rs`（`verify_minisign()`，L36；依赖 `minisign-verify = "0.2"`，`Cargo.toml:47`），用于校验 `.lfplugin` 包签名。`apps/desktop/installer/` 下无任何 minisign / 签名相关代码——安装器只做 SHA-256 完整性校验（`integrity.rs`）与尾部格式拼接，签名验证发生在宿主侧。本文档已按真实代码描述，未写入「安装器做 minisign 签名」。
+- **任务描述称 SFX 安装器含「minisign 签名」**：实际核对后，`minisign` 验签**不在 installer 子 crate**，而在主桌面壳 `apps/desktop/src-tauri/src/plugin_security.rs`（`verify_minisign()`，L36；依赖 `minisign-verify = "0.2"`，`Cargo.toml:47`），用于校验 `.qplugin` 包签名。`apps/desktop/installer/` 下无任何 minisign / 签名相关代码——安装器只做 SHA-256 完整性校验（`integrity.rs`）与尾部格式拼接，签名验证发生在宿主侧。本文档已按真实代码描述，未写入「安装器做 minisign 签名」。
 - **`rc.exe` 未在仓库源代码中以字面量出现**：仓库内没有任何文件直接写 `rc.exe` 字符串，它是 `winres` 依赖在 Windows 构建时隐式调用的工具链。唯一文字提及 Windows 资源编译的是 `installer/build.rs:29` 的降级注释。其余 `rc.exe` 引用仅见于 `CODEBUDDY.md`（环境说明）与 `README.md`（前置要求），均为文档而非代码。已如实标注，未发明路径。
 - **`tauri.conf.json` 未直接出现 `WebView2` 字样**：WebView2 由 Tauri v2 在 Windows 平台隐式选用，配置侧只暴露 `nsis` target 与 `mica` 效果。WebView2 的显式证据已通过 `Cargo.lock`（`webview2-com*`）、NSIS 安装脚本（`installer.nsi` 的 `Section WebView2`）与 `IMPROVEMENT_PLAN.md:45` 的环境变量用法核实。
 

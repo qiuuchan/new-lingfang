@@ -1,7 +1,7 @@
-//! e2e-cap-closure-verify.mjs — LF-19 能力面观察项闭环（双插件导入 + clipboard/net.fetch/relay 正向）。
+//! e2e-cap-closure-verify.mjs — QX-19 能力面观察项闭环（双插件导入 + clipboard/net.fetch/relay 正向）。
 //!
-//! 覆盖（WORK_ORDERS LF-19 第 1-4 条，CDP 证据）：
-//!   1. clip-digest + web-clip + relay-probe 三个 `.lfplugin` 本地导入（install_plugin_artifact
+//! 覆盖（WORK_ORDERS QX-19 第 1-4 条，CDP 证据）：
+//!   1. clip-digest + web-clip + relay-probe 三个 `.qplugin` 本地导入（install_plugin_artifact
 //!      origin=local）→ F3 来源徽标「本地导入」+「未签名」警示在插件中心展示；
 //!   2. clipboard 正向往返：web-clip（已声明 clipboard）iframe 内 writeText → readText；
 //!   3. net.fetch 公网正向：web-clip iframe 内请求 https://example.com 断言 200
@@ -10,9 +10,9 @@
 //!      audio.generate）在 relay-adapter（RELAY_ADAPTER_MOCK=1）驱动下全绿；
 //!      audio 若因 SDK 接线缺口失败则如实记录（data-probe-audio.generate 值原样断言）。
 //!
-//! 前置：release 桌面壳（target/release/lingfang-desktop.exe，LF-18 tauri build 产物）、
-//! 三个示例插件已 build（脚本自动补 build）。relay 凭据经 env 注入（LF-04a seam）：
-//! LINGFANG_RELAY_API_BASE=http://127.0.0.1:<port> + LINGFANG_RELAY_TOKEN=mock-token。
+//! 前置：release 桌面壳（target/release/qianxia-desktop.exe，QX-18 tauri build 产物）、
+//! 三个示例插件已 build（脚本自动补 build）。relay 凭据经 env 注入（QX-04a seam）：
+//! QIANXIA_RELAY_API_BASE=http://127.0.0.1:<port> + QIANXIA_RELAY_TOKEN=mock-token。
 
 import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -25,11 +25,11 @@ const requireFromDesktop = createRequire(path.resolve('apps/desktop/package.json
 const { chromium } = requireFromDesktop('@playwright/test');
 
 const REPO_ROOT = process.cwd();
-const MAIN_EXE = 'lingfang-desktop.exe';
+const MAIN_EXE = 'qianxia-desktop.exe';
 const PLUGINS = [
-  { id: 'com.lingfang.clip-digest', name: '剪藏摘要', dir: 'clip-digest' },
-  { id: 'com.lingfang.web-clip', name: '网页剪藏', dir: 'web-clip' },
-  { id: 'com.lingfang.relay-probe', name: 'Relay 探针', dir: 'relay-probe' },
+  { id: 'com.qianxia.clip-digest', name: '剪藏摘要', dir: 'clip-digest' },
+  { id: 'com.qianxia.web-clip', name: '网页剪藏', dir: 'web-clip' },
+  { id: 'com.qianxia.relay-probe', name: 'Relay 探针', dir: 'relay-probe' },
 ];
 
 let failed = 0;
@@ -63,7 +63,7 @@ function isElevated() {
 }
 
 async function spawnElevated(exe, env) {
-  const taskName = `LingFangE2E_${process.pid}_${Date.now()}`;
+  const taskName = `QianXiaE2E_${process.pid}_${Date.now()}`;
   const launcherPath = path.join(os.tmpdir(), `${taskName}.bat`);
   const bat = [
     '@echo off',
@@ -160,7 +160,7 @@ async function connectPage(port) {
 const invoke = (page, cmd, args = {}) =>
   page.evaluate(([c, a]) => window.__TAURI__.core.invoke(c, a), [cmd, args]);
 
-// 带超时的 evaluate 封装：避免命令悬死时脚本整体挂起（LF-19 e2e 曾整轮卡死）。
+// 带超时的 evaluate 封装：避免命令悬死时脚本整体挂起（QX-19 e2e 曾整轮卡死）。
 const evaluateWithTimeout = (page, fn, arg, timeoutMs = 20_000, label = 'evaluate') =>
   Promise.race([
     page.evaluate(fn, arg),
@@ -187,7 +187,7 @@ function killTree(pid) {
 function ensurePluginArtifacts() {
   const artifacts = [];
   for (const p of PLUGINS) {
-    const built = path.join(REPO_ROOT, 'packages/plugin-sdk', `com.lingfang.${p.dir}-0.1.0.lfplugin`);
+    const built = path.join(REPO_ROOT, 'packages/plugin-sdk', `com.qianxia.${p.dir}-0.1.0.qplugin`);
     if (!fs.existsSync(built)) {
       log(`构建 ${p.dir} 插件制品…`);
       const r = spawnSync('pnpm', ['-C', 'packages/plugin-sdk', 'cli:dev', 'build', `packages/plugin-sdk/examples/${p.dir}`], {
@@ -206,7 +206,7 @@ function ensurePluginArtifacts() {
 // ── 主流程 ───────────────────────────────────────────────────────────────
 
 async function run() {
-  const tmpRoot = path.join(os.tmpdir(), `lingfang-cap-e2e-${Date.now()}`);
+  const tmpRoot = path.join(os.tmpdir(), `qianxia-cap-e2e-${Date.now()}`);
   fs.mkdirSync(tmpRoot, { recursive: true });
   const webviewData = path.join(tmpRoot, 'webview-data');
   let appHandle = null;
@@ -234,8 +234,8 @@ async function run() {
     const exe = path.join(REPO_ROOT, 'target/release', MAIN_EXE);
     if (!fs.existsSync(exe)) throw new Error(`未找到 release 桌面壳：${exe}（先 tauri build --no-bundle）`);
     appHandle = spawnShell(exe, port, webviewData, {
-      LINGFANG_RELAY_API_BASE: `http://127.0.0.1:${adapterPort}`,
-      LINGFANG_RELAY_TOKEN: 'mock-token',
+      QIANXIA_RELAY_API_BASE: `http://127.0.0.1:${adapterPort}`,
+      QIANXIA_RELAY_TOKEN: 'mock-token',
     });
     await waitForCdp(port, 90_000);
     const { browser, page } = await connectPage(port);
@@ -244,18 +244,18 @@ async function run() {
 
     // 2. 双插件 + 探针导入（先清场再 install_plugin_artifact，origin=local）
     const artifacts = ensurePluginArtifacts();
-    log('清场既有安装并本地导入三个 .lfplugin…');
+    log('清场既有安装并本地导入三个 .qplugin…');
     for (let i = 0; i < PLUGINS.length; i++) {
       log(`[${i + 1}/3] 处理 ${PLUGINS[i].id}…`);
       // 先卸载既有安装（同名不同版本会停在 pendingRelease，runner 仍加载旧活动版本）。
       // 注意：只回传映射子集——完整 LocalInstallation 跨 CDP 序列化曾致 evaluate 永不
-      // resolve（LF-19 实测，list 返回原始数组即挂起，子集 13ms 即回）。
+      // resolve（QX-19 实测，list 返回原始数组即挂起，子集 13ms 即回）。
       const listStart = Date.now();
       const existing = await evaluateWithTimeout(
         page,
         // ⚠️ 参数直接传命令名字符串——包进数组会让 invoke 收到数组型命令名，
         // IPC 反序列化报「invalid type: sequence, expected a string」且 promise 永不落定
-        // （LF-19 真机排障实录，探针内联字符串正常、此处传数组即挂）。
+        // （QX-19 真机排障实录，探针内联字符串正常、此处传数组即挂）。
         (cmd) =>
           window.__TAURI__.core.invoke(cmd).then(
             (v) => (v ?? []).map((i) => ({ installationId: i.installationId, packageId: i.packageId, origin: i.origin })),

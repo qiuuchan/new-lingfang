@@ -1,4 +1,4 @@
-// resolvePluginPath 单测（LF-05 / g2-sdk-friction #2 回归）。
+// resolvePluginPath 单测（QX-05 / g2-sdk-friction #2 回归）。
 // 关键场景：cwd 固定为 packages/plugin-sdk 时，仓库根相对路径不得被二次拼接。
 import { describe, expect, it } from 'vitest';
 import path from 'node:path';

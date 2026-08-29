@@ -1,12 +1,12 @@
-// .lfplugin v4 打包器：与桌面壳 `plugin_artifact_v4.rs::inspect_artifact` 兼容。
-// 真源：.trellis/tasks/07-13-plugin-dev-sdk/research/lfplugin-format.md
+// .qplugin v4 打包器：与桌面壳 `plugin_artifact_v4.rs::inspect_artifact` 兼容。
+// 真源：.trellis/tasks/07-13-plugin-dev-sdk/research/qplugin-format.md
 //
 // 关键约束：
 // - ZIP 根级文件（无顶层目录）
 // - _meta.json 固定内容（紧凑 JSON）
 // - manifest.json pretty-printed
 // - 文件字典序，固定 date=new Date(0)，权限 0o644，Deflate level 6，platform UNIX
-// - 排除：data, .git, .venv, venv, node_modules, .lingfang, __pycache__, .pytest_cache,
+// - 排除：data, .git, .venv, venv, node_modules, .qianxia, __pycache__, .pytest_cache,
 //   .mypy_cache, *.pyc, *.pyo, _meta.json（由本模块创建）, manifest.json（同上）
 
 import { createHash } from 'node:crypto';
@@ -29,14 +29,14 @@ const EXCLUDED_SEGMENTS = new Set([
   '.venv',
   'venv',
   'node_modules',
-  '.lingfang',
+  '.qianxia',
   '__pycache__',
   '.pytest_cache',
   '.mypy_cache',
 ]);
 
 // _meta.json 固定内容（紧凑 JSON，与 Rust 第 52 行 b"{...}" 一致）
-const META_JSON_CONTENT = '{"format":"lingfang-plugin","formatVersion":4}';
+const META_JSON_CONTENT = '{"format":"qianxia-plugin","formatVersion":4}';
 
 export interface CollectedFile {
   /** ZIP 内部路径（始终用正斜杠）。 */
@@ -76,7 +76,7 @@ export interface PackResult {
   files: CollectedFile[];
   /** 总未压缩字节数。 */
   totalUncompressed: number;
-  /** 输出文件的推荐名称 `<id>-<version>.lfplugin`。 */
+  /** 输出文件的推荐名称 `<id>-<version>.qplugin`。 */
   suggestedFilename: string;
   /** ZIP 内容的 SHA256（前 16 字符），与桌面壳 release_id 计算方式一致。 */
   sha256Prefix: string;
@@ -212,12 +212,12 @@ export async function collectWorkspaceFiles(
 }
 
 /**
- * 打包工作区为 .lfplugin v4 字节流。
+ * 打包工作区为 .qplugin v4 字节流。
  *
  * 使用方式：
  * ```ts
  * const result = await packWorkspace({ workspaceDir, manifest });
- * await writeFile('my-plugin-1.0.0.lfplugin', result.buffer);
+ * await writeFile('my-plugin-1.0.0.qplugin', result.buffer);
  * ```
  */
 export async function packWorkspace(opts: PackOptions): Promise<PackResult> {
@@ -293,7 +293,7 @@ export async function packWorkspace(opts: PackOptions): Promise<PackResult> {
 
   // 推荐文件名
   const safeId = manifest.id.replace(/[^a-zA-Z0-9-_.]/g, '-');
-  const suggestedFilename = `${safeId}-${manifest.version}.lfplugin`;
+  const suggestedFilename = `${safeId}-${manifest.version}.qplugin`;
 
   return {
     buffer,

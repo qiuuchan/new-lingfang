@@ -3,7 +3,7 @@
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { validateManifest, type ManifestResult } from '../../manifest/index.ts';
-import type { PluginManifest } from '@lingfang/contract';
+import type { PluginManifest } from '@qianxia/contract';
 import { log } from '../log.ts';
 import { resolvePluginPath } from '../util/resolvePath.ts';
 
@@ -29,7 +29,7 @@ export interface DevResult {
  * @returns     退出码：0 成功，1 失败
  */
 export async function devCommand(argv: string[], opts?: DevOptions): Promise<number> {
-  // 1. 解析目录（绝对路径；LF-05 / g2-sdk-friction #2 路径归一化防二次拼接）
+  // 1. 解析目录（绝对路径；QX-05 / g2-sdk-friction #2 路径归一化防二次拼接）
   const dir = resolvePluginPath(opts?.path ?? argv[0] ?? process.cwd());
   if (!existsSync(dir) || !statSync(dir).isDirectory()) {
     return printError('dir_not_found', `目录不存在或不是目录: ${dir}`, opts?.json ?? false, dir, opts?.quiet ?? false);
@@ -87,12 +87,12 @@ export async function devCommand(argv: string[], opts?: DevOptions): Promise<num
   }
   const manifest: PluginManifest = result.manifest;
 
-  // 4. v1 仅支持 client 运行时（F2 政策 / LF-02）
+  // 4. v1 仅支持 client 运行时（F2 政策 / QX-02）
   const runtimeType = manifest.runtime_type ?? 'client';
   if (runtimeType !== 'client') {
     return printError(
       'runtime_not_supported',
-      `v1 dev 安装仅支持 client 运行时（F2 政策 / LF-02）。当前 runtime_type="${runtimeType}"。` +
+      `v1 dev 安装仅支持 client 运行时（F2 政策 / QX-02）。当前 runtime_type="${runtimeType}"。` +
         ` nodejs/python 进程插件在 v1 下仅限内置或一方签名插件。`,
       opts?.json ?? false,
       dir,
@@ -139,7 +139,7 @@ export async function devCommand(argv: string[], opts?: DevOptions): Promise<num
     };
     process.stdout.write(JSON.stringify(out, null, 2) + '\n');
   } else if (opts?.quiet ?? false) {
-    // LF-08：--quiet 成功不输出（退出码 0 即成功）。
+    // QX-08：--quiet 成功不输出（退出码 0 即成功）。
   } else {
     log.success(`dev 安装已注册：${dir} (origin=dev)`);
     if (installationId) {
@@ -161,21 +161,21 @@ export async function devCommand(argv: string[], opts?: DevOptions): Promise<num
  * - 否则视为 CLI 独立运行（无 Tauri），不抛错，仅返回一个未定义 installationId
  *   （由调用方提示用户回到宿主中打开插件）。
  *
- * 亦支持通过全局钩子 `__LINGFANG_DEV_REGISTER__` 注入自定义注册实现（测试 / 集成用）。
+ * 亦支持通过全局钩子 `__QIANXIA_DEV_REGISTER__` 注入自定义注册实现（测试 / 集成用）。
  */
 export async function registerDevDir(
   dir: string,
   packageId?: string
 ): Promise<{ installationId: string }> {
   const g = globalThis as unknown as {
-    __LINGFANG_DEV_REGISTER__?: (input: { dir: string; packageId?: string }) => Promise<{
+    __QIANXIA_DEV_REGISTER__?: (input: { dir: string; packageId?: string }) => Promise<{
       installationId: string;
     }>;
     window?: { __TAURI__?: { core?: { invoke?: Function } } };
   };
 
-  if (typeof g.__LINGFANG_DEV_REGISTER__ === 'function') {
-    return g.__LINGFANG_DEV_REGISTER__({ dir, packageId });
+  if (typeof g.__QIANXIA_DEV_REGISTER__ === 'function') {
+    return g.__QIANXIA_DEV_REGISTER__({ dir, packageId });
   }
 
   const tauriCore = g.window?.__TAURI__?.core;

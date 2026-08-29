@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { SharedChangeEvent, SharedPage, SharedValue } from '@lingfang/contract';
+import type { SharedChangeEvent, SharedPage, SharedValue } from '@qianxia/contract';
 import {
   SharedRecoveryError,
   applySharedChange,

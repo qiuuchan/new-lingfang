@@ -1,8 +1,8 @@
 {
-  "id": "com.lingfang.web-clip",
+  "id": "com.qianxia.web-clip",
   "name": "网页剪藏",
   "version": "0.1.0",
-  "description": "从剪贴板读取网页 URL，抓取正文并用灵坊平台 LLM 摘要，存入 storage.kv 存档，通过 ui.view 展示。client 运行时示例插件，覆盖 clipboard.read / net.fetch / llm.chat / storage.kv / ui.view 五个 kind。",
+  "description": "从剪贴板读取网页 URL，抓取正文并用千匣平台 LLM 摘要，存入 storage.kv 存档，通过 ui.view 展示。client 运行时示例插件，覆盖 clipboard.read / net.fetch / llm.chat / storage.kv / ui.view 五个 kind。",
   "runtime_type": "client",
   "entry": "ui/index.html",
   "visibility": "private",
@@ -10,7 +10,7 @@
     { "kind": "clipboard", "reason": "读取用户剪贴板中的网页 URL", "risk": "low", "requires_admin": false },
     { "kind": "net.fetch", "reason": "抓取用户明确给出的网页 URL 正文", "risk": "medium", "requires_admin": false },
     { "kind": "storage.kv", "reason": "按插件隔离存档剪藏的 URL、正文摘要与元数据", "risk": "low", "requires_admin": false },
-    { "kind": "llm.chat", "reason": "调用灵坊平台 LLM 对网页正文生成中文摘要", "risk": "medium", "requires_admin": false },
+    { "kind": "llm.chat", "reason": "调用千匣平台 LLM 对网页正文生成中文摘要", "risk": "medium", "requires_admin": false },
     { "kind": "ui.view", "reason": "以宿主弹层展示抓取结果与摘要（Markdown 渲染，不注入 HTML）", "risk": "low", "requires_admin": false }
   ]
 }

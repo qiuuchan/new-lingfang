@@ -1,12 +1,12 @@
 # G2 · SDK 使用摩擦记录（剪藏摘要狗粮插件实证）
 
-> 工单：**LF-01**（建议派 Agent A）
+> 工单：**QX-01**（建议派 Agent A）
 > 插件：`packages/plugin-sdk/examples/clip-digest/`（client 运行时，覆盖 `clipboard` + `storage.kv` + `llm.chat` + `ui.view` 四个 kind）
 > 验证环境：Windows 11 / pnpm 9 / Node 20 / 无 WebView2 与 `cargo` 桌面闭环（见文末「未验证项」）
 > 记录人：本会话（ultracode 工作流 + 人工核对）
 > 目的：作为后续 SDK / CLI / API 调整的**唯一输入源**。每条摩擦含「现象 / 复现 / 建议」，无问题项显式标注「无问题」。
 >
-> **解决状态（LF-05，2026-08-25）**：#1 已修复（npm SDK `pluginAiError` 归一 relay 码 +
+> **解决状态（QX-05，2026-08-25）**：#1 已修复（npm SDK `pluginAiError` 归一 relay 码 +
 > 导出 `PluginAiErrorCode` 常量，含裸字符串 reject 形态）；#2 已修复（`resolvePluginPath`
 > 防二次拼接，validate/build/dev/publish 接入）；#5 前半已修复（Rust kv 配额码
 > `kv_value_too_large` / `kv_quota_exceeded` + 宿主归一化，先于泛化「超出」匹配）；
@@ -20,8 +20,8 @@
 
 | 项 | 结果 |
 |---|---|
-| `lingfang-plugin validate` | ✅ exit 0，无 error 无 warning |
-| `lingfang-plugin build` | ✅ exit 0，产物 `com.lingfang.clip-digest-0.1.0.lfplugin`（6700 字节，v4，`_meta.json` 含 `formatVersion:4`，sha `ab0e67e3f74fe34d`） |
+| `qianxia-plugin validate` | ✅ exit 0，无 error 无 warning |
+| `qianxia-plugin build` | ✅ exit 0，产物 `com.qianxia.clip-digest-0.1.0.qplugin`（6700 字节，v4，`_meta.json` 含 `formatVersion:4`，sha `ab0e67e3f74fe34d`） |
 | 4 个 kind 在插件内真实调用 | ✅ 见 `ui/index.html`：readText→storage.set→llm.chat（含降级）→ui.render |
 | `pnpm typecheck`（contract + plugin-sdk + desktop + root） | ✅ 全绿 |
 | `pnpm test`（plugin-sdk 123 + contract 71 + desktop 62） | ✅ 全绿；新增 `src/clip-digest.spec.ts`（10 用例覆盖四个 kind + 降级判定 + 超时包装） |
@@ -41,7 +41,7 @@ pnpm -C packages/plugin-sdk cli:dev -- build   examples/clip-digest
 同一个「平台 LLM 未配置凭据」错误，在不同运行形态下，插件拿到的错误对象结构**不一致**：
 
 - **client 插件运行时（iframe 内 `window.sdk`，由 `PluginRunner.tsx` 注入的 bootstrap 门面）**：经 `apps/desktop/src/lib/plugins-runtime.ts:54` 的 `normalizeCapabilityError` 归一化后，`error.code === 'relay_not_configured'`、`error.message` 为可读中文。
-- **npm SDK（`@lingfang/plugin-sdk` 的 `sdk.llm.chat`，用于 nodejs/python 插件与单测）**：`invokeAi`（`src/index.ts:384-404`）捕获桥错误后走 `pluginAiError`，而 `pluginAiError`（`src/index.ts:171-181`）对「relay 未配置」**只会把 `relay_not_configured:` 作为 `message` 前缀透传，`code` 落为 `'plugin_ai_error'`**。SDK 源码里根本没有把 `relay_not_configured` 映射成稳定 `code` 的分支。
+- **npm SDK（`@qianxia/plugin-sdk` 的 `sdk.llm.chat`，用于 nodejs/python 插件与单测）**：`invokeAi`（`src/index.ts:384-404`）捕获桥错误后走 `pluginAiError`，而 `pluginAiError`（`src/index.ts:171-181`）对「relay 未配置」**只会把 `relay_not_configured:` 作为 `message` 前缀透传，`code` 落为 `'plugin_ai_error'`**。SDK 源码里根本没有把 `relay_not_configured` 映射成稳定 `code` 的分支。
 - 真正的「前缀在 message」是 Rust 侧 `apps/desktop/src-tauri/src/client_ai_proxy.rs:22` 的 `ERR_RELAY_NOT_CONFIGURED = "relay_not_configured:"`。
 
 **复现**
@@ -64,18 +64,18 @@ console.log(err.message) // => 'relay_not_configured: ...'  ← 仅 message 含�
 ## 2. CLI 调用形态与 cwd 敏感（dev 循环摩擦）⚠️ 高优先
 
 **现象**
-任务说明里给的主命令 `pnpm -C packages/plugin-sdk exec lingfang-plugin <cmd>` 在本 checkout **直接失败**，且失败信息不指向根因；可行的命令形态与直觉相反（路径要相对 `packages/plugin-sdk`，而非仓库根）。
+任务说明里给的主命令 `pnpm -C packages/plugin-sdk exec qianxia-plugin <cmd>` 在本 checkout **直接失败**，且失败信息不指向根因；可行的命令形态与直觉相反（路径要相对 `packages/plugin-sdk`，而非仓库根）。
 
 **复现（真实踩坑）**
 | 命令 | 结果 |
 |---|---|
-| `pnpm -C packages/plugin-sdk exec lingfang-plugin validate examples/clip-digest` | ❌ `Command 'lingfang-plugin' not found`（bin 未链接进 `node_modules/.bin`） |
+| `pnpm -C packages/plugin-sdk exec qianxia-plugin validate examples/clip-digest` | ❌ `Command 'qianxia-plugin' not found`（bin 未链接进 `node_modules/.bin`） |
 | `pnpm -C packages/plugin-sdk cli:dev -- validate packages/plugin-sdk/examples/clip-digest`（仓库根下用长路径） | ❌ 路径被二次拼接成 `.../packages/plugin-sdk/packages/plugin-sdk/examples/clip-digest` |
 | `cd examples/clip-digest && pnpm -C packages/plugin-sdk cli:dev -- validate .` | ❌ ENOENT `.../examples/clip-digest/packages`（`-C` 仍把 cwd 切到包目录） |
 | `pnpm -C packages/plugin-sdk cli:dev -- validate examples/clip-digest`（仓库根、相对包目录的短路径） | ✅ 通过 |
 
 **根因**
-- `lingfang-plugin` 是 `bin` 声明，但本环境未执行会让 pnpm 建 `.bin` 软链的安装步骤，`pnpm exec` 找不到。
+- `qianxia-plugin` 是 `bin` 声明，但本环境未执行会让 pnpm 建 `.bin` 软链的安装步骤，`pnpm exec` 找不到。
 - `cli:dev` = `tsx src/cli/index.ts`，其 `process.cwd()` 固定为 `packages/plugin-sdk`；CLI 用 `path.resolve(parsed.positional[0] ?? cwd)`（`build.ts:43`）对相对路径再次基于该 cwd 解析，故「仓库根相对路径」会叠加成双倍路径。
 
 **建议**
@@ -166,7 +166,7 @@ storage.kv 按插件隔离，单值上限约 256KB，单插件约 1024 条目。
 连续两次 `cli:dev -- build` 各自有可感知的 tsx 启动耗时。
 
 **建议**
-对纯静态插件（client），提供 `build` 的 `node` 直跑入口或预编译 CLI，消除 tsx 启动开销；或加 `lingfang-plugin dev` 监听 `manifest.json`/`entry` 变化自动 rebuild。
+对纯静态插件（client），提供 `build` 的 `node` 直跑入口或预编译 CLI，消除 tsx 启动开销；或加 `qianxia-plugin dev` 监听 `manifest.json`/`entry` 变化自动 rebuild。
 
 ---
 
@@ -188,7 +188,7 @@ storage.kv 按插件隔离，单值上限约 256KB，单插件约 1024 条目。
 
 以下需 **Windows + WebView2 + `cargo build`** 桌面闭环，本环境无法跑，列明供人工复核：
 
-1. **桌面壳本地导入 `com.lingfang.clip-digest-0.1.0.lfplugin`**：实际能否在 Plugin Center 完成 `install_plugin_artifact`（origin=local）并运行。
+1. **桌面壳本地导入 `com.qianxia.clip-digest-0.1.0.qplugin`**：实际能否在 Plugin Center 完成 `install_plugin_artifact`（origin=local）并运行。
 2. **F3 来源徽标**：导入后卡片是否显示 amber「本地导入」徽标（`installationProvenance.ts:19`）。
 3. **未签名警示**：因无 `manifest.sig`，详情弹层是否显示 ⚠ 文案（`plugin_security.rs:66-71` + `PluginCenterBody.tsx:358-371`）。
 4. **完整 e2e**：`scripts/e2e-desktop-smoke.mjs` 第 4/5/6 条断言（storage.kv 真落盘、未声明 kind `capability_not_declared`、llm.chat `relay_not_configured`）针对本插件复跑。注意该脚本目前断言的是内置 `notes` 插件；若要验 `clip-digest` 需把 `NOTES_NAME` 改为「剪藏摘要」或新增用例。
@@ -198,12 +198,12 @@ storage.kv 按插件隔离，单值上限约 256KB，单插件约 1024 条目。
 
 ---
 
-## 11. 第二轮摩擦记录（LF-13 · 第二狗粮插件「网页剪藏 / web-clip」实证）
+## 11. 第二轮摩擦记录（QX-13 · 第二狗粮插件「网页剪藏 / web-clip」实证）
 
-> 工单：**LF-13**（建议派 Agent A）
+> 工单：**QX-13**（建议派 Agent A）
 > 新增插件：`packages/plugin-sdk/examples/web-clip/`（client 运行时，覆盖 `clipboard.read` + `net.fetch` + `llm.chat` + `storage.kv` + `ui.view` 五个 kind）
 > 验证环境：同第一轮（Windows 11 / pnpm 9 / Node 20 / 无 WebView2 与 `cargo` 桌面闭环）
-> 记录人：本会话（执行 LF-13）
+> 记录人：本会话（执行 QX-13）
 > 目的：用第二个真实插件逼出此前未证明 kind 的手感问题，并回收 clip-digest 自修的摩擦。
 > 本轮**已修复项闭环**：第一条插件（clip-digest）的 g2-sdk-friction #5.3「kv `set` 失败静默兜底 localStorage 掩盖配额错误」已在本轮自修（见 §11.3）。
 
@@ -247,7 +247,7 @@ const html = typeof resp.body === 'string' ? resp.body : JSON.stringify(resp.bod
 ### 11.3 `storage.kv` 配额错误的归一化：npm SDK 形态与宿主形态是否一致 ⚠️ 观察（本轮自修已落实，记录待核对）
 
 **现象**
-clip-digest 第一轮用 `storeValue` 的 catch 静默兜底 `localStorage`（g2-sdk-friction #5.3 明示的隐患）。本轮自修改为：用 LF-07 的 `storage.list`/`delete`/`count` 实现 LRU 淘汰，配额错误如实提示用户。但**配额错误在 npm SDK 形态下如何归一**仍待真机核对——宿主 `capability.rs` 的 kv 错误码（`kv_value_too_large` / `kv_quota_exceeded`）经宿主 `plugins-runtime.ts` 归一；npm SDK 的 `invoke` 对 storage 类错误**不做 `PluginAiError` 包装**（仅 AI 类走 `pluginAiError`），故插件在 npm/单测形态下拿到的是宿主透传的字符串或 `{code}`。
+clip-digest 第一轮用 `storeValue` 的 catch 静默兜底 `localStorage`（g2-sdk-friction #5.3 明示的隐患）。本轮自修改为：用 QX-07 的 `storage.list`/`delete`/`count` 实现 LRU 淘汰，配额错误如实提示用户。但**配额错误在 npm SDK 形态下如何归一**仍待真机核对——宿主 `capability.rs` 的 kv 错误码（`kv_value_too_large` / `kv_quota_exceeded`）经宿主 `plugins-runtime.ts` 归一；npm SDK 的 `invoke` 对 storage 类错误**不做 `PluginAiError` 包装**（仅 AI 类走 `pluginAiError`），故插件在 npm/单测形态下拿到的是宿主透传的字符串或 `{code}`。
 
 **复现（本轮单测复刻的判定）**
 ```ts
@@ -291,7 +291,7 @@ web-clip 是纯 `ui/index.html`（client 静态插件）。每次 `cli:dev -- bu
 **复现**
 连续两次 `pnpm -C packages/plugin-sdk cli:dev -- build examples/web-clip` 各自有可感知 tsx 启动开销。
 
-**建议**：同第一轮 #7——为纯静态插件提供 `node` 直跑入口或预编译 CLI，或加 `lingfang-plugin dev` 监听 `manifest.json`/`entry` 自动 rebuild。优先级仍低（不阻塞）。
+**建议**：同第一轮 #7——为纯静态插件提供 `node` 直跑入口或预编译 CLI，或加 `qianxia-plugin dev` 监听 `manifest.json`/`entry` 自动 rebuild。优先级仍低（不阻塞）。
 
 ### 11.6 无问题项（第二轮显式确认）
 
@@ -301,7 +301,7 @@ web-clip 是纯 `ui/index.html`（client 静态插件）。每次 `cli:dev -- bu
 | `llm.chat` 在 web-clip 的降级链路 | ✅ 无问题，与 clip-digest 同构，`relay_not_configured` 优雅降级逻辑复用 |
 | `storage.list`/`delete`/`count` LRU 淘汰逻辑 | ✅ 单测覆盖（web-clip + clip-digest 双份 describe），配额/超值/非配额三分支全绿 |
 | `ui.view` 的 `{type:'markdown', body}` 契约 | ✅ 无问题，与 clip-digest 一致沿用，宿主按 Markdown 渲染不注入 HTML |
-| 新插件 `validate`/`build` 首次即通过 | ✅ 无问题，`com.lingfang.web-clip-0.1.0.lfplugin`（8059 字节，v4）产出正常 |
+| 新插件 `validate`/`build` 首次即通过 | ✅ 无问题，`com.qianxia.web-clip-0.1.0.qplugin`（8059 字节，v4）产出正常 |
 
 ---
 
@@ -310,7 +310,7 @@ web-clip 是纯 `ui/index.html`（client 静态插件）。每次 `cli:dev -- bu
 | # | 摩擦 | 优先级 | 现象要点 | 建议要点 |
 |---|---|---|---|---|
 | 1 | `relay_not_configured` 在 npm SDK 无稳定 `code` | 高 | client 走宿主归一化有 `code`，npm SDK 仅 `message` 前缀 | SDK 内补归一化 + 导出错误码常量 |
-| 2 | CLI 命令形态/cwd 敏感 | 高 | `exec lingfang-plugin` 失败；长路径双拼；仅 `cli:dev -- <短相对路径>` 可用 | 文档固定唯一命令 + 路径归一化防双拼 + 友好报错 |
+| 2 | CLI 命令形态/cwd 敏感 | 高 | `exec qianxia-plugin` 失败；长路径双拼；仅 `cli:dev -- <短相对路径>` 可用 | 文档固定唯一命令 + 路径归一化防双拼 + 友好报错 |
 | 3 | CLI 错误输出非结构化 | 中 | 好 code 但默认文本，脚本难解析 | `--json` 友好化 / 字段对齐 |
 | 4 | 超时 30s/180s 语义未明示 | 观察 | 合理；AI 长文偏紧；双计时器叠加未文档 | 文档标注 + 允许调用级 timeout |
 | 5 | kv 256KB/1024 限额 + 无管理 API | 观察 | 本插件够用；无 list/delete/count；超限错误码缺 | 补配额错误码 + 增存储管理能力 |
@@ -320,16 +320,16 @@ web-clip 是纯 `ui/index.html`（client 静态插件）。每次 `cli:dev -- bu
 | 9 | `net.fetch` 返回 `{status,headers,body}` 非 `Response` | 中 | 无 `.ok`/`.json()`，迁移开发者易崩 | 文档明示形态 + 最小范式 / 补适配方法 |
 | 10 | storage 配额错误 npm 与宿主归一化待真机核对 | 观察 | `invoke` 不对 storage 错误做 `PluginAiError` 包装 | 真机核对 `code` + 增 `PluginStorageErrorCode` |
 | 11 | `net.fetch` SSRF 守卫拦截本地/内网（含 localhost 调试） | 观察 | 安全正确但误伤本机预览 | 文档明示边界 + `net_fetch_ssrf_blocked` 码 |
-| 12 | clip-digest 静默 localStorage 兜底（#5.3） | 高→已修 | LF-13 自修为 LRU 淘汰 + 配额如实提示 | 单测覆盖，已落地 |
+| 12 | clip-digest 静默 localStorage 兜底（#5.3） | 高→已修 | QX-13 自修为 LRU 淘汰 + 配额如实提示 | 单测覆盖，已落地 |
 
 ---
 
-## 11. 第三轮摩擦记录（LF-23 · kb-station 知识库工作站 dogfooding，2026-08-28）
+## 11. 第三轮摩擦记录（QX-23 · kb-station 知识库工作站 dogfooding，2026-08-28）
 
 ### #13 · `fs.read` 的 paths 白名单被 manifest 校验往返剥离 ⚠️ 高优先（已修）
 
 - **现象**：manifest 声明 `{ "kind": "fs.read", "paths": ["$HOME/Documents"] }` 后，
-  `lingfang-plugin validate/build` 通过，但**产物 .lfplugin 内的 manifest 丢失 paths**；
+  `qianxia-plugin validate/build` 通过，但**产物 .qplugin 内的 manifest 丢失 paths**；
   安装后 `sdk.fs.read` 对白名单内路径恒报 `capability_out_of_scope`（fail-closed 但功能全断）。
 - **根因**：契约 `PluginCapability`（Zod）无 `paths` 字段，`validateManifest` 解析往返
   （parse→serialize）剥离未知键；宿主 `capabilities_from_manifest` 读原始 JSON 的 paths，
@@ -363,7 +363,7 @@ web-clip 是纯 `ui/index.html`（client 静态插件）。每次 `cli:dev -- bu
 
 - **现象**：白名单内路径若文件不存在，报 `capability_out_of_scope` 且不带任何路径信息
   （防存在性 oracle 的脱敏设计）——开发时把「拼错路径」误判为「越权」。
-- **结论**：安全取舍正确（LF-19 已证 capability_out_of_scope 稳定码）；建议文档明示
+- **结论**：安全取舍正确（QX-19 已证 capability_out_of_scope 稳定码）；建议文档明示
   「canonicalize 前置要求 + 错误码脱敏」，排查时先确认路径存在。
 
 ### 第三轮速查表增补
@@ -377,7 +377,7 @@ web-clip 是纯 `ui/index.html`（client 静态插件）。每次 `cli:dev -- bu
 
 ---
 
-## 12. 第四轮摩擦反哺记录（LF-24 · R2，2026-08-28，输入=第三轮 #13-#16 + kb-station 全链评估）
+## 12. 第四轮摩擦反哺记录（QX-24 · R2，2026-08-28，输入=第三轮 #13-#16 + kb-station 全链评估）
 
 ### #17 · 能力面限额评估：kb-station 用量 vs 上限（✅ 无问题）
 
@@ -391,7 +391,7 @@ web-clip 是纯 `ui/index.html`（client 静态插件）。每次 `cli:dev -- bu
 
 ### #18 · SDK API 形状评估（✅ 无新增问题，显式确认）
 
-kb-station 全链使用的 API 形状与文档/宿主一致：`storage.kv` get/set/list/delete（LF-07 管理
+kb-station 全链使用的 API 形状与文档/宿主一致：`storage.kv` get/set/list/delete（QX-07 管理
 API 全走通，list 前缀语义经 #14 修正后正确）、`llm.chat` 返回 `{content}`、`ui.view` 入参
 `{type:'markdown', body}`、`fs.read` 返回 `{content}`（文件）/`{entries,truncated}`（目录）。
 **无新增形状摩擦**——第三轮 #13-#16 已覆盖本轮全部真实摩擦面。

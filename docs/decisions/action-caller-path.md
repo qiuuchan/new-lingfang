@@ -1,8 +1,8 @@
 # 决策：v1 下 action 调用方仅限进程插件（ADR-LF06）
 
-- 状态：已采纳（2026-08-25，工单 LF-06）
-- 范围：灵坊工作台桌面壳 `apps/desktop`（Tauri v2，零服务器架构）
-- 相关：核实结论 `IMPROVEMENT_PLAN_3.md#0` 之 #1–#3、#11；`WORK_ORDERS.md` LF-06
+- 状态：已采纳（2026-08-25，工单 QX-06）
+- 范围：千匣台桌面壳 `apps/desktop`（Tauri v2，零服务器架构）
+- 相关：核实结论 `IMPROVEMENT_PLAN_3.md#0` 之 #1–#3、#11；`WORK_ORDERS.md` QX-06
 
 ## 决策
 
@@ -24,18 +24,18 @@ client handler 内部经 `executeClientActionAdapter` 的 allow-list 再次调�
    这是一次异步事件往返，必须在网关里注入 AppHandle + 等待回传——对现有同步网关是侵入式改造。
 
 2. **进程插件已有一条完整闭环，client 没有。**
-   nodejs / python 插件进程经 `LINGFANG_PLUGIN_BRIDGE_URL` 桥直连 `/actions/call`
+   nodejs / python 插件进程经 `QIANXIA_PLUGIN_BRIDGE_URL` 桥直连 `/actions/call`
    （`plugin_llm_bridge.rs:560` `route_action_call`）→ emit `plugin-action-bridge-call`
    → 前端在 sandbox iframe 内执行目标 client 插件的 action handler
    （`clientActionBridge.ts` + `plugin-action-client-adapter.ts`）→
    `respond_plugin_action_bridge` 回传结果给进程。整条链路代码已交付，
-   LF-06 的任务是把它跑成**真机闭环**（内置 `action-caller` → 内置 `action-demo`）。
+   QX-06 的任务是把它跑成**真机闭环**（内置 `action-caller` → 内置 `action-demo`）。
 
-3. **v1 政策把本地导入的第三方插件封死在 client 运行时**（LF-02 / F2：
+3. **v1 政策把本地导入的第三方插件封死在 client 运行时**（QX-02 / F2：
    `dev` 仅 client，本地导入 nodejs/python 仅内置/一方签名）。因此「真机可主动发起
    action 调用」的主体天然只剩内置/一方签名进程插件——决策只是把既成事实写清楚。
 
-4. **需求未出现前不投资。** 截至 LF-06，没有任何真实「client 插件调另一个 client 插件
+4. **需求未出现前不投资。** 截至 QX-06，没有任何真实「client 插件调另一个 client 插件
    action」的需求；为它改造同步网关 + 异步桥回路属于过早投资，违反「停止追加基础设施」
    的本轮方针。
 
@@ -43,7 +43,7 @@ client handler 内部经 `executeClientActionAdapter` 的 allow-list 再次调�
 
 `plugin-action-client-adapter.ts:213` 的 allow-list **包含** `'actions.call'`。这是另一层：
 允许一个 **client action handler 在其执行体内** 经宿主桥再次调用某个 action（例如
-action A 的内部逻辑触发 action B）。它走的是「前端 sandbox iframe → `__lingfangInvoke`
+action A 的内部逻辑触发 action B）。它走的是「前端 sandbox iframe → `__qianxiaInvoke`
 → 宿主 → 桥 `/actions/call`」链路，与「client 插件经 capability 网关
 `invoke_capability('actions.call')`」不是同一条路。
 
@@ -67,4 +67,4 @@ action A 的内部逻辑触发 action B）。它走的是「前端 sandbox ifram
 
 未注册 / 不存在的 action 调用方经桥调 `actions.call` 时，`clientActionBridge.runClientAction`
 对缺失 handler 显式回传稳定码 `action_dependency_unresolved`（`clientActionBridge.ts:115`），
-使进程端不再静默挂到 24h 超时。该稳定码是 LF-06 验收的「反向对照」断言对象。
+使进程端不再静默挂到 24h 超时。该稳定码是 QX-06 验收的「反向对照」断言对象。

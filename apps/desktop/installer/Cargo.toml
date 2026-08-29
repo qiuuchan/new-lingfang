@@ -2,7 +2,7 @@
 # 三合一二进制：install（egui 交互）/ --silent（无 UI 覆盖）/ update（等待+覆盖+重启）/ uninstall（egui 确认）。
 # 自解压：app 文件追加到本 exe 尾部，运行期读取解压（design §2）。
 [package]
-name = "lingfang-installer"
+name = "qianxia-installer"
 version = "0.0.23"
 edition = "2021"
 

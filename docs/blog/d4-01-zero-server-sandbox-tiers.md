@@ -1,6 +1,6 @@
 # 零服务器桌面插件平台：Tauri v2 + Job Object 沙箱的三档安全边界
 
-> D4 首发架构博客（LF-28 配套）。发布到 GitHub Discussions「架构」分类。
+> D4 首发架构博客（QX-28 配套）。发布到 GitHub Discussions「架构」分类。
 > 定位：给技术读者的深度文，讲清楚「本地优先插件平台」的安全模型为什么是三层、
 > 每层防线守什么、不守什么——以及为什么我们选择诚实描述而不是吹成一个沙箱。
 
@@ -8,7 +8,7 @@
 
 ## 0. 背景：一个没有后端的桌面插件平台
 
-「灵坊工作台」是一个 Tauri v2 桌面插件平台：第三方插件跑在本地桌面壳里，安装、能力鉴权、
+「千匣台」是一个 Tauri v2 桌面插件平台：第三方插件跑在本地桌面壳里，安装、能力鉴权、
 文件与 AI 调用全部由桌面壳托管。它的架构底线是一条看起来不太现代的决定——**零服务器**：
 
 - 仓库内没有后端（relay / billing / RBAC 服务端被刻意移除）；
@@ -75,7 +75,7 @@ JOBOBJECT_EXTENDED_LIMIT_INFORMATION {
 
 既然进程插件无法沙箱，防线只能前移到**安装时刻**：
 
-- `.lfplugin` 制品用 **minisign** 验签（`plugin_security.rs`），核对签名与召回列表；
+- `.qplugin` 制品用 **minisign** 验签（`plugin_security.rs`），核对签名与召回列表；
 - v1 政策下，**本地导入仅接受 client 运行时插件**；nodejs / python 安装保留给内置插件与
   一方签名插件——直到插件签名信任根成熟为止。
 
@@ -102,7 +102,7 @@ JOBOBJECT_EXTENDED_LIMIT_INFORMATION {
   权限弹窗后放行；grant 解析 deny-wins（用户 > 角色 > 默认拒绝）。
 - **AI 凭据**：client iframe 永不持有 relay 密钥——AI 调用走宿主代理命令，宿主持 session
   转发到 relay（决策记录 C2，`docs/decisions/C2-relay-credential-source.md`）。
-- **内置插件编译进二进制**：`build.rs` 把内置插件 zip 成 sha256 命名的 `.lfplugin`，
+- **内置插件编译进二进制**：`build.rs` 把内置插件 zip 成 sha256 命名的 `.qplugin`，
   `include_bytes!` 嵌入，启动时注册——内置插件不在信任链之外。
 
 ## 6. 局限与下一步

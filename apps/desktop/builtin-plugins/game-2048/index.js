@@ -127,8 +127,8 @@ let board, score, best, won = false;
 const COLORS = { 2:'#eee4da', 4:'#ede0c8', 8:'#f2b179', 16:'#f59563', 32:'#f67c5f', 64:'#f65e3b', 128:'#edcf72', 256:'#edcc61', 512:'#edc850', 1024:'#edc53f', 2048:'#edc22e' };
 const DARK = new Set([8,16,32,64,128,256,512,1024,2048]);
 
-function bestLoad(){ try { return parseInt(localStorage.getItem('lf2048best')||'0',10)||0; } catch { return 0; } }
-function bestSave(v){ try { localStorage.setItem('lf2048best', String(v)); } catch {} }
+function bestLoad(){ try { return parseInt(localStorage.getItem('qx2048best')||'0',10)||0; } catch { return 0; } }
+function bestSave(v){ try { localStorage.setItem('qx2048best', String(v)); } catch {} }
 
 function buildBg(){
   const bg = document.getElementById('bg'); bg.innerHTML = '';

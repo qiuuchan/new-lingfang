@@ -1,4 +1,4 @@
-# 灵坊工作台 — 后续任务清单
+# 千匣台 — 后续任务清单
 
 > 基于 `IMPLEMENTATION_PLAN.md` 三轮修订（A1–A4、B2、C1+C3、D1–D3 已交付）的执行结果梳理。
 > 前序交付状态见 `IMPLEMENTATION_PLAN.md` 的「执行状况」节。
@@ -22,7 +22,7 @@
       包内 ffmpeg.exe / ffprobe.exe 与 keyFiles 完全一致；lock 已回填 `sourceSha256`/`sourceSize`，
       `source` URL 修正为 `/builds/packages/`（原 `/builds/` 根路径已 404）。
     - `ci.yml` `publish-runtimes` checkout 已启用 `lfs: true`。
-  - **B 链路已闭环（✅ 2026-08-22 端到端跑绿）**：Org secret `LINGFANG_RUNTIME_PUBKEY`/`LINGFANG_RUNTIME_SIGKEY`
+  - **B 链路已闭环（✅ 2026-08-22 端到端跑绿）**：Org secret `QIANXIA_RUNTIME_PUBKEY`/`QIANXIA_RUNTIME_SIGKEY`
     已注册（旧 `.runtime-signing/` 草案密钥作废，唯一信任根 = Org secret）；`publish-runtimes` 六步全部 hard——
     LFS 检出 → curl 断点预取 → materialize → populate(node/python/pnpm/ffmpeg/chromium) → verify(全量 sha256+漂移) →
     打包(~1.7GB) → minisign 签名+自验 → Release 上传，tag `v0.0.1-test` 全绿，
@@ -41,10 +41,10 @@
       `--silent --target <路径>` 形态拉起新安装包时路径被误判为未知子命令，静默安装/热更必败；
       现改为先消费 flag 及其值再识别子命令（含回归测试）。
     - CI：`publish-runtimes` job 扩为「B3→C」双产物——在已校验的 runtimes/ 上构建桌面壳 +
-      SFX 安装器，minisign 签名后随 Release 上传 `LingFang-Setup-*.exe`（+ `.minisig`）。
+      SFX 安装器，minisign 签名后随 Release 上传 `QianXia-Setup-*.exe`（+ `.minisig`）。
     - 本机端到端验证：runtime-lock 校验通过 → 打包（payload 629.6MB / Setup 633.2MB）→
       `--silent --target` 静默解压 exit=0 → 解压产物 python.exe/chrome.dll 与锁逐字节一致、
-      updater.exe 为无尾部裸 exe。`cargo test -p lingfang-installer` 30/30 全绿。
+      updater.exe 为无尾部裸 exe。`cargo test -p qianxia-installer` 30/30 全绿。
   - **可立即准备（代码侧，本会话已完成 ✅ 2026-08-22）**：
     - `.gitattributes`：Git LFS 跟踪 `apps/desktop/runtime-parts/**` 与 `*.part-*`（chrome.dll 分片不拖垮克隆；
       团队初始化/提交流程见 `docs/lfs-setup.md`）。
@@ -84,7 +84,7 @@
 - [x] **A5a · 内置 notes 插件端到端验证** ✅
   - 方式：`tauri build --no-bundle --debug` 构建产物 + `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port`
     启动桌面壳，Playwright `connectOverCDP` 驱动真实 UI 打开 notes 并在插件 iframe 内断言。
-  - 结果：iframe 渲染 notes 界面（sandbox allow-scripts、opaque origin）；`window.sdk`/`__lingfangInvoke`
+  - 结果：iframe 渲染 notes 界面（sandbox allow-scripts、opaque origin）；`window.sdk`/`__qianxiaInvoke`
     注入成功；ui-tokens CSS 注入生效；`read_plugin_file` 解析内置插件目录成功；
     `storage.kv` 明确 reject `capability_not_supported`（非静默无应）；
     未声明的 `system.info` 拒绝 `capability_not_declared`；
@@ -103,7 +103,7 @@
        PluginRunner 监听器无条件注册、事件到达时再解析 ref。
 
 - [x] **A5b · 安装插件注册路径验证** ✅
-  - 方式：CLI 非交互生成 client 模板（声明 system.info+clipboard）→ validate/build 出 .lfplugin →
+  - 方式：CLI 非交互生成 client 模板（声明 system.info+clipboard）→ validate/build 出 .qplugin →
     经页面内 IPC 调 `install_plugin_artifact` 安装（origin=local）→ UI 打开运行。
   - 结果：已声明的 `system.info`/`clipboard.writeText` 真实执行返回数据（不再 not_declared），
     未声明的 `storage.kv` 正确拒绝——A4 价值得到端到端证明。
@@ -172,7 +172,7 @@
     手动验证清单，含前置环境与 `pnpm build:desktop` 命令；标注 B3/C2 限制。
   - 三者均为文档，不改源码；B3/C2 仍待产品/人拍板后方可落码。
 
-- [x] **文档行号→符号引用** ✅ 已完成（LF-03 / G5）
+- [x] **文档行号→符号引用** ✅ 已完成（QX-03 / G5）
   - `IMPLEMENTATION_PLAN.md` 与 `TODO.md` 前瞻性（非存档）节的 `file:行号` 引用已批量替换为符号名（`parse_manifest`、`registry.register`、`plugin_net_fetch`、`route_llm_chat`、`respond_plugin_action_bridge` 等）；存档节（「0. 核实结论」快照表、「核实关键证据」附录）保持原样不动。
 
 ---

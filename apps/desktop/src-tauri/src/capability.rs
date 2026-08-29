@@ -323,7 +323,7 @@ mod tests {
 
     fn temp_root(name: &str) -> std::path::PathBuf {
         let root = std::env::temp_dir().join(format!(
-            "lingfang-capability-test-{}-{name}",
+            "qianxia-capability-test-{}-{name}",
             std::process::id()
         ));
         let _ = fs::remove_dir_all(&root);

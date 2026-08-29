@@ -1,11 +1,11 @@
-// publish 命令：上传 .lfplugin 到注册中心 POST /api/plugin-registry/releases。
+// publish 命令：上传 .qplugin 到注册中心 POST /api/plugin-registry/releases。
 // 真源：.trellis/tasks/07-13-plugin-dev-sdk/research/publish-endpoint.md
 //
 // 关键约束（与 design.md §2.4 一致）：
 // - 非 multipart：raw binary body + Content-Type: application/octet-stream
 // - 元数据通过自定义 header 传递（x-plugin-package-id / x-plugin-source-kind / x-plugin-source-label-b64 / x-client）
 // - JWT 认证（Authorization: Bearer <token>）
-// - BASE 和 TOKEN 优先取 opts 参数，其次取环境变量 LINGFANG_API_BASE / LINGFANG_TOKEN
+// - BASE 和 TOKEN 优先取 opts 参数，其次取环境变量 QIANXIA_API_BASE / QIANXIA_TOKEN
 
 import { readFile, stat, mkdtemp } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
@@ -18,11 +18,11 @@ import { resolvePluginPath } from '../util/resolvePath.ts';
 // ── Types ──────────────────────────────────────────────────────────────
 
 export interface PublishOptions {
-  /** 插件工作区目录 或 .lfplugin 文件路径（默认：当前目录） */
+  /** 插件工作区目录 或 .qplugin 文件路径（默认：当前目录） */
   path?: string;
-  /** API 基址（默认：环境变量 LINGFANG_API_BASE） */
+  /** API 基址（默认：环境变量 QIANXIA_API_BASE） */
   base?: string;
-  /** JWT 认证 token（默认：环境变量 LINGFANG_TOKEN） */
+  /** JWT 认证 token（默认：环境变量 QIANXIA_TOKEN） */
   token?: string;
   /** 发布到已有 package 的 ID（对应 header: x-plugin-package-id） */
   packageId?: string;
@@ -32,11 +32,11 @@ export interface PublishOptions {
   sourceLabel?: string;
   /** 客户端类型（如 "desktop"；对应 header: x-client） */
   clientKind?: string;
-  /** 如果为 true 且 path 是工作区，先 build 生成 .lfplugin（默认：path 非 .lfplugin 文件时为 true） */
+  /** 如果为 true 且 path 是工作区，先 build 生成 .qplugin（默认：path 非 .qplugin 文件时为 true） */
   build?: boolean;
   /** 传递给 build 命令的输出路径 */
   out?: string;
-  /** LF-08：仅逐行输出错误 code（传递给内部 build；发布自身错误不输出） */
+  /** QX-08：仅逐行输出错误 code（传递给内部 build；发布自身错误不输出） */
   quiet?: boolean;
 }
 
@@ -52,16 +52,16 @@ export interface PublishResult {
 
 function resolveToken(opts?: Pick<PublishOptions, 'token'>): string {
   if (opts?.token) return opts.token;
-  const env = process.env['LINGFANG_TOKEN'];
+  const env = process.env['QIANXIA_TOKEN'];
   if (env) return env;
-  throw new Error('缺少认证 token（设置 LINGFANG_TOKEN 环境变量或通过 --token 传入）');
+  throw new Error('缺少认证 token（设置 QIANXIA_TOKEN 环境变量或通过 --token 传入）');
 }
 
 function resolveBase(opts?: Pick<PublishOptions, 'base'>): string {
   if (opts?.base) return opts.base;
-  const env = process.env['LINGFANG_API_BASE'];
+  const env = process.env['QIANXIA_API_BASE'];
   if (env) return env;
-  throw new Error('缺少 API 地址（设置 LINGFANG_API_BASE 环境变量或通过 --base 传入）');
+  throw new Error('缺少 API 地址（设置 QIANXIA_API_BASE 环境变量或通过 --base 传入）');
 }
 
 /** 判断路径是否是可构建的工作区（目录 + 包含 manifest.json）。 */
@@ -84,15 +84,15 @@ function base64urlEncode(text: string): string {
 }
 
 /**
- * 尝试 lazy-import 并执行 build 命令，返回生成的 .lfplugin 文件路径。
+ * 尝试 lazy-import 并执行 build 命令，返回生成的 .qplugin 文件路径。
  *
  * 实现策略：把产物写到唯一临时目录（避免污染 cwd），文件名按 archive.ts
- * 的 suggestedFilename 规则推导（`<safeId>-<version>.lfplugin`），然后显式
+ * 的 suggestedFilename 规则推导（`<safeId>-<version>.qplugin`），然后显式
  * 通过 opts.out 传给 buildCommand 以拿到确定路径。
  *
  * @param workspacePath 工作区目录（含 manifest.json）
  * @param out           可选自定义输出路径（透传给 build）
- * @returns             生成的 .lfplugin 绝对路径；失败返回 null
+ * @returns             生成的 .qplugin 绝对路径；失败返回 null
  */
 async function runBuild(
   workspacePath: string,
@@ -107,7 +107,7 @@ async function runBuild(
   if (!explicitOut) {
     const derived = await deriveSuggestedFilename(workspacePath);
     if (!derived) return null;
-    const tempDir = await mkdtemp(path.join(tmpdir(), 'lingfang-publish-'));
+    const tempDir = await mkdtemp(path.join(tmpdir(), 'qianxia-publish-'));
     explicitOut = path.join(tempDir, derived);
   }
 
@@ -135,7 +135,7 @@ async function runBuild(
 
 /**
  * 读取工作区 manifest.json 并按 archive.ts 的 suggestedFilename 规则
- * 推导产物文件名（`<safeId>-<version>.lfplugin`）。
+ * 推导产物文件名（`<safeId>-<version>.qplugin`）。
  * 失败返回 null。
  */
 async function deriveSuggestedFilename(workspacePath: string): Promise<string | null> {
@@ -149,7 +149,7 @@ async function deriveSuggestedFilename(workspacePath: string): Promise<string | 
     }
     // 与 archive.ts packWorkspace.suggestedFilename 对齐
     const safeId = manifest.id.replace(/[^a-zA-Z0-9-_.]/g, '-');
-    return `${safeId}-${manifest.version}.lfplugin`;
+    return `${safeId}-${manifest.version}.qplugin`;
   } catch (e) {
     log.error(`无法读取工作区 manifest.json：${(e as Error).message}`);
     return null;
@@ -169,7 +169,7 @@ async function deriveSuggestedFilename(workspacePath: string): Promise<string | 
  * @returns     退出码（0 = 成功，1 = 失败）
  */
 export async function publishCommand(argv: string[], opts?: PublishOptions): Promise<number> {
-  // LF-08 / J3：--quiet 抑制所有人类可读日志，仅最终失败打印单个 code 行。
+  // QX-08 / J3：--quiet 抑制所有人类可读日志，仅最终失败打印单个 code 行。
   const quiet = opts?.quiet ?? false;
   const q = {
     error: (m: string) => {
@@ -186,7 +186,7 @@ export async function publishCommand(argv: string[], opts?: PublishOptions): Pro
 
   // ── 1. 解析配置 ──────────────────────────────────────────────────
   const resolvedPath = opts?.path ?? (argv.length > 0 ? argv[0] : process.cwd());
-  // LF-05 / g2-sdk-friction #2：路径归一化防二次拼接（cwd 固定为 packages/plugin-sdk 的场景）。
+  // QX-05 / g2-sdk-friction #2：路径归一化防二次拼接（cwd 固定为 packages/plugin-sdk 的场景）。
   const targetPath = resolvePluginPath(resolvedPath);
 
   let token: string;
@@ -205,8 +205,8 @@ export async function publishCommand(argv: string[], opts?: PublishOptions): Pro
   // ── 2. 确定 artifact 来源 ────────────────────────────────────────
   let artifactPath: string;
 
-  // 情况 A：路径以 .lfplugin 结尾且文件存在 → 直接使用
-  if (targetPath.endsWith('.lfplugin') && (await pathExists(targetPath))) {
+  // 情况 A：路径以 .qplugin 结尾且文件存在 → 直接使用
+  if (targetPath.endsWith('.qplugin') && (await pathExists(targetPath))) {
     artifactPath = targetPath;
     q.info(`使用已有制品：${artifactPath}`);
   }
@@ -214,7 +214,7 @@ export async function publishCommand(argv: string[], opts?: PublishOptions): Pro
   else if (await isWorkspace(targetPath)) {
     if (opts?.build === false) {
       q.error(
-        '当前为工作区目录，未找到 .lfplugin 制品。请先运行 lingfang-plugin build，或去掉 --no-build 选项让 publish 自动构建。'
+        '当前为工作区目录，未找到 .qplugin 制品。请先运行 qianxia-plugin build，或去掉 --no-build 选项让 publish 自动构建。'
       );
       return 1;
     }
@@ -223,7 +223,7 @@ export async function publishCommand(argv: string[], opts?: PublishOptions): Pro
     if (!built) return 1;
     artifactPath = built;
   }
-  // 情况 C：既不是 .lfplugin 文件也不是有效工作区
+  // 情况 C：既不是 .qplugin 文件也不是有效工作区
   else {
     if (await pathExists(targetPath)) {
       if ((await stat(targetPath)).isDirectory()) {
@@ -231,7 +231,7 @@ export async function publishCommand(argv: string[], opts?: PublishOptions): Pro
           `目录 "${targetPath}" 不像插件工作区（缺少 manifest.json），请确认路径是否正确。`
         );
       } else {
-        q.error(`文件 "${targetPath}" 不是 .lfplugin 插件制品。`);
+        q.error(`文件 "${targetPath}" 不是 .qplugin 插件制品。`);
       }
     } else {
       q.error(`路径 "${targetPath}" 不存在。`);

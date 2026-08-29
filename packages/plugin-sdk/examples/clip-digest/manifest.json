@@ -1,15 +1,15 @@
 {
-  "id": "com.lingfang.clip-digest",
+  "id": "com.qianxia.clip-digest",
   "name": "剪藏摘要",
   "version": "0.1.0",
-  "description": "剪贴板剪藏 + 灵坊平台 LLM 摘要。读取剪贴板文本，存入 storage.kv，调用 llm.chat 生成摘要（凭据缺失时优雅降级），通过 ui.view 弹出摘要层。",
+  "description": "剪贴板剪藏 + 千匣平台 LLM 摘要。读取剪贴板文本，存入 storage.kv，调用 llm.chat 生成摘要（凭据缺失时优雅降级），通过 ui.view 弹出摘要层。",
   "runtime_type": "client",
   "entry": "ui/index.html",
   "visibility": "private",
   "capabilities": [
     { "kind": "clipboard", "reason": "读取用户剪贴板文本以生成剪藏", "risk": "low", "requires_admin": false },
     { "kind": "storage.kv", "reason": "持久化剪藏原文与摘要，按插件隔离", "risk": "low", "requires_admin": false },
-    { "kind": "llm.chat", "reason": "调用灵坊平台 LLM 对剪藏文本生成中文摘要", "risk": "medium", "requires_admin": false },
+    { "kind": "llm.chat", "reason": "调用千匣平台 LLM 对剪藏文本生成中文摘要", "risk": "medium", "requires_admin": false },
     { "kind": "ui.view", "reason": "以宿主弹层展示摘要结果（Markdown 渲染，不注入 HTML）", "risk": "low", "requires_admin": false }
   ]
 }

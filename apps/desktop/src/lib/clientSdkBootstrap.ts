@@ -1,12 +1,12 @@
 // clientSdkBootstrap.ts — 注入 client iframe 的 SDK 引导脚本（模板字符串，eval 在插件沙箱内）。
 //
-// 定义 window.__lingfangInvoke 与 window.sdk：每个方法经 parent.postMessage 请求宿主能力，
+// 定义 window.__qianxiaInvoke 与 window.sdk：每个方法经 parent.postMessage 请求宿主能力，
 // 宿主（pluginRunnerHost.ts）经 invokeRuntime 触达 Rust 网关。
 // 包络（envelope）与 plugin-sdk 的 sdk 对象一致（storage.kv {op}/clipboard {op}/...），
 // 使 client HTML 插件与 nodejs/python 插件行为对齐。
 //
-// ⚠️ 本门面须与 packages/plugin-sdk/src/index.ts 的 sdk 对象保持同步——LF-07 曾只改 npm SDK
-// 与本 shim 漏同步（iframe 内 storage.list 不存在），真机 e2e 才暴露（LF-12 验收）。
+// ⚠️ 本门面须与 packages/plugin-sdk/src/index.ts 的 sdk 对象保持同步——QX-07 曾只改 npm SDK
+// 与本 shim 漏同步（iframe 内 storage.list 不存在），真机 e2e 才暴露（QX-12 验收）。
 // 回归测试见 clientSdkBootstrap.spec.ts。
 export const CLIENT_SDK_BOOTSTRAP = `(function(){
   var pending = new Map();
@@ -27,13 +27,13 @@ export const CLIENT_SDK_BOOTSTRAP = `(function(){
     if (m.error) { var e = new Error(m.error.message || '能力调用失败'); e.code = m.error.code; waiter.reject(e); }
     else waiter.resolve(m.result);
   });
-  window.__lingfangInvoke = post;
+  window.__qianxiaInvoke = post;
   var cap = post;
   var sdk = {
     storage: {
       get: function(key){ return cap('storage.kv', { op: 'get', key: key }); },
       set: function(key, value){ return cap('storage.kv', { op: 'set', key: key, value: value }); },
-      // LF-07 管理 API（list 解包 keys / count 解包 count / delete 回传 {deleted}，与 npm SDK 门面一致）。
+      // QX-07 管理 API（list 解包 keys / count 解包 count / delete 回传 {deleted}，与 npm SDK 门面一致）。
       list: function(prefix){ return cap('storage.kv', prefix !== undefined ? { op: 'list', prefix: prefix } : { op: 'list' }).then(function(r){ return r.keys; }); },
       delete: function(key){ return cap('storage.kv', { op: 'delete', key: key }); },
       count: function(){ return cap('storage.kv', { op: 'count' }).then(function(r){ return r.count; }); }
@@ -47,7 +47,7 @@ export const CLIENT_SDK_BOOTSTRAP = `(function(){
       notify: function(title, body){ return cap('system.notify', { title: title, body: body }); }
     },
     clipboard: {
-      // LF-19 契约修复：宿主返回 { content }（与 storage.kv { value } 同构），
+      // QX-19 契约修复：宿主返回 { content }（与 storage.kv { value } 同构），
       // 与 npm SDK 门面一致解包为 string（此前直传对象，readText 拿不到文本）。
       readText: function(){ return cap('clipboard', { op: 'read' }).then(function(r){ return r && r.content; }); },
       writeText: function(text){ return cap('clipboard', { op: 'write', text: text }); }

@@ -7,15 +7,15 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { PluginAiError, PluginAiErrorCode, sdk } from './index';
 
 type TestGlobal = typeof globalThis & {
-  __lingfangInvoke?: (capability: string, args: unknown) => Promise<unknown>;
+  __qianxiaInvoke?: (capability: string, args: unknown) => Promise<unknown>;
 };
 
 afterEach(() => {
-  delete (globalThis as TestGlobal).__lingfangInvoke;
+  delete (globalThis as TestGlobal).__qianxiaInvoke;
   vi.restoreAllMocks();
 });
 
-// 复刻 examples/web-clip/ui/index.html 的判定与持久化逻辑（LF-13：LRU 淘汰，不再静默 localStorage）。
+// 复刻 examples/web-clip/ui/index.html 的判定与持久化逻辑（QX-13：LRU 淘汰，不再静默 localStorage）。
 const MAX_ENTRIES = 1024;
 const PREFIX = 'web-clip:';
 
@@ -68,7 +68,7 @@ function extractArticle(html: string): string {
 describe('web-clip: capability SDK routing', () => {
   it('sdk.clipboard.readText() routes to clipboard bridge with op=read', async () => {
     const bridge = vi.fn().mockResolvedValue({ content: 'https://example.com/article' });
-    (globalThis as TestGlobal).__lingfangInvoke = bridge;
+    (globalThis as TestGlobal).__qianxiaInvoke = bridge;
 
     await expect(sdk.clipboard.readText()).resolves.toBe('https://example.com/article');
     expect(bridge).toHaveBeenCalledWith('clipboard', { op: 'read' });
@@ -76,7 +76,7 @@ describe('web-clip: capability SDK routing', () => {
 
   it('sdk.net.fetch(url) routes to net.fetch bridge with url + init', async () => {
     const bridge = vi.fn().mockResolvedValue({ status: 200, headers: {}, body: '<html></html>' });
-    (globalThis as TestGlobal).__lingfangInvoke = bridge;
+    (globalThis as TestGlobal).__qianxiaInvoke = bridge;
 
     const resp = await sdk.net.fetch('https://example.com/article', { method: 'GET' });
     expect(resp).toMatchObject({ status: 200 });
@@ -88,7 +88,7 @@ describe('web-clip: capability SDK routing', () => {
 
   it('sdk.llm.chat({messages}) routes to llm.chat with default model=fast', async () => {
     const bridge = vi.fn().mockResolvedValue('摘要内容');
-    (globalThis as TestGlobal).__lingfangInvoke = bridge;
+    (globalThis as TestGlobal).__qianxiaInvoke = bridge;
     const messages = [
       { role: 'system' as const, content: '你是网页剪藏助手' },
       { role: 'user' as const, content: '正文' },
@@ -139,7 +139,7 @@ describe('web-clip: LRU eviction on quota exhaustion', () => {
       }
       return undefined;
     });
-    (globalThis as TestGlobal).__lingfangInvoke = bridge;
+    (globalThis as TestGlobal).__qianxiaInvoke = bridge;
 
     await expect(persistRecord({ url: 'https://x.com', summary: 's' })).resolves.toBeUndefined();
 
@@ -163,7 +163,7 @@ describe('web-clip: LRU eviction on quota exhaustion', () => {
       }
       return undefined;
     });
-    (globalThis as TestGlobal).__lingfangInvoke = bridge;
+    (globalThis as TestGlobal).__qianxiaInvoke = bridge;
 
     await expect(persistRecord({ url: 'https://x.com', summary: 's' })).rejects.toThrow(/256KB/);
   });
@@ -177,7 +177,7 @@ describe('web-clip: net.fetch SSRF block is surfaced (not bypassed)', () => {
     const bridge = vi.fn().mockRejectedValue(
       'net.fetch 禁止访问内网/保留地址（SSRF 防护）'
     );
-    (globalThis as TestGlobal).__lingfangInvoke = bridge;
+    (globalThis as TestGlobal).__qianxiaInvoke = bridge;
 
     const err = await sdk.net
       .fetch('http://169.254.169.254/latest/meta-data', { method: 'GET' })
@@ -192,7 +192,7 @@ describe('web-clip: net.fetch SSRF block is surfaced (not bypassed)', () => {
 describe('web-clip: llm.chat relay_not_configured degrades without throwing', () => {
   it('relay_not_configured path keeps the archival flow from crashing', async () => {
     const bridge = vi.fn().mockRejectedValue('relay_not_configured: 请先配置 relay 凭据');
-    (globalThis as TestGlobal).__lingfangInvoke = bridge;
+    (globalThis as TestGlobal).__qianxiaInvoke = bridge;
 
     const isRelayNotConfigured = (e: unknown) =>
       (e as { code?: string })?.code === PluginAiErrorCode.RelayNotConfigured ||

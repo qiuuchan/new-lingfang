@@ -1,4 +1,4 @@
-//! update.rs — 应用侧更新触发链路（LF-10，阶段 L1）。
+//! update.rs — 应用侧更新触发链路（QX-10，阶段 L1）。
 //!
 //! 背景：安装器 `run_update`（等主进程退出 → 静默覆盖 → 重启 → 自删）已实现，但应用侧
 //! 从未拉起它——每个 Release 都是「死版」。本模块补齐「检测 → 下载 → 验签 → 拉起 updater.exe」
@@ -20,7 +20,7 @@ use serde::{Deserialize, Serialize};
 use sha2::Digest;
 
 /// feed 默认地址：本仓库 GitHub Releases 随包上传的 `latest.json`。
-/// 可由命令参数覆盖，其次 env `LINGFANG_UPDATE_FEED_URL`。
+/// 可由命令参数覆盖，其次 env `QIANXIA_UPDATE_FEED_URL`。
 pub const DEFAULT_FEED_URL: &str =
     "https://github.com/qiuuchan/new-lingfang/releases/latest/download/latest.json";
 
@@ -132,9 +132,9 @@ pub async fn download_update(
     if !is_allowed_scheme(&info.setup_url) {
         return Err("安装包地址指向内网/保留地址（SSRF 防护）".to_string());
     }
-    let tmp_dir = std::env::temp_dir().join("lingfang-update");
+    let tmp_dir = std::env::temp_dir().join("qianxia-update");
     let _ = std::fs::create_dir_all(&tmp_dir);
-    let tmp_path = tmp_dir.join(format!("LingFang-Setup-{}.exe", info.version));
+    let tmp_path = tmp_dir.join(format!("QianXia-Setup-{}.exe", info.version));
     // 清理可能残留的旧临时包。
     let _ = std::fs::remove_file(&tmp_path);
 
@@ -208,7 +208,7 @@ pub async fn download_update(
 ///
 /// 参数构造（对齐 installer `cli.rs` 的 flag 解析形态）：
 /// `updater.exe update --target <安装目录> --setup <临时包> --wait-pid <自pid> --restart`
-/// 安装目录默认取当前 exe 所在目录（即安装位置）；可用 env `LINGFANG_UPDATE_TARGET_OVERRIDE`
+/// 安装目录默认取当前 exe 所在目录（即安装位置）；可用 env `QIANXIA_UPDATE_TARGET_OVERRIDE`
 /// 覆盖（仅测试用，避免 e2e 误覆盖真实构建目录）。
 ///
 /// 本命令异步 spawn 后立刻返回 Ok（不等待 updater 完成——updater 自己负责等本进程退出再覆盖）。
@@ -223,7 +223,7 @@ pub fn apply_update(setup_path: String) -> Result<(), String> {
         .map(|p| p.to_path_buf())
         .ok_or_else(|| "无法解析 exe 父目录".to_string())?;
 
-    let target = std::env::var("LINGFANG_UPDATE_TARGET_OVERRIDE")
+    let target = std::env::var("QIANXIA_UPDATE_TARGET_OVERRIDE")
         .ok()
         .filter(|s| !s.trim().is_empty())
         .map(PathBuf::from)
@@ -269,9 +269,9 @@ fn app_version_semver() -> Result<semver::Version, String> {
     build_version()
 }
 
-/// 编译期注入的版本（build.rs 把 tauri.conf `version` 写进 env `LINGFANG_APP_VERSION`）。
+/// 编译期注入的版本（build.rs 把 tauri.conf `version` 写进 env `QIANXIA_APP_VERSION`）。
 fn build_version() -> Result<semver::Version, String> {
-    let v = env!("LINGFANG_APP_VERSION");
+    let v = env!("QIANXIA_APP_VERSION");
     semver::Version::parse(v).map_err(|e| format!("编译期版本号非法 {v}：{e}"))
 }
 
@@ -464,7 +464,7 @@ mod tests {
         assert!(msg.contains("sha256"), "错误信息应提及 sha256：{msg}");
     }
 
-    /// LF-16 验收：CI「Generate latest.json」步骤产出的 feed 形状必须能被
+    /// QX-16 验收：CI「Generate latest.json」步骤产出的 feed 形状必须能被
     /// check_update 的 Feed 解析结构正确解析（字段口径 fixture，双向锁死——
     /// CI 侧改字段名/结构而不改本解析，或反之，该测试即红）。
     #[test]
@@ -492,7 +492,7 @@ mod tests {
         assert!(feed.notes.is_empty() && feed.pub_date == "2026-08-28T10:00:00.000Z");
     }
 
-    /// LF-16 反向：tag 前缀若没剥离（version 带 v），semver 解析必须失败——
+    /// QX-16 反向：tag 前缀若没剥离（version 带 v），semver 解析必须失败——
     /// 这正是 CI 用 `${GITHUB_REF_NAME#v}` 剥前缀的原因，锁死该约定。
     #[test]
     fn feed_version_with_v_prefix_fails_semver() {

@@ -1,6 +1,6 @@
 // plugins-runtime.ts — 宿主能力落点（零服务器架构）。
 //
-// 前端 client 插件（iframe 内 window.sdk / __lingfangInvoke）与 client-action adapter
+// 前端 client 插件（iframe 内 window.sdk / __qianxiaInvoke）与 client-action adapter
 // 最终都汇聚到这里，经 Tauri 命令触达 Rust capability 网关。契约 / 网关分派细节见
 // capability.rs（其注释也指向本文件）。
 //
@@ -51,7 +51,7 @@ export function normalizeCapabilityError(err: unknown): CapabilityRuntimeError {
   if (message.includes('未声明能力')) code = 'capability_not_declared';
   else if (message.includes('暂未实现')) code = 'capability_not_supported';
   else if (message.includes('SSRF') || message.includes('内网')) code = 'net_fetch_ssrf_blocked';
-  // LF-05 / g2-sdk-friction #5：kv 配额错误先于泛化「超出」匹配——kv 文案含「超出」
+  // QX-05 / g2-sdk-friction #5：kv 配额错误先于泛化「超出」匹配——kv 文案含「超出」
   // （value 超出 N 字节上限 / 条目数超出 N 上限），若后置会被 capability_out_of_scope 吞掉。
   else if (message.includes('kv_value_too_large')) code = 'kv_value_too_large';
   else if (message.includes('kv_quota_exceeded')) code = 'kv_quota_exceeded';
@@ -64,7 +64,7 @@ export function normalizeCapabilityError(err: unknown): CapabilityRuntimeError {
   return error;
 }
 
-// 统一入口：client 插件（window.sdk / __lingfangInvoke）与 client-action adapter 都最终调用本函数。
+// 统一入口：client 插件（window.sdk / __qianxiaInvoke）与 client-action adapter 都最终调用本函数。
 export async function invokeRuntime(
   pluginId: string,
   kind: string,

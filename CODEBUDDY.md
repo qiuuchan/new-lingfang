@@ -4,7 +4,7 @@ This file provides guidance to CodeBuddy Code when working with code in this rep
 
 ## Overview
 
-**my-treasure** ("灵坊工作台" / LingFang Workbench) is a Tauri v2 desktop **plugin platform**. It
+**my-treasure** ("千匣台" / QianXia Workbench) is a Tauri v2 desktop **plugin platform**. It
 runs third-party plugins locally inside a desktop shell. The defining architectural choice is a
 **zero-server model**: there is no backend in this repo. Client-plugin execution and every
 privileged call it makes go through Tauri commands with capability checks; nodejs/python plugins
@@ -49,11 +49,11 @@ pnpm -C apps/desktop build:frontend   # runtime:verify + vite build (frontend on
 cd apps/desktop/src-tauri && cargo build && cargo test
 
 # Plugin SDK CLI (create / validate / build / publish / dev)
-pnpm plugin:create        # = pnpm -C packages/plugin-sdk exec lingfang-plugin create
+pnpm plugin:create        # = pnpm -C packages/plugin-sdk exec qianxia-plugin create
 pnpm plugin:validate
 pnpm plugin:build
 pnpm plugin:publish
-pnpm plugin:dev <dir>     # = pnpm -C packages/plugin-sdk exec lingfang-plugin dev <dir>  (注册 dev 安装，免打包直读，v1 仅 client)
+pnpm plugin:dev <dir>     # = pnpm -C packages/plugin-sdk exec qianxia-plugin dev <dir>  (注册 dev 安装，免打包直读，v1 仅 client)
 pnpm -C packages/plugin-sdk cli:dev     # run the CLI source directly (tsx)
 
 # Bundled runtimes (see "Runtimes" below). The lock file `apps/desktop/runtime-lock.json`
@@ -70,7 +70,7 @@ cd apps/desktop/installer && cargo build
 
 ### Packages (pnpm workspace: `apps/desktop`, `packages/*`)
 
-- **`apps/desktop`** (`@lingfang/desktop`) — the Tauri v2 shell.
+- **`apps/desktop`** (`@qianxia/desktop`) — the Tauri v2 shell.
   - *Frontend*: React 18 + Vite 6 + TS 5 + Tailwind v4 + `zustand` (state) + `next-themes`
     (dark default) + `framer-motion` + `@base-ui/react`. Entry: `index.html` → `src/main.tsx`
     (error boundary + theme) → `src/App.tsx`. All Tauri I/O is centralized in `src/lib/api.ts`
@@ -79,7 +79,7 @@ cd apps/desktop/installer && cargo build
   - *Rust* (`src-tauri`): the real engine. Key modules:
     - `plugin_store.rs` — `PluginStore`, scans `plugins_root`, lists/reads plugin files.
     - `plugin_package_manager.rs` — install/rollback/uninstall, draft workspaces, inspect
-      `.lfplugin` v4 artifacts; `register_builtins` seeds the built-in plugins.
+      `.qplugin` v4 artifacts; `register_builtins` seeds the built-in plugins.
     - `plugin_runner.rs` — `start_plugin`, spawns `client`/`nodejs`/`python` processes in a
       Windows Job Object sandbox, streams output via the `plugin:output` / `plugin:exited`
       Tauri events.
@@ -89,7 +89,7 @@ cd apps/desktop/installer && cargo build
       declared capabilities.
     - `plugin_security.rs` — minisign signature verification + recall checks.
     - `plugin_net_fetch.rs` — host-side HTTP with SSRF guards (30s / 10 MiB limits).
-    - `plugin_llm_bridge.rs` — injects `LINGFANG_PLUGIN_BRIDGE_URL` / `LINGFANG_PLUGIN_BRIDGE_TOKEN`
+    - `plugin_llm_bridge.rs` — injects `QIANXIA_PLUGIN_BRIDGE_URL` / `QIANXIA_PLUGIN_BRIDGE_TOKEN`
       into plugin processes so they can reach LLM/image/video capabilities without holding keys.
   - Exposed Tauri commands (all `#[tauri::command]`): `list_plugins`, `start_builtin_plugin`,
     `read_plugin_file`, `invoke_capability`, `plugin_net_fetch`, `plugin_script::*`,
@@ -97,7 +97,7 @@ cd apps/desktop/installer && cargo build
     `plugin_runner::{start,stop,delete,get_status}_plugin`, `plugin_store::*`,
     `plugin_package_manager::commands::*`, `plugin_security::*`.
 
-- **`packages/contract`** (`@lingfang/contract`) — the **single source of truth** for all host↔
+- **`packages/contract`** (`@qianxia/contract`) — the **single source of truth** for all host↔
   plugin types. Zod schemas only; it contains **no host logic**. `src/index.ts` re-exports the
   domain modules (`identity`, `admin-common`, `plugin`, `plugin-action`, `plugin-workflow`,
   `plugin-cloud-automation`, `plugin-registry`, `plugin-shared-state`, `draft`, `llm`,
@@ -106,19 +106,19 @@ cd apps/desktop/installer && cargo build
   (snake_case boundary), `PluginGrant` + `resolveGrant()` (deny-wins). **Contract drift is treated
   as a defect** — keep it authoritative and reuse its types everywhere.
 
-- **`packages/plugin-sdk`** (`@lingfang/plugin-sdk`) — what plugin authors import, plus the
-  `lingfang-plugin` CLI. `src/index.ts` exports the typed `sdk` object — the real host API surface
+- **`packages/plugin-sdk`** (`@qianxia/plugin-sdk`) — what plugin authors import, plus the
+  `qianxia-plugin` CLI. `src/index.ts` exports the typed `sdk` object — the real host API surface
   a plugin calls (`fs`, `net.fetch`, `clipboard`, `storage`, `shared`, `system`, `llm`, `image`,
   `video`, `artifacts`, `ui`, `plugin`). Every method routes through the host-injected bridge with
-  capability-gated timeouts (30s default, 180s AI, 24h+30s actions). `lingfang-plugin` commands:
+  capability-gated timeouts (30s default, 180s AI, 24h+30s actions). `qianxia-plugin` commands:
   `create` (scaffolds `client`/`nodejs`/`python` from `src/templates/*`), `validate`
   (`validateManifest()` = Zod parse + 7 business rules in `src/manifest/rules.ts`, e.g.
   `ruleEntryRuntimeMatch` enforces `client→.html`, `nodejs→.js/.mjs/.cjs`, `python→.py`),
-  `build` (packs a `.lfplugin` v4 zip via `util/archive.ts` — never hand-zip), `publish`
+  `build` (packs a `.qplugin` v4 zip via `util/archive.ts` — never hand-zip), `publish`
   (uploads to registry). See `packages/plugin-sdk/README.md`.
 
-- **`packages/ui-tokens`** (`@lingfang/ui-tokens`) — design tokens only (`tokens.css`, CSS vars
-  like `--lf-color-primary`). The host injects these into every plugin iframe; plugins must consume
+- **`packages/ui-tokens`** (`@qianxia/ui-tokens`) — design tokens only (`tokens.css`, CSS vars
+  like `--qx-color-primary`). The host injects these into every plugin iframe; plugins must consume
   tokens, never hardcode colors.
 
 ### Plugin model
@@ -142,18 +142,18 @@ cd apps/desktop/installer && cargo build
     `tauri::Channel` for transfer progress. The host also emits `plugin:dev-reload` with
     `{ installationId, runtimeType }` when a dev-install directory changes; `PluginRunner` listens
     and re-reads the client entry (iframe auto-reload).
-  - **Dev installs (v1)**: `lingfang-plugin dev <dir>` registers a plugin directory as a dev
+  - **Dev installs (v1)**: `qianxia-plugin dev <dir>` registers a plugin directory as a dev
     installation (`origin=dev`, direct-read, no packaging). Per F2 security policy, **v1 dev installs
     are client-only** — `nodejs`/`python` runtime types are rejected by the CLI. The host exposes
     `register_dev_dir(input: { dir, packageId? })` returning a `LocalInstallation`; outside the
     desktop host (no `window.__TAURI__`) the CLI is best-effort and only prints a hint.
-  - Client iframe ⇄ host: host injects `window.__lingfangInvoke(capability, args)` into the iframe.
-  - nodejs/python ⇄ host: a localhost HTTP bridge at `LINGFANG_PLUGIN_BRIDGE_URL` with routes
+  - Client iframe ⇄ host: host injects `window.__qianxiaInvoke(capability, args)` into the iframe.
+  - nodejs/python ⇄ host: a localhost HTTP bridge at `QIANXIA_PLUGIN_BRIDGE_URL` with routes
     `/llm/chat`, `/image/generate`, `/image/edit`, `/video/generate`, `/actions/call`,
     `/artifacts/*`, all gated by the capability gateway.
 - **Built-in plugins** are compiled *into the binary*: `apps/desktop/src-tauri/build.rs`
   (`generate_builtin_bundle`) zips each dir in `apps/desktop/builtin-plugins/` into a sha256-named
-  `.lfplugin`, writes `index.json`, and emits `builtin_plugin_bundle.rs` embedded via
+  `.qplugin`, writes `index.json`, and emits `builtin_plugin_bundle.rs` embedded via
   `include_bytes!`. `main.rs` calls `register_builtins(INDEX_JSON, ARTIFACTS)`. Current built-ins:
   `calculator` (python/PySide6), `game-2048` (nodejs), `notes` (client HTML), `action-demo`
   (client, declares `demo.hello` action), `action-caller` (nodejs, drives the action bridge).
@@ -168,7 +168,7 @@ dev/build time from the committed lock file `apps/desktop/runtime-lock.json` via
 `verify-bundled-runtimes.mjs` checks `requiredFiles`/`keyFiles` and cross-checks Playwright
 revision/browserVersion drift. `RuntimeResolver` (`runtime_resolver.rs`) is the only entry point for
 running these; it **never consults system PATH** — only `runtimes/` (resolved from exe dir / resource
-dir / `LINGFANG_EMBEDDED_RUNTIME_DIR`), injecting bundled PATH plus Tsinghua PyPI / npmmirror npm
+dir / `QIANXIA_EMBEDDED_RUNTIME_DIR`), injecting bundled PATH plus Tsinghua PyPI / npmmirror npm
 mirrors. `plugin_runner.rs` uses it to create Python venvs and run `pnpm`/`npm install`, spawning
 sandboxed processes.
 
@@ -189,7 +189,7 @@ privileges and CAN bypass the SDK to touch the network or user-readable files di
 capability gateway constrains only calls that go through the SDK/bridge — it is an API contract
 for honest plugins, not a wall against malicious ones.
 
-**Tier 3 — the real defense for process plugins is install-time trust.** `.lfplugin` packages
+**Tier 3 — the real defense for process plugins is install-time trust.** `.qplugin` packages
 are minisign-verified (`plugin_security.rs` `verify_plugin_signature_command`; `signed=false`
 does not block — status display only) and checked against a recall list
 (`check_plugin_recall_command`). Until a plugin-signing trust root exists for the ecosystem,

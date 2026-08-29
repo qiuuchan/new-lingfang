@@ -10,17 +10,17 @@ fn main() {
     let version = desktop_version().unwrap_or_else(|| {
         std::env::var("CARGO_PKG_VERSION").unwrap_or_else(|_| "0.0.0".to_string())
     });
-    println!("cargo:rustc-env=LINGFANG_APP_VERSION={version}");
+    println!("cargo:rustc-env=QIANXIA_APP_VERSION={version}");
     println!("cargo:rerun-if-changed=../src-tauri/tauri.conf.json");
 
     #[cfg(target_os = "windows")]
     {
         let mut res = winres::WindowsResource::new();
         // 与 paths.rs / tauri.conf.json 对齐的显示信息。
-        res.set("FileDescription", "灵坊工作台 安装程序");
-        res.set("ProductName", "灵坊工作台");
-        res.set("LegalCopyright", "© 2026 灵坊工作台");
-        res.set("CompanyName", "灵坊工作台");
+        res.set("FileDescription", "千匣台 安装程序");
+        res.set("ProductName", "千匣台");
+        res.set("LegalCopyright", "© 2026 千匣台");
+        res.set("CompanyName", "千匣台");
         res.set("ProductVersion", &version);
         res.set("FileVersion", &windows_file_version(&version));
         // 原始版本四元组（winres 默认从 ProductVersion 解析；这里显式确保格式合法）。

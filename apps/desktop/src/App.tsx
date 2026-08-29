@@ -197,11 +197,11 @@ export default function App() {
     });
   }, []);
 
-  // LF-06（Defect #1 修复）：内置 client 插件的 action handler 此前只在「打开插件」
+  // QX-06（Defect #1 修复）：内置 client 插件的 action handler 此前只在「打开插件」
   // （PluginRunner.tsx:110）或 pin/recent 水合时注册。全新机器 pin/recent 为空时，
   // 内置 client action（如 action-demo 的 demo.hello）不会被注册，导致进程插件经桥
   // 调它时回 action_dependency_unresolved。这里在 App 启动期对内置 client 插件
-  // 主动注册，保证内置 action 始终可被调用（与 LF-06 harness 先「打开 action-demo」双层保障）。
+  // 主动注册，保证内置 action 始终可被调用（与 QX-06 harness 先「打开 action-demo」双层保障）。
   useEffect(() => {
     let cancelled = false;
     void (async () => {

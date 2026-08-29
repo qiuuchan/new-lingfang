@@ -1,4 +1,4 @@
-# 灵坊工作台 改进计划(第二轮 · 基于代码核实 · 2026-08-23)
+# 千匣台 改进计划(第二轮 · 基于代码核实 · 2026-08-23)
 
 > 本文档是 `IMPLEMENTATION_PLAN.md`(第一轮,A–D 阶段)全部完成后的**第二轮改进计划**,
 > 来源于 2026-08-23 的项目评审与改进方向讨论,撰写前对涉及的关键事实做了代码级核实(见「0. 核实结论」)。
@@ -46,7 +46,7 @@
   3. 连接:Playwright `connectOverCDP` → 等待插件中心加载 → 打开内置 notes;
   4. 断言(与 A5a 对齐、按 caps 后现状更新):
      - iframe 渲染(`sandbox="allow-scripts"`、opaque origin),无脚本错误;
-     - `window.sdk` 已定义;ui-tokens CSS 已注入(查 `--lf-color-primary`);
+     - `window.sdk` 已定义;ui-tokens CSS 已注入(查 `--qx-color-primary`);
      - **`storage.kv` set/get 真实成功**(caps 后新预期,顺带验证 kv 落盘);
      - 未声明 kind(如 `system.info`)reject `capability_not_declared`;
      - `llm.chat` reject `relay_not_configured`(凭据未配置时的正确表现);
@@ -84,7 +84,7 @@
 - 验证:逐条与 `sandbox.rs`/`capability.rs`/`plugin_security.rs` 现状对照,不引入新的未核实断言。
 
 ### F2. 政策落地:v1 第三方插件仅限 client 运行时(已拍板采纳 ✅)
-- **依据**:client 边界真实存在(#10);进程沙箱非安全边界(#10);插件签名信任根未建(当前仅 runtime 制品有 Org secret minisign 信任根,`.lfplugin` 生态侧无)。
+- **依据**:client 边界真实存在(#10);进程沙箱非安全边界(#10);插件签名信任根未建(当前仅 runtime 制品有 Org secret minisign 信任根,`.qplugin` 生态侧无)。
 - **落点**:
   - 安装路径:`plugin_package_manager` 对 `origin=local` 导入且 `runtime_type ∈ {nodejs, python}` 的插件,安装时明确拒绝(错误信息指向政策文档);内置插件与一方签名插件不受限。补单测(拒绝+放行两侧)。
   - 文档:CODEBUDDY.md Security 节 + `packages/plugin-sdk/README.md` + `docs/plugin-development.md` 标注该政策与解除条件(市场签名信任根建立)。
@@ -123,13 +123,13 @@
 - 放 `packages/plugin-sdk/examples/`(或独立目录);发布流程走 `plugin:create` → `plugin:build` → 本地导入,顺带验证 F3 的来源徽标与未签名警示。
 - 伴随产出:一份「SDK 使用摩擦记录」(错误码可读性、30s/180s 超时是否合理、kv 单值 256KB 限额是否够用等),作为后续 API 调整的唯一输入源。
 
-### G3. `lingfang-plugin dev` 热循环(分两步)
-- **v1 目录直读安装**:CLI 新 `dev` 命令把插件目录注册为 dev 安装(`origin='dev'`),`plugin_package_manager` 支持从目录直读(免打包 `.lfplugin`),宿主内手动重开插件即刷新;
+### G3. `qianxia-plugin dev` 热循环(分两步)
+- **v1 目录直读安装**:CLI 新 `dev` 命令把插件目录注册为 dev 安装(`origin='dev'`),`plugin_package_manager` 支持从目录直读(免打包 `.qplugin`),宿主内手动重开插件即刷新;
 - **v2 watch + 自动重载**:文件 watch → 触发宿主刷新 iframe(client 插件)或重启进程(nodejs/python)。
 - 这是吸引第一批插件作者的最大杠杆:当前迭代循环是 build→安装→重开,摩擦过大。
 
 ### G4. README.md(仓库门面,当前缺失)
-- 一屏内容:项目定位(**零服务器=本仓库无后端**;AI 能力经用户配置的平台 relay,桌面壳是客户端而非"无云")、quickstart(`pnpm install` → `dev:desktop`)、架构地图(指向 CODEBUDDY.md)、仓库名 `my-treasure` 与产品名"灵坊工作台"的关系一句话。
+- 一屏内容:项目定位(**零服务器=本仓库无后端**;AI 能力经用户配置的平台 relay,桌面壳是客户端而非"无云")、quickstart(`pnpm install` → `dev:desktop`)、架构地图(指向 CODEBUDDY.md)、仓库名 `my-treasure` 与产品名"千匣台"的关系一句话。
 
 ### G5. 文档行号 → 符号引用
 - 将 IMPLEMENTATION_PLAN.md / TODO.md 中前瞻性(非存档)的 `file.rs:123` 引用批量替换为符号名(`parse_manifest`、`registry.register` 等),并删除 TODO「校准文档行号」条目;存档节保持原样。
@@ -138,9 +138,9 @@
 
 ## 阶段 H:还债 backlog(不排期,触发才做)
 
-- **H1. 契约瘦身**:平台云专属模块(marketplace-discovery/marketplace-commerce/plugin-governance/web-plugin-center/admin-governance/rbac/billing)标注归属注释或拆出 `@lingfang/platform-contract` 包,让桌面开发的"单一权威来源"不再拖拽用不到的形状。
+- **H1. 契约瘦身**:平台云专属模块(marketplace-discovery/marketplace-commerce/plugin-governance/web-plugin-center/admin-governance/rbac/billing)标注归属注释或拆出 `@qianxia/platform-contract` 包,让桌面开发的"单一权威来源"不再拖拽用不到的形状。
 - **H2. Windows-only ADR**:`docs/decisions/platform-windows-only.md`——一段话决策(v1 就是 Windows)+ 移植最硬骨头清单(Job Object 沙箱、SFX 安装器、WebView2、rc.exe)。
-- **H3. 重申不做(已落地记录,LF-03 核对 ✅)**:以下为 v1 明确维持现状的非目标,未经产品重新拍板不得动工:
+- **H3. 重申不做(已落地记录,QX-03 核对 ✅)**:以下为 v1 明确维持现状的非目标,未经产品重新拍板不得动工:
   - **`plugin.upload` / `plugin.submitMarketplace` 保持网关 NotSupported**:属平台市场审核流交互(需平台凭据与流程),零服务器桌面壳不越权伪造;网关语义与文案不变(`plugins-runtime.ts` / SDK 文档已标注"契约已定义、桌面壳未实现")。
   - **不建市场 / 计费 / 审核流基础设施**:无后端、无平台账号体系是零服务器叙事的基石,任何市场/计费/审核闭环都违背该定位。
   - **不扩能力面**(`CapabilityKind` 17 种之外的 kind,或既有 6 个 NotSupported kind 的桌面落点)直到真实插件需求提出:能力面每增一项都需宿主侧真实落点 + 安全复核,无需求不提前投资。
@@ -163,7 +163,7 @@
 | F5 | SettingsPanel 凭据校验 | ✅ api_base 硬校验(https URL,非法禁保存);token 空白字符软提示;7 个单测 |
 | G1 | notes AI 摘要真实凭据实操 | ⬜ **需真实 relay 凭据(用户输入),本轮无法自动推进** |
 | G2 | 剪藏摘要狗粮插件 + 摩擦记录 | ⬜ 未开始 |
-| G3 | `lingfang-plugin dev`(v1 直读 → v2 watch) | ⬜ 未开始 |
+| G3 | `qianxia-plugin dev`(v1 直读 → v2 watch) | ⬜ 未开始 |
 | G4 | README.md | ✅ 含零服务器叙事校准、v1 政策、架构地图、三档安全摘要 |
 | G5 | 行号→符号引用 | ⬜ 未开始 |
 

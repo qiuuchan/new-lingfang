@@ -6,9 +6,9 @@
     <title>知识库工作站</title>
     <style>
       :root {
-        --bg: var(--lf-color-surface, #f8f9fa);
+        --bg: var(--qx-color-surface, #f8f9fa);
         --surface: #ffffff;
-        --text: var(--lf-color-text, #212529);
+        --text: var(--qx-color-text, #212529);
         --text-secondary: #868e96;
         --border: #dee2e6;
         --accent: #3b82f6;
@@ -17,9 +17,9 @@
       }
       @media (prefers-color-scheme: dark) {
         :root {
-          --bg: var(--lf-color-surface, #0f1117);
+          --bg: var(--qx-color-surface, #0f1117);
           --surface: #1a1b26;
-          --text: var(--lf-color-text, #c9d1d9);
+          --text: var(--qx-color-text, #c9d1d9);
           --text-secondary: #8b949e;
           --border: #30363d;
           --accent: #58a6ff;
@@ -202,7 +202,7 @@
 
       // 关键词全文检索：token 化 + 词频加权（v1 不引入向量/倒排，客户端 JS 直接打分）。
       // CJK 连续运行切成重叠二元组（如「能力网关检查」→ 能力/力网/网关/关检/检查），
-      // 使短查询「能力网关」能与长片段匹配（LF-23 首跑实测：整串 token 匹配不上）。
+      // 使短查询「能力网关」能与长片段匹配（QX-23 首跑实测：整串 token 匹配不上）。
       function tokenize(s) {
         const ascii = (s.toLowerCase().match(/[a-z0-9]+/g) ?? []);
         const cjk = (s.match(/[\u4e00-\u9fa5]{2,}/g) ?? []);
@@ -218,7 +218,7 @@
         const tokens = tokenize(query);
         if (!tokens.length) return [];
         // ⚠️ 键形为 doc:<id>:<ts>:chunk:<i>——前缀必须是 'doc:' 再过滤 chunk
-        // （首版误用 'doc:chunk:'，前缀不匹配任何键，检索恒 0 命中，LF-23 实测）。
+        // （首版误用 'doc:chunk:'，前缀不匹配任何键，检索恒 0 命中，QX-23 实测）。
         const keys = (await sdk.storage.list('doc:')).filter((k) => k.includes(':chunk:'));
         const hits = [];
         for (const key of keys) {
@@ -331,7 +331,7 @@
           if (!answer.trim()) throw new Error('LLM 未返回内容');
           setStatus('askStatus', '');
           // 宿主弹层展示答案（Markdown 渲染，不注入 HTML）。
-          // LF-20 修复：render 直接收 Markdown 字符串——传 {type,body} 对象会被宿主
+          // QX-20 修复：render 直接收 Markdown 字符串——传 {type,body} 对象会被宿主
           // 当 JSON 展示（UiViewHost 仅对 string 走 Markdown）。
           await sdk.ui.render('## 回答\n\n' + answer + '\n\n---\n\n### 依据片段\n\n' + hits.map((h, i) => '**片段 ' + (i + 1) + '**：\n\n> ' + h.text.slice(0, 200)).join('\n\n'));
           const ansEl = $('answer');

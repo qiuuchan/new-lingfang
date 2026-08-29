@@ -1,5 +1,5 @@
 {
-  "name": "@lingfang/desktop",
+  "name": "@qianxia/desktop",
   "private": true,
   "version": "0.1.11",
   "type": "module",
@@ -23,8 +23,8 @@
   "dependencies": {
     "@base-ui/react": "^1.5.0",
     "@fontsource-variable/geist": "^5.2.9",
-    "@lingfang/contract": "workspace:*",
-    "@lingfang/ui-tokens": "workspace:^",
+    "@qianxia/contract": "workspace:*",
+    "@qianxia/ui-tokens": "workspace:^",
     "@tauri-apps/api": "^2.11.0",
     "@tauri-apps/plugin-dialog": "^2.7.1",
     "class-variance-authority": "^0.7.1",

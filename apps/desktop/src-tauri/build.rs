@@ -23,8 +23,8 @@ fn main() {
     tauri_build::build()
 }
 
-/// 把 tauri.conf.json 的 `version` 注入为编译期常量 `LINGFANG_APP_VERSION`，
-/// 供 update.rs `get_app_version` / semver 比较使用（与 installer 侧 `LINGFANG_APP_VERSION`
+/// 把 tauri.conf.json 的 `version` 注入为编译期常量 `QIANXIA_APP_VERSION`，
+/// 供 update.rs `get_app_version` / semver 比较使用（与 installer 侧 `QIANXIA_APP_VERSION`
 /// 同源，避免应用侧/安装器侧版本漂移）。
 fn emit_app_version() {
     let manifest_dir = PathBuf::from(
@@ -39,7 +39,7 @@ fn emit_app_version() {
         .and_then(|v| v.as_str())
         .expect("tauri.conf.json 缺少 version")
         .to_string();
-    println!("cargo:rustc-env=LINGFANG_APP_VERSION={version}");
+    println!("cargo:rustc-env=QIANXIA_APP_VERSION={version}");
     println!("cargo:rerun-if-changed={}", conf_path.display());
 }
 
@@ -99,7 +99,7 @@ fn generate_builtin_bundle() -> Result<(), String> {
                 )
             })?
             .to_string();
-        let artifact_file = format!("{}.lfplugin", inspected.sha256);
+        let artifact_file = format!("{}.qplugin", inspected.sha256);
         if !artifact_files.insert(artifact_file.clone()) {
             return Err(format!(
                 "duplicate builtin artifact SHA: {}",

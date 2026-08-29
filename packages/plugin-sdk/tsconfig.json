@@ -10,7 +10,7 @@
     "noEmit": true,
     "baseUrl": ".",
     "paths": {
-      "@lingfang/contract": ["../contract/src/index.ts"]
+      "@qianxia/contract": ["../contract/src/index.ts"]
     }
   },
   "include": ["src"]

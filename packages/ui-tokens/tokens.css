@@ -1,16 +1,16 @@
-/* LingFang design token：宿主注入到所有插件容器。
+/* QianXia design token：宿主注入到所有插件容器。
    插件只能消费这些变量，禁止硬编码色值（见 docs/03 §4），保证「装 N 个插件还像同一个 App」。 */
 :root {
-  --lf-color-primary: #2563eb;
-  --lf-color-bg: #fafafa;
-  --lf-color-text: #1a1a1a;
-  --lf-color-border: #dddddd;
-  --lf-radius-md: 10px;
-  --lf-spacing-md: 14px;
-  --lf-font-sans: system-ui, sans-serif;
+  --qx-color-primary: #2563eb;
+  --qx-color-bg: #fafafa;
+  --qx-color-text: #1a1a1a;
+  --qx-color-border: #dddddd;
+  --qx-radius-md: 10px;
+  --qx-spacing-md: 14px;
+  --qx-font-sans: system-ui, sans-serif;
   /* 界面动画时长 token（语义对齐用）。注意：桌面壳实际生效来源是 apps/desktop/src/index.css 的同名变量，
      本文件仅注入到插件 iframe 容器；此处保留同名 token 以维持「设计令牌单一来源」的文档语义。 */
-  --lf-dur-fast: 200ms;
-  --lf-dur-base: 320ms;
-  --lf-dur-slow: 480ms;
+  --qx-dur-fast: 200ms;
+  --qx-dur-base: 320ms;
+  --qx-dur-slow: 480ms;
 }

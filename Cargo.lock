@@ -3070,53 +3070,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "lingfang-desktop"
-version = "0.1.11"
-dependencies = [
- "arboard",
- "base64 0.22.1",
- "bytes",
- "chrono",
- "dirs 5.0.1",
- "futures",
- "futures-util",
- "minisign-verify",
- "notify",
- "reqwest 0.12.28",
- "semver",
- "serde",
- "serde_json",
- "sha2",
- "sysinfo",
- "tauri",
- "tauri-build",
- "tauri-plugin-dialog",
- "tauri-plugin-notification",
- "tempfile",
- "tokio",
- "uuid",
- "windows-sys 0.61.2",
- "xcap",
- "zip",
-]
-
-[[package]]
-name = "lingfang-installer"
-version = "0.0.23"
-dependencies = [
- "anyhow",
- "dirs 5.0.1",
- "eframe",
- "egui",
- "png 0.17.16",
- "raw-window-handle 0.6.2",
- "sha2",
- "windows-sys 0.59.0",
- "winres",
- "zip",
-]
-
-[[package]]
 name = "linux-raw-sys"
 version = "0.4.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4305,6 +4258,53 @@ name = "pxfm"
 version = "0.1.30"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d55d956fa96f5ec02be2e13af0e20391a5aa83d6a074e3ad368959d0fab299ea"
+
+[[package]]
+name = "qianxia-desktop"
+version = "0.1.11"
+dependencies = [
+ "arboard",
+ "base64 0.22.1",
+ "bytes",
+ "chrono",
+ "dirs 5.0.1",
+ "futures",
+ "futures-util",
+ "minisign-verify",
+ "notify",
+ "reqwest 0.12.28",
+ "semver",
+ "serde",
+ "serde_json",
+ "sha2",
+ "sysinfo",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-dialog",
+ "tauri-plugin-notification",
+ "tempfile",
+ "tokio",
+ "uuid",
+ "windows-sys 0.61.2",
+ "xcap",
+ "zip",
+]
+
+[[package]]
+name = "qianxia-installer"
+version = "0.0.23"
+dependencies = [
+ "anyhow",
+ "dirs 5.0.1",
+ "eframe",
+ "egui",
+ "png 0.17.16",
+ "raw-window-handle 0.6.2",
+ "sha2",
+ "windows-sys 0.59.0",
+ "winres",
+ "zip",
+]
 
 [[package]]
 name = "quick-error"

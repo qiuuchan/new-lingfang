@@ -545,7 +545,7 @@
         <div class="sidebar-header">
           <h1>Markdown 笔记</h1>
           <button class="btn-new" id="btnNewNote">新建笔记</button>
-          <button class="btn-icon" id="btnConfig" title="AI 总结使用灵坊平台 LLM，无需额外配置">
+          <button class="btn-icon" id="btnConfig" title="AI 总结使用千匣平台 LLM，无需额外配置">
             AI
           </button>
         </div>
@@ -704,7 +704,7 @@
               };
             },
           },
-          llm: { chat: () => Promise.resolve({ content: 'AI 功能需在 LingFang 平台内使用。' }) },
+          llm: { chat: () => Promise.resolve({ content: 'AI 功能需在 QianXia 平台内使用。' }) },
           system: {
             notify: (t) => {
               try {
@@ -1166,7 +1166,7 @@
         document
           .getElementById('btnConfig')
           .addEventListener('click', () =>
-            sdk.system.notify('AI 总结已接入灵坊平台 LLM，无需配置第三方接口')
+            sdk.system.notify('AI 总结已接入千匣平台 LLM，无需配置第三方接口')
           );
         document.getElementById('btnNewNote').addEventListener('click', createNote);
         document.getElementById('searchInput').addEventListener('input', handleSearch);

@@ -17,7 +17,7 @@ afterEach(async () => {
 });
 
 async function tempDir(): Promise<string> {
-  const dir = await mkdtemp(path.join(tmpdir(), 'lf-dev-'));
+  const dir = await mkdtemp(path.join(tmpdir(), 'qx-dev-'));
   CLEANUP_DIRS.push(dir);
   return dir;
 }

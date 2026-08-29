@@ -3,7 +3,7 @@ import type {
   SharedChangesPage,
   SharedPage,
   SharedValue,
-} from '@lingfang/contract';
+} from '@qianxia/contract';
 
 export type SharedReplica = {
   namespace_id: string;

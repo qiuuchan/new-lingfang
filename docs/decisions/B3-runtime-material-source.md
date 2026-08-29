@@ -1,14 +1,14 @@
 # B3: runtime 物料来源（bundled runtime binaries 来自哪里）
 
 > 状态：✅ 已拍板（2026-08-22：**组合 B→C**）。代码侧脚手架已全部落地；仅剩外部物料/密钥入库即可闭环（见文末「脚手架进度与剩余外部阻塞」）。逐项答复见 `docs/DECISION-REQUEST.md`「决策一：B3」。
-> 范围：灵坊工作台（my-treasure）Tauri v2 桌面端 `apps/desktop/runtimes/` 下的 node / python / ffmpeg / chromium 二进制物料
+> 范围：千匣台（my-treasure）Tauri v2 桌面端 `apps/desktop/runtimes/` 下的 node / python / ffmpeg / chromium 二进制物料
 > 关联决策：B2（lock 文件落地位置已修复为 `apps/desktop/runtime-lock.json`，见 `scripts/materialize-bundled-runtimes.mjs:20-22`、`scripts/verify-bundled-runtimes.mjs:11-13`）
 
 ---
 
 ## 背景与阻塞点
 
-灵坊工作台是**零服务器**模型：所有插件执行、能力下发、文件/网络访问都走 Tauri 命令 + 本地文件系统 + **应用自带的语言运行时**（node / python / ffmpeg / chromium）。运行时**不查系统 PATH**，只从 `runtimes/` 解析（`runtime_resolver.rs:8`、`runtime_resolver.rs:344-354` 的 `resolve_bundled` 只 `join(subdir)` 后判定 exe 是否存在，`RuntimeSource` 永远为 `Bundled`）。
+千匣台是**零服务器**模型：所有插件执行、能力下发、文件/网络访问都走 Tauri 命令 + 本地文件系统 + **应用自带的语言运行时**（node / python / ffmpeg / chromium）。运行时**不查系统 PATH**，只从 `runtimes/` 解析（`runtime_resolver.rs:8`、`runtime_resolver.rs:344-354` 的 `resolve_bundled` 只 `join(subdir)` 后判定 exe 是否存在，`RuntimeSource` 永远为 `Bundled`）。
 
 `materialize-bundled-runtimes.mjs` 与 `verify-bundled-runtimes.mjs` 已经写好，但它们的**输入端没有物料来源**：
 
@@ -44,7 +44,7 @@
 
 - **`apps/desktop/.gitignore`**：只忽略 `.local-runtimes/`（dev 模式按需下载落点），与 bundled runtime 物料来源无直接关系。
 
-- **`runtime_resolver.rs`**：`bundled_runtimes_root`（`runtime_resolver.rs:356-380`）解析顺序为 `LINGFANG_EMBEDDED_RUNTIME_DIR` 环境变量 → exe 同级 `runtimes/` → `resource_dir/runtimes/` → `CARGO_MANIFEST_DIR/../runtimes/`。**全程只查 `runtimes/`，绝不查系统 PATH**（不变式 1，`runtime_resolver.rs:8`）。`env()` 还会清空宿主 PATH 并只注入命中来源 PATH（`runtime_resolver.rs:247-291`）。结论：resolver 对"物料从哪来"无感知，它只消费已就位的 `runtimes/`。
+- **`runtime_resolver.rs`**：`bundled_runtimes_root`（`runtime_resolver.rs:356-380`）解析顺序为 `QIANXIA_EMBEDDED_RUNTIME_DIR` 环境变量 → exe 同级 `runtimes/` → `resource_dir/runtimes/` → `CARGO_MANIFEST_DIR/../runtimes/`。**全程只查 `runtimes/`，绝不查系统 PATH**（不变式 1，`runtime_resolver.rs:8`）。`env()` 还会清空宿主 PATH 并只注入命中来源 PATH（`runtime_resolver.rs:247-291`）。结论：resolver 对"物料从哪来"无感知，它只消费已就位的 `runtimes/`。
 
 ---
 
@@ -119,13 +119,13 @@
 |---|---|---|---|
 | 1 | `chrome.dll` 5 分片（合计 285MB） | ✅ 完成（2026-08-22） | 自 Playwright CFT 149.0.7827.55 `chrome-win64.zip` 提取（size/sha256 与锁一致），等分切分落位 `apps/desktop/runtime-parts/chromium/ms-playwright/chromium-1228/chrome-win64/`，拼合回验 sha256 通过。提交走 LFS（流程见 `docs/lfs-setup.md`）；本工作副本尚无 `.git`，建仓后首提即入库 |
 | 2 | ffmpeg 实际 `sourceSha256` / `sourceSize` | ✅ 完成（2026-08-22） | 归档 166,721,853B / sha256 `0fff1889…` 已回填 lock；`source` 修正为 gyan.dev `/builds/packages/`（原 `/builds/` 路径已 404，GitHub 镜像字节一致）；包内 ffmpeg.exe / ffprobe.exe 与 keyFiles 逐字节一致 |
-| 3 | CI minisign 密钥 | ✅ 完成（2026-08-22） | `LINGFANG_RUNTIME_PUBKEY` / `LINGFANG_RUNTIME_SIGKEY` 已注册；`publish-runtimes` 六步全部 hard 并端到端跑绿：tag `v0.0.1-test` → Release `runtimes-bundle.zip`（约 1.7GB）+ `.minisig`，签名与自验通过。B 链路闭环 |
+| 3 | CI minisign 密钥 | ✅ 完成（2026-08-22） | `QIANXIA_RUNTIME_PUBKEY` / `QIANXIA_RUNTIME_SIGKEY` 已注册；`publish-runtimes` 六步全部 hard 并端到端跑绿：tag `v0.0.1-test` → Release `runtimes-bundle.zip`（约 1.7GB）+ `.minisig`，签名与自验通过。B 链路闭环 |
 
 后续（P2）：installer crate 接入 workspace 并注入 `runtimes/`，迁移至方案 C。
 > ✅ **P2 已完成（2026-08-23，B3→C 迁移闭环）**：installer 入 workspace；`sfx.rs` 以
 > `SegmentReader` 流式解压（payload >1.5GB 不再整段进内存）；`build-installer.mjs` 打包前强制
 > runtime-lock 全量校验（sha256 硬门槛）、排除 `.download`、内置纯净 `updater.exe`、u32 容量守卫；
-> CI `publish-runtimes` 扩为双产物（runtimes-bundle.zip + 内嵌 runtimes 的 LingFang-Setup-*.exe，
+> CI `publish-runtimes` 扩为双产物（runtimes-bundle.zip + 内嵌 runtimes 的 QianXia-Setup-*.exe，
 > 均经 minisign 签名）。顺带修复 `cli.rs` 子命令误判路径值的存量 bug（`--silent --target <路径>`
 > 形态此前必败）。本机端到端验证通过（打包 633MB → 静默解压 → 产物与锁逐字节一致）。
 
@@ -140,8 +140,8 @@
 
 | Org secret | 值 |
 |---|---|
-| `LINGFANG_RUNTIME_PUBKEY` | minisign 公钥文件全文（KeyId `3AAE104344CB8CA3`，base64 `RWSjjMtEQxCuOiyJ5vRBrdquGSU15tGQDHW3zVMkO4sMJIAvC32jpQwt`） |
-| `LINGFANG_RUNTIME_SIGKEY` | 对应私钥文件全文（无密码版，仅存于 GitHub secret 与 Owner 本地备份） |
+| `QIANXIA_RUNTIME_PUBKEY` | minisign 公钥文件全文（KeyId `3AAE104344CB8CA3`，base64 `RWSjjMtEQxCuOiyJ5vRBrdquGSU15tGQDHW3zVMkO4sMJIAvC32jpQwt`） |
+| `QIANXIA_RUNTIME_SIGKEY` | 对应私钥文件全文（无密码版，仅存于 GitHub secret 与 Owner 本地备份） |
 
 闭环验证（tag `v0.0.1-test`，run `ab75bbe`）：checkout(LFS) → 预取(sha 门槛) → materialize → populate → verify → package(~1.7GB) → **minisign 签名 + 自验 ✓** → Release 上传 ✓。
 产物：`https://github.com/qiuuchan/new-lingfang/releases/tag/v0.0.1-test`。
@@ -149,7 +149,7 @@
 验签命令（消费方）：
 
 ```powershell
-minisign -Vm runtimes-bundle.zip -P <LINGFANG_RUNTIME_PUBKEY 文件或内联 base64>
+minisign -Vm runtimes-bundle.zip -P <QIANXIA_RUNTIME_PUBKEY 文件或内联 base64>
 ```
 
 ---

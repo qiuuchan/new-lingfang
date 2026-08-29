@@ -6,20 +6,20 @@ import threading
 import urllib.request
 import webbrowser
 
-BRIDGE_URL = os.environ.get("LINGFANG_PLUGIN_BRIDGE_URL", "")
-BRIDGE_TOKEN = os.environ.get("LINGFANG_PLUGIN_BRIDGE_TOKEN", "")
+BRIDGE_URL = os.environ.get("QIANXIA_PLUGIN_BRIDGE_URL", "")
+BRIDGE_TOKEN = os.environ.get("QIANXIA_PLUGIN_BRIDGE_TOKEN", "")
 
 
 def call_bridge(path: str, payload: dict) -> dict:
     """调用平台本地桥。"""
     if not BRIDGE_URL or not BRIDGE_TOKEN:
-        raise RuntimeError("桥未注入：请在 LingFang 桌面壳内运行此插件")
+        raise RuntimeError("桥未注入：请在 QianXia 桌面壳内运行此插件")
     req = urllib.request.Request(
         f"{BRIDGE_URL}{path}",
         data=json.dumps(payload).encode(),
         headers={
             "Content-Type": "application/json",
-            "X-LingFang-Plugin-Token": BRIDGE_TOKEN,
+            "X-QianXia-Plugin-Token": BRIDGE_TOKEN,
         },
         method="POST",
     )

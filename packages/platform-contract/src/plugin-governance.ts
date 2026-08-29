@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { CapabilityKind, RuntimeType } from '@lingfang/contract';
-import { PluginReleaseSourceKind, Sha256Hex } from '@lingfang/contract';
+import { CapabilityKind, RuntimeType } from '@qianxia/contract';
+import { PluginReleaseSourceKind, Sha256Hex } from '@qianxia/contract';
 
 export const PluginPolicyOperation = z.enum([
   'install',

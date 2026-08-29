@@ -2,7 +2,7 @@
   "id": "builtin.action-demo",
   "name": "Action Demo",
   "version": "0.1.0",
-  "description": "LF-06 fixture：声明 demo.hello client action，供内置 nodejs 插件经桥调用验证 action 桥真机闭环。",
+  "description": "QX-06 fixture：声明 demo.hello client action，供内置 nodejs 插件经桥调用验证 action 桥真机闭环。",
   "runtime_type": "client",
   "entry": "ui/index.html",
   "capabilities": [

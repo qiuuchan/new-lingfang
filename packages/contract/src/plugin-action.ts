@@ -88,7 +88,7 @@ export type PortableJsonSchemaNode = {
   minItems?: number;
   maxItems?: number;
   format?: 'date-time' | 'uuid';
-  $ref?: 'lingfang://schemas/artifact-ref/v1';
+  $ref?: 'qianxia://schemas/artifact-ref/v1';
 };
 
 export type PortableJsonSchema = PortableJsonSchemaNode;
@@ -177,11 +177,11 @@ function validatePortableSchemaNode(
   }
 
   if ('$ref' in value) {
-    if (value.$ref !== 'lingfang://schemas/artifact-ref/v1' || keys.length !== 1) {
+    if (value.$ref !== 'qianxia://schemas/artifact-ref/v1' || keys.length !== 1) {
       addIssue(
         ctx,
         [...path, '$ref'],
-        'only lingfang://schemas/artifact-ref/v1 is supported as $ref'
+        'only qianxia://schemas/artifact-ref/v1 is supported as $ref'
       );
     }
     return;

@@ -2,7 +2,7 @@
 //!
 //! 三项能力：
 //! 1. **签名校验**：verify_plugin_signature 用 minisign 非对称验签。插件目录放 manifest.sig
-//!    （minisign 文本格式），与 plugins_root/.plugin-pubkey（或 env LINGFANG_PLUGIN_PUBKEY）
+//!    （minisign 文本格式），与 plugins_root/.plugin-pubkey（或 env QIANXIA_PLUGIN_PUBKEY）
 //!    配对的公钥验签 manifest.json。未配置公钥 / 无签名文件 → signed=false（不阻断，仅状态展示）。
 //! 2. **版本召回**：PluginRecallInfo 描述某插件版本是否被召回（前端据此展示警告，禁止运行）。
 //!    召回标记落在 plugins_root/.recalled.json（平台下发），格式 { "<pluginId>": "<version>" }。
@@ -78,7 +78,7 @@ pub fn verify_signature_at_dir(
         });
     }
 
-    // 公钥来源：plugins_root/.plugin-pubkey（优先）或 env LINGFANG_PLUGIN_PUBKEY。
+    // 公钥来源：plugins_root/.plugin-pubkey（优先）或 env QIANXIA_PLUGIN_PUBKEY。
     // 未配置时返回 signed=true 但 verified=false（不阻断，提示「平台未配置验签公钥」）。
     let pubkey_str = match read_pubkey(plugins_root)? {
         Some(k) => k,
@@ -86,7 +86,7 @@ pub fn verify_signature_at_dir(
             return Ok(PluginSignatureStatus {
                 signed: true,
                 verified: false,
-                reason: "平台未配置插件验签公钥（.plugin-pubkey / LINGFANG_PLUGIN_PUBKEY）".into(),
+                reason: "平台未配置插件验签公钥（.plugin-pubkey / QIANXIA_PLUGIN_PUBKEY）".into(),
             });
         }
     };
@@ -109,7 +109,7 @@ pub fn verify_signature_at_dir(
     }
 }
 
-/// 公钥读取：plugins_root/.plugin-pubkey（单行 base64）> env LINGFANG_PLUGIN_PUBKEY > None。
+/// 公钥读取：plugins_root/.plugin-pubkey（单行 base64）> env QIANXIA_PLUGIN_PUBKEY > None。
 fn read_pubkey(plugins_root: &Path) -> Result<Option<String>, String> {
     let path: PathBuf = plugins_root.join(".plugin-pubkey");
     if path.exists() {
@@ -119,7 +119,7 @@ fn read_pubkey(plugins_root: &Path) -> Result<Option<String>, String> {
             return Ok(Some(trimmed.to_string()));
         }
     }
-    Ok(std::env::var("LINGFANG_PLUGIN_PUBKEY")
+    Ok(std::env::var("QIANXIA_PLUGIN_PUBKEY")
         .ok()
         .filter(|s| !s.is_empty()))
 }
@@ -227,7 +227,7 @@ mod tests {
 
     fn temp_store(name: &str) -> PluginStore {
         let root = std::env::temp_dir().join(format!(
-            "lingfang-plugin-security-{}-{name}",
+            "qianxia-plugin-security-{}-{name}",
             std::process::id()
         ));
         let _ = std::fs::remove_dir_all(&root);

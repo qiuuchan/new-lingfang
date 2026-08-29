@@ -1,7 +1,7 @@
 use super::*;
 
 fn manager() -> (PluginPackageManager, PathBuf) {
-    let root = std::env::temp_dir().join(format!("lingfang-manager-{}", Uuid::new_v4()));
+    let root = std::env::temp_dir().join(format!("qianxia-manager-{}", Uuid::new_v4()));
     let store = PluginStore::new(&root).unwrap();
     let manager = PluginPackageManager::new(&store).unwrap();
     (manager, root)
@@ -27,7 +27,7 @@ fn runtime_artifact(
         fs::create_dir_all(parent).unwrap();
     }
     fs::write(entry_path, content).unwrap();
-    let output = root.join(format!("{version}-{}.lfplugin", Uuid::new_v4()));
+    let output = root.join(format!("{version}-{}.qplugin", Uuid::new_v4()));
     let inspected = package_workspace(&workspace, &output).unwrap();
     (output, inspected)
 }
@@ -42,7 +42,7 @@ fn node_artifact(root: &Path) -> (PathBuf, InspectedArtifact) {
         r#"{"dependencies":{"left-pad":"1.3.0"}}"#,
     )
     .unwrap();
-    let output = root.join("node-demo.lfplugin");
+    let output = root.join("node-demo.qplugin");
     let inspected = package_workspace(&workspace, &output).unwrap();
     (output, inspected)
 }
@@ -133,7 +133,7 @@ fn installed_policy_source_collects_manifest_dependencies_and_nested_sources() {
     )
     .unwrap();
     fs::write(workspace.join("requirements.txt"), "openai==1.0.0\n").unwrap();
-    let artifact_path = root.join("complete-policy.lfplugin");
+    let artifact_path = root.join("complete-policy.qplugin");
     let inspected = package_workspace(&workspace, &artifact_path).unwrap();
     let installed = install_for_policy(
         &manager,
@@ -173,7 +173,7 @@ fn installed_policy_source_tags_binary_files_as_base64() {
     fs::write(workspace.join("index.html"), "<main>ok</main>").unwrap();
     let binary = [0_u8, 159, 146, 150, 255, 10];
     fs::write(workspace.join("icon.png"), binary).unwrap();
-    let artifact_path = root.join("binary-policy.lfplugin");
+    let artifact_path = root.join("binary-policy.qplugin");
     let inspected = package_workspace(&workspace, &artifact_path).unwrap();
     let installed = install_for_policy(
         &manager,
@@ -720,7 +720,7 @@ fn imported_workspace_is_publishable_the_first_time() {
         workspace.source_kind,
         PluginReleaseSourceKind::LocalArtifact
     );
-    assert_eq!(workspace.source_label, "本地 .lfplugin 制品");
+    assert_eq!(workspace.source_label, "本地 .qplugin 制品");
 
     let packed = manager
         .pack_workspace(&workspace.workspace_id, None)
@@ -747,12 +747,12 @@ fn workspace_provenance_defaults_old_ledgers_and_tracks_creator_updates() {
         .unwrap();
     assert_eq!(
         workspace.source_kind,
-        PluginReleaseSourceKind::LingfangCreator
+        PluginReleaseSourceKind::QianxiaCreator
     );
     assert_eq!(workspace.source_label, "灵枋创建器");
     assert_eq!(
         serde_json::to_value(&workspace).unwrap()["sourceKind"],
-        "LINGFANG_CREATOR"
+        "QIANXIA_CREATOR"
     );
 
     let synced = manager
@@ -823,7 +823,7 @@ fn installed_payload_preserves_the_release_readme() {
     .unwrap();
     fs::write(workspace.join("index.html"), "<main>demo</main>").unwrap();
     fs::write(workspace.join("README.md"), "# README Demo\n\nRelease details.").unwrap();
-    let artifact_path = root.join("readme-demo.lfplugin");
+    let artifact_path = root.join("readme-demo.qplugin");
     let artifact = package_workspace(&workspace, &artifact_path).unwrap();
 
     let installation = manager
@@ -846,7 +846,7 @@ fn installed_payload_preserves_the_release_readme() {
 
 #[test]
 fn environment_cleanup_errors_are_returned() {
-    let root = std::env::temp_dir().join(format!("lingfang-env-cleanup-{}", Uuid::new_v4()));
+    let root = std::env::temp_dir().join(format!("qianxia-env-cleanup-{}", Uuid::new_v4()));
     fs::create_dir_all(&root).unwrap();
     let not_a_directory = root.join("environment");
     fs::write(&not_a_directory, "occupied").unwrap();
@@ -856,7 +856,7 @@ fn environment_cleanup_errors_are_returned() {
 
 #[test]
 fn legacy_invalid_readme_degrades_without_disabling_the_installation() {
-    let root = std::env::temp_dir().join(format!("lingfang-legacy-readme-{}", Uuid::new_v4()));
+    let root = std::env::temp_dir().join(format!("qianxia-legacy-readme-{}", Uuid::new_v4()));
     fs::create_dir_all(&root).unwrap();
     let readme = root.join("README.md");
     fs::write(&readme, [0xc3, 0x28]).unwrap();
@@ -925,7 +925,7 @@ fn dev_register_rejects_non_client() {
         })
         .unwrap_err();
     assert!(
-        err.contains("client") || err.contains("F2") || err.contains("LF-02"),
+        err.contains("client") || err.contains("F2") || err.contains("QX-02"),
         "错误文案应指向 client-only 政策：{err}"
     );
     assert!(manager.list_installations().is_empty());

@@ -1,6 +1,6 @@
 # Git LFS 使用指引（runtime-parts 分片）
 
-> 适用范围：灵坊工作台（my-treasure）B3 runtime 物料分片的入库、克隆与 CI 拉取。
+> 适用范围：千匣台（my-treasure）B3 runtime 物料分片的入库、克隆与 CI 拉取。
 > 背景：`chrome.dll` 等大二进制以分片形式提交 `apps/desktop/runtime-parts/`（B3 决策：立即提交 + 启用 LFS，
 > 见 `docs/decisions/B3-runtime-material-source.md`）。`.gitattributes` 已声明两条规则，**不要**重复 track：
 >
@@ -94,9 +94,9 @@ git lfs pull --include="apps/desktop/runtime-parts/**"
 | 历史里已混入原始大字节 | `git lfs migrate import --everything`（重写历史，全团队协调后慎用） |
 | clone 卡在 Downloading LFS objects | 先 SKIP_SMUDGE 克隆，再按第四节按需拉取 |
 
-## 七、新克隆 → 跑通桌面构建（LF-11）
+## 七、新克隆 → 跑通桌面构建（QX-11）
 
-> 工单 `docs/WORK_ORDERS.md` LF-11（阶段 L2+L3）配套。目标：新克隆开发者**一条命令灌好 runtimes**，
+> 工单 `docs/WORK_ORDERS.md` QX-11（阶段 L2+L3）配套。目标：新克隆开发者**一条命令灌好 runtimes**，
 > 并用一个脚本实证「干净环境 → 启动 → 插件可用」最后一公里。
 
 ```bash
@@ -107,9 +107,9 @@ pnpm dev:desktop                        # 启动插件中心 → 运行内置「
 ```
 
 `runtime:populate` 的源选择顺序（详见 `scripts/populate-local-runtimes.mjs`）：
-1. `LINGFANG_RUNTIME_BUNDLE` 指向本地 `runtimes-bundle.zip` → 用之；
+1. `QIANXIA_RUNTIME_BUNDLE` 指向本地 `runtimes-bundle.zip` → 用之；
 2. 本地 `apps/desktop/runtimes/` 已通过 `runtime:verify` → 幂等跳过（加 `--force` 强制重灌）；
-3. 远程回退：从 GitHub Release 下载 `runtimes-bundle.zip` + `.minisig`（需 `LINGFANG_RUNTIME_PUBKEY`
+3. 远程回退：从 GitHub Release 下载 `runtimes-bundle.zip` + `.minisig`（需 `QIANXIA_RUNTIME_PUBKEY`
    验签信任根，与 `plugin_security.rs` 同一 Org secret）。本环境无 Release / 密钥时明确提示并打印
    `ci.yml` 的 populate 手工步骤，**不假阳性**。
 
@@ -122,7 +122,7 @@ E2E_INSTALLER_SKIP=1 node scripts/e2e-install-verify.mjs  # 跳过安装器自�
 ```
 
 脚本行为：
-- **有 SFX 安装器**（`LINGFANG_SETUP_EXE` 或 `target/release/LingFang-Setup-*.exe`）→ 跑
+- **有 SFX 安装器**（`QIANXIA_SETUP_EXE` 或 `target/release/QianXia-Setup-*.exe`）→ 跑
   `--silent --target <全新目录>`，启动安装实例，CDP 断言：插件中心加载 / 内置 notes 打开 /
   `storage.kv` 真落盘 / 四 runtime keyFiles 在位（对齐 `verify-bundled-runtimes.mjs` 口径）。
 - **无安装器（本环境默认）** → 明确「跳过 --silent 安装」，降级用 `target/debug` 调试壳做启动闭环断言，

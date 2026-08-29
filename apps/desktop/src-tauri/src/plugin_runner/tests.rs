@@ -15,7 +15,7 @@ fn venv_python_path_is_platform_correct() {
 #[test]
 fn python_venv_dir_is_stable_for_same_plugin_path() {
     let plugin = PathBuf::from(
-        r"C:\Users\Administrator\AppData\Roaming\com.lingfang.desktop\plugins\plugin-a",
+        r"C:\Users\Administrator\AppData\Roaming\com.qianxia.desktop\plugins\plugin-a",
     );
     assert_eq!(python_venv_dir(&plugin), python_venv_dir(&plugin));
 }
@@ -23,7 +23,7 @@ fn python_venv_dir_is_stable_for_same_plugin_path() {
 #[test]
 fn python_venv_dir_uses_short_cache_on_windows() {
     let plugin = PathBuf::from(
-        r"C:\Users\Administrator\AppData\Roaming\com.lingfang.desktop\plugins\plugin-a",
+        r"C:\Users\Administrator\AppData\Roaming\com.qianxia.desktop\plugins\plugin-a",
     );
     let venv = python_venv_dir(&plugin);
     #[cfg(windows)]
@@ -103,7 +103,7 @@ fn parse_manifest_rejects_invalid_json() {
 
 #[test]
 fn minimal_env_excludes_sensitive_keys() {
-    // 白名单不应含 TOKEN/KEY/SECRET/LINGFANG_ 前缀（防泄漏）。
+    // 白名单不应含 TOKEN/KEY/SECRET/QIANXIA_ 前缀（防泄漏）。
     let env = minimal_env();
     let keys: Vec<_> = env
         .iter()
@@ -114,8 +114,8 @@ fn minimal_env_excludes_sensitive_keys() {
         assert!(!upper.contains("TOKEN"), "minimal_env 不应含 TOKEN：{k}");
         assert!(!upper.contains("SECRET"), "minimal_env 不应含 SECRET：{k}");
         assert!(
-            !upper.contains("LINGFANG"),
-            "minimal_env 不应含 LINGFANG_：{k}"
+            !upper.contains("QIANXIA"),
+            "minimal_env 不应含 QIANXIA_：{k}"
         );
     }
 }
@@ -338,7 +338,7 @@ fn process_table_take_nonexistent_returns_none() {
 /// 生成唯一临时目录名（避免并发测试冲突）。
 fn temp_dir_unique(prefix: &str) -> PathBuf {
     std::env::temp_dir().join(format!(
-        "lf-runner-{prefix}-{}",
+        "qx-runner-{prefix}-{}",
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
@@ -346,15 +346,15 @@ fn temp_dir_unique(prefix: &str) -> PathBuf {
     ))
 }
 
-/// 端到端集成测试：用真实内置 Python（LINGFANG_EMBEDDED_RUNTIME_DIR）跑 ensure_python_venv，
+/// 端到端集成测试：用真实内置 Python（QIANXIA_EMBEDDED_RUNTIME_DIR）跑 ensure_python_venv，
 /// 验证 requirements.txt 在无 uv 时回退 venv python -m pip install 真的能装上依赖。
 ///
 /// 标 `#[ignore]`：需要内置 runtimes + 网络（清华 PyPI 镜像），不进默认 `cargo test`。
-/// 手动跑：`LINGFANG_EMBEDDED_RUNTIME_DIR=... cargo test -p lingfang-desktop ensure_python_venv_installs_requirements_without_uv -- --ignored --nocapture`
+/// 手动跑：`QIANXIA_EMBEDDED_RUNTIME_DIR=... cargo test -p qianxia-desktop ensure_python_venv_installs_requirements_without_uv -- --ignored --nocapture`
 #[test]
 #[ignore]
 fn ensure_python_venv_installs_requirements_without_uv() {
-    let python_root = std::env::var_os("LINGFANG_EMBEDDED_RUNTIME_DIR")
+    let python_root = std::env::var_os("QIANXIA_EMBEDDED_RUNTIME_DIR")
         .map(PathBuf::from)
         .unwrap_or_else(|| {
             // 兜底：开发机内置 runtimes 目录（apps/desktop/runtimes）。
@@ -367,7 +367,7 @@ fn ensure_python_venv_installs_requirements_without_uv() {
     let python_exe = python_dir.join("python.exe");
     if !python_exe.is_file() {
         panic!(
-            "内置 Python 不存在：{}（设 LINGFANG_EMBEDDED_RUNTIME_DIR 指向 runtimes 目录）",
+            "内置 Python 不存在：{}（设 QIANXIA_EMBEDDED_RUNTIME_DIR 指向 runtimes 目录）",
             python_exe.display()
         );
     }
@@ -435,7 +435,7 @@ fn ensure_python_venv_installs_requirements_without_uv() {
 /// 构造临时 PluginStore（anchor_root 在 temp_dir 下，隔离测试）。
 fn temp_store_for_delete(name: &str) -> PluginStore {
     let root = std::env::temp_dir().join(format!(
-        "lf-runner-delete-{name}-{}",
+        "qx-runner-delete-{name}-{}",
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
@@ -804,7 +804,7 @@ fn write_crash_dump_contains_repro_command_and_env_and_output() {
     std::fs::create_dir_all(&tmp).unwrap();
     let env_dump = vec![
         "PATH=/usr/bin".to_string(),
-        "LINGFANG_PLUGIN_BRIDGE_TOKEN=<hidden>".to_string(),
+        "QIANXIA_PLUGIN_BRIDGE_TOKEN=<hidden>".to_string(),
     ];
     write_crash_dump(
         &tmp,
@@ -821,7 +821,7 @@ fn write_crash_dump_contains_repro_command_and_env_and_output() {
     assert!(content.contains("/tmp/plugin"));
     // 含 env（脱敏 token）。
     assert!(content.contains("PATH=/usr/bin"));
-    assert!(content.contains("LINGFANG_PLUGIN_BRIDGE_TOKEN=<hidden>"));
+    assert!(content.contains("QIANXIA_PLUGIN_BRIDGE_TOKEN=<hidden>"));
     // 含进程输出。
     assert!(content.contains("Traceback: ImportError"));
     let _ = std::fs::remove_dir_all(&tmp);
@@ -879,7 +879,7 @@ fn peek_runtime_type_reads_from_manifest() {
     let _ = std::fs::remove_dir_all(&tmp);
 }
 
-// LF-08 / J4：client dev-reload 300ms 节流语义（连续事件 → 单次 emit）。
+// QX-08 / J4：client dev-reload 300ms 节流语义（连续事件 → 单次 emit）。
 #[test]
 fn dev_reload_throttles_within_300ms_window() {
     use std::time::{Duration, Instant};

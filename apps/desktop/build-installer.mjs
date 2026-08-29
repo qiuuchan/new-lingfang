@@ -2,12 +2,12 @@
 // 自制安装包构建脚本：将应用文件打包成自解压安装器。
 //
 // 流程：
-// 1. 收集 target/release/lingfang-desktop.exe + runtimes/（B3→C 方案 C 终态：运行时随包分发）
+// 1. 收集 target/release/qianxia-desktop.exe + runtimes/（B3→C 方案 C 终态：运行时随包分发）
 // 2. 硬门槛：runtimes/ 必须先通过 runtime-lock.json 全量校验（keyFiles sha256 +
 //    requiredFiles + materializedFiles + Playwright 漂移），否则拒绝打包
 // 3. 打包为 payload.zip（排除 runtimes/.download 预取归档；内置纯净 updater.exe）
 // 4. 拼接 installer.exe + payload.zip + trailer(12字节)
-// 5. 输出 LingFang-Setup-{version}.exe
+// 5. 输出 QianXia-Setup-{version}.exe
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -44,7 +44,7 @@ async function main() {
   console.log(`📦 版本: ${version}`);
 
   // 1. 检查必需文件
-  const appExe = path.join(targetRelease, 'lingfang-desktop.exe');
+  const appExe = path.join(targetRelease, 'qianxia-desktop.exe');
   const installerExe = path.join(targetRelease, 'installer.exe');
   const runtimesDir = path.join(desktopRoot, 'runtimes');
 
@@ -55,7 +55,7 @@ async function main() {
   }
   if (!fs.existsSync(installerExe)) {
     console.error(`❌ 安装器不存在: ${installerExe}`);
-    console.error('   请先编译: cargo build --release -p lingfang-installer');
+    console.error('   请先编译: cargo build --release -p qianxia-installer');
     process.exit(1);
   }
 
@@ -92,7 +92,7 @@ async function main() {
   console.log('\n📦 打包应用文件...');
 
   const files = [
-    { src: appExe, dst: 'lingfang-desktop.exe' },
+    { src: appExe, dst: 'qianxia-desktop.exe' },
     // 纯净 updater.exe（无 payload 尾部的裸 installer）：deploy 时优先信任它，
     // 避免「兜底复制自身」把 >1GB 的带包安装器复制进安装目录。
     { src: installerExe, dst: 'updater.exe' },
@@ -121,7 +121,7 @@ async function main() {
   }
 
   // 使用 Windows 内置 tar 打包（Windows 10+ 自带 bsdtar，-a 按扩展名输出真 zip）。
-  // ⚠️ LF-18 真机缺陷修复：PATH 里若先命中 GNU tar（如 Git Bash /usr/bin/tar），
+  // ⚠️ QX-18 真机缺陷修复：PATH 里若先命中 GNU tar（如 Git Bash /usr/bin/tar），
   // 它不支持 zip 输出，对未知后缀 `.zip` 会**静默降级为 ustar 归档**（首字节 `./`），
   // 产物装配流程零报错；安装器侧 zip 解析在垃圾数据上可能「成功解析出 0 条目」，
   // 最终只落地兜底复制的 updater.exe、退出码 0。因此打包后必须做 zip 魔数硬门槛。
@@ -173,7 +173,7 @@ async function main() {
   }
 
   // 尾部 EOCD 哨兵：zip 结尾 64KiB 内必含中央目录结束记录签名 PK\x05\x06。
-  // 仅防极端错位/半写盘（LF-18 中安装器曾在此类畸形流上静默解出 0 条目）。
+  // 仅防极端错位/半写盘（QX-18 中安装器曾在此类畸形流上静默解出 0 条目）。
   {
     const size = fs.statSync(payloadZip).size;
     const tailWin = Buffer.alloc(Math.min(size, 65_536 + 22));
@@ -204,7 +204,7 @@ async function main() {
 
   // 4. 拼接 installer.exe + payload.zip + trailer
   console.log('\n🔧 拼接自解压安装器...');
-  const outputExe = path.join(targetRelease, `LingFang-Setup-${version}.exe`);
+  const outputExe = path.join(targetRelease, `QianXia-Setup-${version}.exe`);
 
   // 构建 trailer
   const trailer = Buffer.alloc(TRAILER_LEN);

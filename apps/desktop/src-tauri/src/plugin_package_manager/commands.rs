@@ -42,7 +42,7 @@ pub(crate) fn load_installed_plugin(
     if !caps.is_empty() {
         app_state.registry.register(&installation_id, caps);
     }
-    // LF-02-R：开发态（Dev）来源在「打开/加载」时即启动目录监听（幂等，先停旧监听器）。
+    // QX-02-R：开发态（Dev）来源在「打开/加载」时即启动目录监听（幂等，先停旧监听器）。
     // 前端列表加载/刷新、以及重启应用后的 hydration 均会调用本命令加载插件，
     // 而 start_installed_plugin（原 watch 调用点）前端零调用方——client 插件打开只走本路径，
     // 故 watch 必须补在「加载」入口，否则改文件永不触发 v2 自动重载（实测 30s 无重载）。
@@ -307,11 +307,11 @@ pub(crate) fn sync_draft_workspace_metadata(
 }
 
 #[tauri::command]
-pub(crate) fn inspect_lfplugin_v4(artifact_path: String) -> Result<InspectedArtifact, String> {
+pub(crate) fn inspect_qplugin_v4(artifact_path: String) -> Result<InspectedArtifact, String> {
     inspect_artifact(Path::new(&artifact_path))
 }
 
 #[tauri::command]
-pub(crate) fn sha256_lfplugin(artifact_path: String) -> Result<String, String> {
+pub(crate) fn sha256_qplugin(artifact_path: String) -> Result<String, String> {
     sha256_file(Path::new(&artifact_path))
 }

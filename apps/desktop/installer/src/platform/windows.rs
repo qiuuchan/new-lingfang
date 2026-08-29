@@ -226,7 +226,7 @@ fn path_is_under(child: &Path, parent: &Path) -> bool {
 ///
 /// 仅按路径前缀匹配，不会误杀系统同名进程（如系统 python.exe）。返回终止的进程数。
 ///
-/// ⚠️ LF-17 集成缺陷修复：update 模式下部署器（新 setup）的**父进程就是 updater.exe**，
+/// ⚠️ QX-17 集成缺陷修复：update 模式下部署器（新 setup）的**父进程就是 updater.exe**，
 /// 而 updater 恰好运行于安装目录内（deploy.rs 保证安装目录有 updater.exe）——若按旧逻辑
 /// 无差别清场，updater 会被自己的部署流程误杀，更新链在「覆盖成功」后中断：不重启主程序、
 /// 不删临时包、不自删。因此必须豁免「自身 + 父进程链」。

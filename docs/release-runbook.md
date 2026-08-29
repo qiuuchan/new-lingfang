@@ -1,4 +1,4 @@
-# 发版 Runbook（LF-16）
+# 发版 Runbook（QX-16）
 
 > 面向维护者的一次发版操作手册。更新链路（`update.rs` 三命令 + installer `run_update`）
 > 的 feed 来源 ADR 见 `docs/decisions/update-feed-source.md`。
@@ -11,11 +11,11 @@
    pnpm typecheck && pnpm test   # 四包 vitest
    ```
 2. 版本号就绪：`apps/desktop/src-tauri/tauri.conf.json` 的 `version` 字段 = 本次发布版本
-   （build.rs 注入 `LINGFANG_APP_VERSION`，`check_update` 的 semver 比较以此为基准）。
+   （build.rs 注入 `QIANXIA_APP_VERSION`，`check_update` 的 semver 比较以此为基准）。
    **tag 必须与该字段一致**（tag 加 `v` 前缀，如版本 `0.1.12` → tag `v0.1.12`）。
    CI 的 latest.json 生成步骤内置三方硬门槛：tag（去 `v`）≠ `tauri.conf.json` version 时直接失败——tag 打错或忘升版本号会在发版 job 暴露，而非产出一个死 feed。
 3. Org secret 就绪（一次性，缺失时 CI 签名步骤会硬失败）：
-   - `LINGFANG_RUNTIME_PUBKEY` / `LINGFANG_RUNTIME_SIGKEY`（minisign 信任根，
+   - `QIANXIA_RUNTIME_PUBKEY` / `QIANXIA_RUNTIME_SIGKEY`（minisign 信任根，
      runtime bundle 与安装包共用）。
 
 ## 二、发版步骤
@@ -27,8 +27,8 @@
 2. CI `publish-runtimes` job 自动执行（`needs: quality`）：
    - runtime 物料灌装 + 全量 sha256 校验 → `runtimes-bundle.zip` + `.minisig`；
    - 构建桌面壳 + SFX 安装器（`build-installer.mjs` 自带 runtime-lock 硬门槛）→
-     `LingFang-Setup-*.exe` + `.minisig`；
-   - **LF-16 新增**：生成 `latest.json` 并随 Release 上传。
+     `QianXia-Setup-*.exe` + `.minisig`；
+   - **QX-16 新增**：生成 `latest.json` 并随 Release 上传。
 
 ## 三、latest.json 字段口径（与 `update.rs` Feed 结构双向锁死）
 
@@ -47,14 +47,14 @@
 ## 四、发版后抽检
 
 1. Release assets 应包含：`runtimes-bundle.zip`、`runtimes-bundle.zip.minisig`、
-   `LingFang-Setup-*.exe`、`LingFang-Setup-*.exe.minisig`、`latest.json`。
+   `QianXia-Setup-*.exe`、`QianXia-Setup-*.exe.minisig`、`latest.json`。
 2. `latest.json` 内容抽检：
    ```bash
    gh release download v0.1.12 -p latest.json -O - | cat
    ```
-   核对 `version` 无 `v` 前缀、`sha256` 与安装包一致（`sha256sum LingFang-Setup-*.exe`）。
+   核对 `version` 无 `v` 前缀、`sha256` 与安装包一致（`sha256sum QianXia-Setup-*.exe`）。
 3. 更新链路冒烟（可选，最真实）：旧版安装实例 → 设置页「检查更新」→ 应提示新版 →
-   下载 → 验签 → 重启为新版。完整 e2e 见 LF-17。
+   下载 → 验签 → 重启为新版。完整 e2e 见 QX-17。
 
 ## 五、常见问题
 

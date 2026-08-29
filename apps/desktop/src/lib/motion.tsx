@@ -23,7 +23,7 @@ import { cn } from '@/lib/utils';
 type Direction = 'up' | 'down' | 'left' | 'right';
 
 /** framer-motion 入场动画时长（秒）。集中定义便于「整体调慢且观感一致」。
-   与 index.css 的 --lf-dur-* CSS 变量是两套机制（CSS 变量供 Tailwind 工具类，这里供 framer-motion 数字 duration）。
+   与 index.css 的 --qx-dur-* CSS 变量是两套机制（CSS 变量供 Tailwind 工具类，这里供 framer-motion 数字 duration）。
    入场类整体偏慢（约 ×1.4~1.5）；AnimatedNumber/Shimmer 属持续/循环类，单列且不随入场调慢以免拖沓。 */
 export const MOTION = {
   fadeIn: 0.2,

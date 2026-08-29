@@ -27,7 +27,7 @@ pub fn deploy_to(install_dir: &Path) -> Result<usize> {
     // 1) 自解压 app 文件到安装目录。
     let count = sfx::extract_payload(&self_exe, install_dir).context("自解压 app 文件失败")?;
 
-    // 1.5) 落地硬门槛：主程序必须真实存在。LF-18 真机缺陷——畸形 payload（如
+    // 1.5) 落地硬门槛：主程序必须真实存在。QX-18 真机缺陷——畸形 payload（如
     //      GNU tar 静默产出的 ustar 被 zip 层误解析为 0 条目）会走完全部流程、
     //      仅留兜底复制的 updater.exe 且退出码 0。在源头上拒绝这种「假成功」。
     ensure_main_exe(install_dir)?;
@@ -63,7 +63,7 @@ mod tests {
 
     #[test]
     fn ensure_main_exe_rejects_empty_dir() {
-        let dir = std::env::temp_dir().join("lingfang-deploy-empty-test");
+        let dir = std::env::temp_dir().join("qianxia-deploy-empty-test");
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let err = ensure_main_exe(&dir).unwrap_err();
@@ -73,7 +73,7 @@ mod tests {
 
     #[test]
     fn ensure_main_exe_accepts_present_main() {
-        let dir = std::env::temp_dir().join("lingfang-deploy-present-test");
+        let dir = std::env::temp_dir().join("qianxia-deploy-present-test");
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(dir.join(paths::MAIN_EXE), b"fake").unwrap();
@@ -84,7 +84,7 @@ mod tests {
     #[test]
     fn ensure_main_exe_rejects_directory_named_main() {
         // 名字撞上但不是文件（目录）也必须拒绝。
-        let dir = std::env::temp_dir().join("lingfang-deploy-dirnamed-test");
+        let dir = std::env::temp_dir().join("qianxia-deploy-dirnamed-test");
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(dir.join(paths::MAIN_EXE)).unwrap();
         assert!(ensure_main_exe(&dir).is_err());

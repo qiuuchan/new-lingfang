@@ -15,7 +15,7 @@ export const PluginAiPolicyStatus = z.enum(['UNCHECKED', 'PASSED', 'FAILED']);
 export type PluginAiPolicyStatus = z.infer<typeof PluginAiPolicyStatus>;
 export const MarketplaceListingStatus = z.enum(['DRAFT', 'ACTIVE', 'DELISTED']);
 export const PluginReleaseSourceKind = z.enum([
-  'LINGFANG_CREATOR',
+  'QIANXIA_CREATOR',
   'EXTERNAL_TOOL',
   'LOCAL_ARTIFACT',
   'COPIED_INSTALLATION',

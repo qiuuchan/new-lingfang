@@ -58,16 +58,16 @@ struct BridgeSession {
 
 ### 谁会拿到一个 session（即拿到凭据）
 - nodejs/python 插件：`plugin_script.rs:577` 与 `plugin_runner.rs:1629` 调用
-  `register_session`，把 `LINGFANG_PLUGIN_BRIDGE_URL` / `LINGFANG_PLUGIN_BRIDGE_TOKEN`
+  `register_session`，把 `QIANXIA_PLUGIN_BRIDGE_URL` / `QIANXIA_PLUGIN_BRIDGE_TOKEN`
   注入进程环境（plugin_script.rs:605-609 / plugin_runner.rs:1656-1660）。
 - action 调用：`register_action_session`（:207）。
 
 ### client 插件今天拿到什么
-- **没有 BridgeSession**，没有 `LINGFANG_PLUGIN_BRIDGE_*`，iframe 内只有 `window.sdk`。
+- **没有 BridgeSession**，没有 `QIANXIA_PLUGIN_BRIDGE_*`，iframe 内只有 `window.sdk`。
 - `llm.chat` / `image.*` / `video.*` / `audio.*` 全部走 `invoke_capability` → `NotSupported`。
 - SDK 侧 `sdk.llm.chat` 形状（`plugin-sdk/src/index.ts:578-580`）只是把调用交给
-  `invokeAi` → `__lingfangInvoke` 或 localhost 桥回退；client 路径下回退也因无
-  `LINGFANG_PLUGIN_BRIDGE_*` 而失败（index.ts:308-314）。
+  `invokeAi` → `__qianxiaInvoke` 或 localhost 桥回退；client 路径下回退也因无
+  `QIANXIA_PLUGIN_BRIDGE_*` 而失败（index.ts:308-314）。
 
 结论：client 与 nodejs/python 的 AI 能力供给不对称，根因是**凭据从未注入 iframe 路径**。
 
@@ -120,7 +120,7 @@ B 仅在已规划平台账号体系时纳入。
 产品已于 2026-08-22 拍板采用 **C-on-A**：凭据取自应用设置（用户手动配置 relay `api_base` +
 `auth_token`），client 插件的 AI 能力经宿主代理命令（`client_llm_chat` 等）走宿主持有的 relay
 session，iframe 永不持有凭据；零服务器定位保持（壳直连 relay，不引入平台账号体系）。该方案已由
-LF-04b 真机验证（设置页录入真实凭据 → 内置 notes AI 摘要真实返回，凭据零日志泄漏）。
+QX-04b 真机验证（设置页录入真实凭据 → 内置 notes AI 摘要真实返回，凭据零日志泄漏）。
 
 原待决问题最终结论：
 
@@ -136,4 +136,4 @@ LF-04b 真机验证（设置页录入真实凭据 → 内置 notes AI 摘要真�
 | 选项 | C-on-A |
 | 决策者 | 产品（用户） |
 | 日期 | 2026-08-22 |
-| 依据 | 保留 `BridgeSession`/网关/计费模型且控制改动面；避开 B 的零服务器冲突；iframe 不持凭据强化沙箱；LF-04b 真机验证通过 |
+| 依据 | 保留 `BridgeSession`/网关/计费模型且控制改动面；避开 B 的零服务器冲突；iframe 不持凭据强化沙箱；QX-04b 真机验证通过 |

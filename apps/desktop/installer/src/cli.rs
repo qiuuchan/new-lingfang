@@ -142,11 +142,11 @@ mod tests {
     /// （modes/mod.rs run_update 的 spawn 形态）。路径值不得被误判为子命令。
     #[test]
     fn flags_first_with_path_value_is_silent_install() {
-        let args = v(&["--silent", "--target", "C:\\Users\\u\\AppData\\Local\\LingFang"]);
+        let args = v(&["--silent", "--target", "C:\\Users\\u\\AppData\\Local\\QianXia"]);
         assert_eq!(
             parse_args(&args).unwrap(),
             Mode::Silent {
-                target: Some("C:\\Users\\u\\AppData\\Local\\LingFang".into())
+                target: Some("C:\\Users\\u\\AppData\\Local\\QianXia".into())
             }
         );
         // update 模式 spawn 时的完整形态（含子命令 + 前置 flag 混排）。

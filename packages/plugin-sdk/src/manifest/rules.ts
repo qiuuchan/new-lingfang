@@ -1,8 +1,8 @@
 // manifest 业务规则（见 design.md §3）。
 // 每条规则签名：(manifest: PluginManifest) => ManifestError[]
 // 返回空数组表示通过，非空数组为违反。
-import { CapabilityKind as CapabilityKindSchema } from '@lingfang/contract';
-import type { PluginManifest } from '@lingfang/contract';
+import { CapabilityKind as CapabilityKindSchema } from '@qianxia/contract';
+import type { PluginManifest } from '@qianxia/contract';
 
 export interface ManifestError {
   code: string;
@@ -208,7 +208,7 @@ export function ruleUnsafeEntryPath(manifest: PluginManifest): ManifestError[] {
   return [];
 }
 
-// LF-23：fs.read / fs.write 必须声明非空 paths 白名单——
+// QX-23：fs.read / fs.write 必须声明非空 paths 白名单——
 // 空白名单意味着该能力恒 OutOfScope（fail-closed 但功能断裂），是配置错误而非运行时报错。
 export function ruleFsScopeRequiresPaths(manifest: PluginManifest): ManifestError[] {
   const errors: ManifestError[] = [];

@@ -22,7 +22,7 @@ R1 真用插件（D1=A：本地知识库 / RAG）。小潘每天用的本地优�
 ## 本地跑通
 
 ```bash
-lingfang-plugin build packages/plugin-sdk/examples/kb-station
+qianxia-plugin build packages/plugin-sdk/examples/kb-station
 ```
 
 插件中心本地导入 → 运行。配好 relay 凭据（设置页或 env）后问答可用；
@@ -30,5 +30,5 @@ lingfang-plugin build packages/plugin-sdk/examples/kb-station
 
 ## e2e
 
-`scripts/e2e-kb-station-verify.mjs`（LF-23）：CDP 驱动 iframe 内 `window.__kb` 钩子
+`scripts/e2e-kb-station-verify.mjs`（QX-23）：CDP 驱动 iframe 内 `window.__kb` 钩子
 （与按钮同路径）走 导入 → 列表 → 检索 → 问答 全链，断言切片/命中/答案。

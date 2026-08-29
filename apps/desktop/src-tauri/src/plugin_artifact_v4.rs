@@ -21,7 +21,7 @@ const EXCLUDED_SEGMENTS: &[&str] = &[
     ".venv",
     "venv",
     "node_modules",
-    ".lingfang",
+    ".qianxia",
     "__pycache__",
     ".pytest_cache",
     ".mypy_cache",
@@ -203,7 +203,7 @@ pub(crate) fn package_workspace(
         .unix_permissions(0o644);
     zip.start_file("_meta.json", options)
         .map_err(|error| format!("写入 _meta.json 失败：{error}"))?;
-    zip.write_all(b"{\"format\":\"lingfang-plugin\",\"formatVersion\":4}")
+    zip.write_all(b"{\"format\":\"qianxia-plugin\",\"formatVersion\":4}")
         .map_err(|error| format!("写入 _meta.json 失败：{error}"))?;
     zip.start_file("manifest.json", options)
         .map_err(|error| format!("写入 manifest.json 失败：{error}"))?;
@@ -363,10 +363,10 @@ pub(crate) fn inspect_artifact(path: &Path) -> Result<InspectedArtifact, String>
         });
     }
     let meta = meta.ok_or_else(|| "v4 制品缺少 _meta.json".to_string())?;
-    if meta.get("format").and_then(Value::as_str) != Some("lingfang-plugin")
+    if meta.get("format").and_then(Value::as_str) != Some("qianxia-plugin")
         || meta.get("formatVersion").and_then(Value::as_u64) != Some(4)
     {
-        return Err("只支持 .lfplugin v4 制品".to_string());
+        return Err("只支持 .qplugin v4 制品".to_string());
     }
     let manifest = manifest.ok_or_else(|| "v4 制品缺少 manifest.json".to_string())?;
     validate_manifest(&manifest)?;
@@ -449,7 +449,7 @@ mod tests {
     use super::*;
 
     fn temp(name: &str) -> PathBuf {
-        std::env::temp_dir().join(format!("lingfang-artifact-{name}-{}", uuid::Uuid::new_v4()))
+        std::env::temp_dir().join(format!("qianxia-artifact-{name}-{}", uuid::Uuid::new_v4()))
     }
 
     fn write_test_zip(path: &Path, extra_files: &[(&str, &[u8])]) {
@@ -462,7 +462,7 @@ mod tests {
         for (name, bytes) in [
             (
                 "_meta.json",
-                b"{\"format\":\"lingfang-plugin\",\"formatVersion\":4}".as_slice(),
+                b"{\"format\":\"qianxia-plugin\",\"formatVersion\":4}".as_slice(),
             ),
             (
                 "manifest.json",
@@ -488,8 +488,8 @@ mod tests {
         fs::write(root.join("main.py"), "print('ok')\n").unwrap();
         fs::write(root.join("data/state.json"), "secret").unwrap();
         fs::write(root.join("node_modules/pkg/index.js"), "ignored").unwrap();
-        let first = std::env::temp_dir().join(format!("first-{}.lfplugin", uuid::Uuid::new_v4()));
-        let second = std::env::temp_dir().join(format!("second-{}.lfplugin", uuid::Uuid::new_v4()));
+        let first = std::env::temp_dir().join(format!("first-{}.qplugin", uuid::Uuid::new_v4()));
+        let second = std::env::temp_dir().join(format!("second-{}.qplugin", uuid::Uuid::new_v4()));
         package_workspace(&root, &first).unwrap();
         package_workspace(&root, &second).unwrap();
         assert_eq!(sha256_file(&first).unwrap(), sha256_file(&second).unwrap());
@@ -519,7 +519,7 @@ mod tests {
             .unwrap()
             .read_to_string(&mut meta)
             .unwrap();
-        assert_eq!(meta, r#"{"format":"lingfang-plugin","formatVersion":4}"#);
+        assert_eq!(meta, r#"{"format":"qianxia-plugin","formatVersion":4}"#);
         for index in 0..zip.len() {
             assert_eq!(
                 zip.by_index(index).unwrap().last_modified(),
@@ -537,7 +537,7 @@ mod tests {
         fs::create_dir_all(&root).unwrap();
         fs::write(root.join("manifest.json"), r#"{"id":"demo","name":"Demo","version":"1.0.0","runtime_type":"python","entry":"main.py"}"#).unwrap();
         fs::write(root.join("main.py"), "print('ok')\n").unwrap();
-        let artifact = root.join("demo.lfplugin");
+        let artifact = root.join("demo.qplugin");
         let inspected = package_workspace(&root, &artifact).unwrap();
         assert_ne!(inspected.sha256, "0".repeat(64));
         let destination = root.join("out");
@@ -552,7 +552,7 @@ mod tests {
     fn inspection_rejects_excluded_segments_at_any_depth() {
         let root = temp("nested-cache");
         fs::create_dir_all(&root).unwrap();
-        let artifact = root.join("nested-cache.lfplugin");
+        let artifact = root.join("nested-cache.qplugin");
         write_test_zip(&artifact, &[("src/data/secret.json", b"secret")]);
 
         let error = inspect_artifact(&artifact).unwrap_err();
@@ -564,11 +564,11 @@ mod tests {
     fn inspection_validates_root_readme_contract() {
         let root = temp("readme-contract");
         fs::create_dir_all(&root).unwrap();
-        let invalid_utf8 = root.join("invalid-utf8.lfplugin");
+        let invalid_utf8 = root.join("invalid-utf8.qplugin");
         write_test_zip(&invalid_utf8, &[("README.md", &[0xc3, 0x28])]);
         assert!(inspect_artifact(&invalid_utf8).unwrap_err().contains("UTF-8"));
 
-        let oversized = root.join("oversized.lfplugin");
+        let oversized = root.join("oversized.qplugin");
         let bytes = vec![b'a'; MAX_README_BYTES as usize + 1];
         write_test_zip(&oversized, &[("README.md", bytes.as_slice())]);
         assert!(inspect_artifact(&oversized).unwrap_err().contains("256 KiB"));
@@ -579,7 +579,7 @@ mod tests {
     fn inspection_rejects_windows_case_collisions() {
         let root = temp("windows-case-collision");
         fs::create_dir_all(&root).unwrap();
-        let artifact = root.join("collision.lfplugin");
+        let artifact = root.join("collision.qplugin");
         write_test_zip(&artifact, &[("README.md", b"# trusted"), ("readme.md", b"# shadow")]);
         assert!(inspect_artifact(&artifact).unwrap_err().contains("Windows 大小写冲突"));
         let _ = fs::remove_dir_all(root);
@@ -589,7 +589,7 @@ mod tests {
     fn inspection_reads_entries_to_eof_and_rejects_crc_tampering() {
         let root = temp("crc");
         fs::create_dir_all(&root).unwrap();
-        let artifact = root.join("crc.lfplugin");
+        let artifact = root.join("crc.qplugin");
         write_test_zip(&artifact, &[]);
         let mut bytes = fs::read(&artifact).unwrap();
         let needle = b"print('ok')";
@@ -621,14 +621,14 @@ mod tests {
         let accepted = temp("file-limit-accepted");
         write_file_count_workspace(&accepted, MAX_FILES - 2);
         let accepted_artifact =
-            std::env::temp_dir().join(format!("accepted-{}.lfplugin", uuid::Uuid::new_v4()));
+            std::env::temp_dir().join(format!("accepted-{}.qplugin", uuid::Uuid::new_v4()));
         let inspected = package_workspace(&accepted, &accepted_artifact).unwrap();
         assert_eq!(inspected.files.len(), MAX_FILES);
 
         let rejected = temp("file-limit-rejected");
         write_file_count_workspace(&rejected, MAX_FILES - 1);
         let rejected_artifact =
-            std::env::temp_dir().join(format!("rejected-{}.lfplugin", uuid::Uuid::new_v4()));
+            std::env::temp_dir().join(format!("rejected-{}.qplugin", uuid::Uuid::new_v4()));
         let error = package_workspace(&rejected, &rejected_artifact).unwrap_err();
         assert!(error.contains("文件数量超过 1500"));
 

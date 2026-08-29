@@ -1,4 +1,4 @@
-// resolvePluginPath — CLI 位置参数路径归一化（LF-05 / g2-sdk-friction #2）。
+// resolvePluginPath — CLI 位置参数路径归一化（QX-05 / g2-sdk-friction #2）。
 //
 // 背景：`pnpm -C packages/plugin-sdk cli:dev -- <cmd> <路径>` 会把进程 cwd 固定为
 // `packages/plugin-sdk`；若用户按仓库根习惯传 `packages/plugin-sdk/examples/...`，

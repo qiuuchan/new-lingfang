@@ -287,8 +287,8 @@ export async function createCommand(
   log.raw('');
   log.raw('  下一步：');
   log.raw(`    cd ${name}`);
-  log.raw('    lingfang-plugin validate');
-  log.raw('    lingfang-plugin build');
+  log.raw('    qianxia-plugin validate');
+  log.raw('    qianxia-plugin build');
 
   return 0;
 }
